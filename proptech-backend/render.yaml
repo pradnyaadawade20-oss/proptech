@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: proptech-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: proptech-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: proptech-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: proptech-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: proptech-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: proptech-db
+          property: database
+      - key: DB_SSLMODE
+        value: require
+
+databases:
+  - name: proptech-db
+    plan: free
