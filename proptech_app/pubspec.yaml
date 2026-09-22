@@ -1,0 +1,65 @@
+name: proptech_app
+description: "PropTech marketplace app - Buyer/Tenant"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+
+  cupertino_icons: ^1.0.6
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Networking (for later backend integration)
+  dio: ^5.4.3+1
+
+  # UI / Fonts
+  google_fonts: ^6.2.1
+
+  # Images
+  cached_network_image: ^3.3.1
+
+  # Local storage (auth token etc.)
+  flutter_secure_storage: ^9.2.2
+  image_picker: ^1.1.2
+
+  # Phone dialer / external links
+  url_launcher: ^6.3.0
+
+  # Real 360° equirectangular panorama viewer (drag/gyro rotate,
+  # like the phone's Panorama/Photo Sphere capture)
+  panorama_viewer: 2.0.4
+
+  # Map-based property search (OpenStreetMap — no API key required)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  flutter_map_animations: ^0.7.0
+  geolocator: ^13.0.1
+
+  # Video tour playback on property detail screen
+  video_player: ^2.9.2
+  chewie: ^1.8.5
+
+  # Price trend chart on property detail screen
+  fl_chart: ^0.69.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
