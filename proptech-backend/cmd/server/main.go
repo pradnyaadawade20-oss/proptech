@@ -4,10 +4,14 @@ import (
 	"log"
 	"net/http"
 
+	"context"
+
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
+	"proptech-backend/internal/migrate"
 	"proptech-backend/internal/repository"
 	"proptech-backend/internal/routes"
+	"proptech-backend/migrations"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -27,6 +31,11 @@ func main() {
 	defer dbPool.Close()
 
 	log.Println("Connected to database successfully")
+
+	if err := migrate.Run(context.Background(), dbPool, migrations.Files); err != nil {
+		log.Fatal("Failed to run migrations:", err)
+	}
+	log.Println("Migrations up to date")
 
 	propertyRepo := repository.NewPropertyRepository(dbPool)
 	propertyHandler := handlers.NewPropertyHandler(propertyRepo)
