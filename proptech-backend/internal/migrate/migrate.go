@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -53,6 +54,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, files embed.FS) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
+		// Strip a leading UTF-8 BOM (EF BB BF) if present. Some files were
+		// saved with one (e.g. by editors on Windows) and Postgres treats
+		// it as a syntax error rather than whitespace.
+		sqlBytes = bytes.TrimPrefix(sqlBytes, []byte{0xEF, 0xBB, 0xBF})
 
 		tx, err := pool.Begin(ctx)
 		if err != nil {
