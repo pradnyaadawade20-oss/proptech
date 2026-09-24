@@ -24,6 +24,12 @@ class RouteNames {
   // in the shell below, which crashes with a duplicate-GlobalKey assertion.
   static const chatListStandalone = '/chats-view';
 
+  static const settings = '/settings';
+  static const helpSupport = '/help-support';
+  static const about = '/about';
+  static const privacy = '/privacy-policy';
+  static const terms = '/terms';
+
   static const profile = '/profile';
   // Standalone copy of profile, used when pushing on top of a non-shell
   // screen (Owner/Broker Dashboard) — same GlobalKey conflict as chatListStandalone.

@@ -94,6 +94,25 @@ func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 	}
 }
 
+func RegisterNotificationRoutes(router *gin.Engine, h *handlers.NotificationHandler) {
+	notifications := router.Group("/api/notifications")
+	{
+		notifications.GET("", h.GetNotifications)
+		notifications.POST("", h.CreateNotification)
+		notifications.POST("/read-all", h.MarkAllRead)
+		notifications.PATCH("/:id/read", h.MarkRead)
+		notifications.DELETE("/:id", h.DeleteNotification)
+	}
+}
+
+func RegisterDeviceTokenRoutes(router *gin.Engine, h *handlers.DeviceTokenHandler) {
+	deviceTokens := router.Group("/api/device-tokens")
+	{
+		deviceTokens.POST("", h.RegisterToken)
+		deviceTokens.DELETE("", h.UnregisterToken)
+	}
+}
+
 func RegisterBrokerRoutes(router *gin.Engine, h *handlers.BrokerHandler) {
 	broker := router.Group("/api/broker")
 	{

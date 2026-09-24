@@ -5,10 +5,111 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/session/user_session.dart';
+import '../auth/auth_service.dart';
 import '../auth/role_switcher_sheet.dart';
+import '../chat/chat_avatar.dart';
+import 'profile_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  UserProfile? _profile;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final profile = await ProfileService.instance.getMyProfile();
+      if (!mounted) return;
+      setState(() { _profile = profile; _loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _editProfile() async {
+    final profile = _profile;
+    if (profile == null) return;
+
+    final updated = await showModalBottomSheet<UserProfile>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _EditProfileSheet(profile: profile),
+    );
+    if (updated != null && mounted) setState(() => _profile = updated);
+  }
+
+  Future<void> _logout() async {
+    await AuthService.instance.logout();
+    UserSession.instance.reset();
+    if (mounted) context.go(RouteNames.login);
+  }
+
+  Widget _buildHeader() {
+    if (_loading) {
+      return const SizedBox(
+        height: 72,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final profile = _profile;
+    if (profile == null) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              _error ?? 'Could not load your profile.',
+              style: AppTextStyles.bodySmall,
+            ),
+          ),
+          TextButton(onPressed: _loadProfile, child: const Text('Retry')),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        ChatAvatar(name: profile.name, avatarUrl: profile.avatarUrl, radius: 36),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(profile.name, style: AppTextStyles.h3),
+              const SizedBox(height: 2),
+              Text(
+                profile.email.isNotEmpty ? profile.email : 'Add your email',
+                style: AppTextStyles.bodySmall,
+              ),
+              const SizedBox(height: 2),
+              Text(profile.phone, style: AppTextStyles.bodySmall),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: _editProfile,
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,31 +118,7 @@ class ProfileScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 36,
-                backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=8'),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Amit Kumar', style: AppTextStyles.h3),
-                    const SizedBox(height: 2),
-                    Text('amit.kumar@email.com', style: AppTextStyles.bodySmall),
-                    const SizedBox(height: 2),
-                    Text('+91 98765 43210', style: AppTextStyles.bodySmall),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _showInfoDialog(context, 'Edit Profile', 'Profile editing will be available once the backend is connected.'),
-              ),
-            ],
-          ),
+          _buildHeader(),
           const SizedBox(height: AppSpacing.lg),
           ValueListenableBuilder<UserRole?>(
             valueListenable: UserSession.instance.currentRole,
@@ -77,17 +154,17 @@ class ProfileScreen extends StatelessWidget {
           _ProfileMenuTile(
             icon: Icons.settings_outlined,
             title: 'Settings',
-            onTap: () => _showInfoDialog(context, 'Settings', 'App settings screen is coming soon.'),
+            onTap: () => context.push(RouteNames.settings),
           ),
           _ProfileMenuTile(
             icon: Icons.help_outline,
             title: 'Help & Support',
-            onTap: () => _showInfoDialog(context, 'Help & Support', 'For any queries, reach us at support@proptech.app'),
+            onTap: () => context.push(RouteNames.helpSupport),
           ),
           _ProfileMenuTile(
             icon: Icons.info_outline,
             title: 'About',
-            onTap: () => _showInfoDialog(context, 'About PropTech', 'PropTech v0.1.0\nBuy, Rent or Sell verified properties with complete trust.'),
+            onTap: () => context.push(RouteNames.about),
           ),
           const SizedBox(height: AppSpacing.md),
           _ProfileMenuTile(
@@ -95,27 +172,12 @@ class ProfileScreen extends StatelessWidget {
             title: 'Logout',
             iconColor: Colors.red,
             textColor: Colors.red,
-            onTap: () {
-              context.go(RouteNames.login);
-            },
+            onTap: _logout,
           ),
         ],
       ),
     );
   }
-}
-
-void _showInfoDialog(BuildContext context, String title, String message) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-      ],
-    ),
-  );
 }
 
 class _ProfileMenuTile extends StatelessWidget {
@@ -144,6 +206,108 @@ class _ProfileMenuTile extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right, color: AppColors.textHint),
       onTap: onTap,
+    );
+  }
+}
+
+class _EditProfileSheet extends StatefulWidget {
+  final UserProfile profile;
+  const _EditProfileSheet({required this.profile});
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _name = TextEditingController(text: widget.profile.name);
+  late final TextEditingController _email = TextEditingController(text: widget.profile.email);
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    final email = _email.text.trim();
+
+    if (name.isEmpty) {
+      setState(() => _error = 'Name cannot be empty.');
+      return;
+    }
+    if (email.isNotEmpty && !email.contains('@')) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+
+    setState(() { _saving = true; _error = null; });
+    try {
+      final updated = await ProfileService.instance.updateProfile(
+        userId: widget.profile.id,
+        name: name,
+        email: email,
+        avatarUrl: widget.profile.avatarUrl, // backend overwrites it, so send it back unchanged
+      );
+      if (mounted) Navigator.pop(context, updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSpacing.md,
+        right: AppSpacing.md,
+        top: AppSpacing.md,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.md,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Edit Profile', style: AppTextStyles.h3),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: Colors.red)),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

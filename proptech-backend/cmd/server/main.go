@@ -9,6 +9,7 @@ import (
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/migrate"
+	"proptech-backend/internal/push"
 	"proptech-backend/internal/repository"
 	"proptech-backend/internal/routes"
 	"proptech-backend/migrations"
@@ -56,6 +57,20 @@ func main() {
 	agreementRepo := repository.NewAgreementRepository(dbPool)
 	agreementHandler := handlers.NewAgreementHandler(agreementRepo)
 
+	brokerSubscriptionRepo := repository.NewBrokerSubscriptionRepository(dbPool)
+	brokerHandler := handlers.NewBrokerHandler(brokerSubscriptionRepo)
+
+	notificationRepo := repository.NewNotificationRepository(dbPool)
+	deviceTokenRepo := repository.NewDeviceTokenRepository(dbPool)
+
+	pushSender, err := push.NewSender(context.Background(), cfg.FirebaseCredentials)
+	if err != nil {
+		log.Println("Push notifications disabled — Firebase not configured:", err)
+		pushSender = nil
+	}
+	notificationHandler := handlers.NewNotificationHandler(notificationRepo, deviceTokenRepo, pushSender)
+	deviceTokenHandler := handlers.NewDeviceTokenHandler(deviceTokenRepo)
+
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {
@@ -72,6 +87,9 @@ func main() {
 	routes.RegisterMessageRoutes(router, messageHandler)
 	routes.RegisterProfileRoutes(router, profileHandler)
 	routes.RegisterAgreementRoutes(router, agreementHandler)
+	routes.RegisterBrokerRoutes(router, brokerHandler)
+	routes.RegisterNotificationRoutes(router, notificationHandler)
+	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {

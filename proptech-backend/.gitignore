@@ -5,7 +5,7 @@ firebase-service-account*.json
 *.key
 
 # Build / OS / IDE
-proptech-backend/server
+/server
 *.exe
 *.test
 *.out

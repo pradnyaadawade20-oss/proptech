@@ -29,6 +29,17 @@ class PropertyService {
     }
   }
 
+  /// Properties listed by a given owner (GET /api/properties/my?owner_id=).
+  Future<List<Property>> getByOwner(String ownerId) async {
+    try {
+      final response = await _dio.get('/api/properties/my', queryParameters: {'owner_id': ownerId});
+      final list = response.data['properties'] as List<dynamic>? ?? [];
+      return list.map((e) => Property.fromJson(e as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   Future<Property> create({
     required String ownerId,
     required String title,

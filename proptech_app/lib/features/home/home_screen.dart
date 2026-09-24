@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../app/router/route_names.dart';
@@ -183,28 +183,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                     child: SizedBox(
-                      width: 250,
+                      width: 200,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           RichText(
                             text: TextSpan(
-                              style: AppTextStyles.h1.copyWith(height: 1.2),
+                              style: AppTextStyles.h1.copyWith(height: 1.2, fontSize: 21),
                               children: [
-                                const TextSpan(text: 'Find your\n'),
+                                const TextSpan(text: 'Find your 👋\n'),
                                 TextSpan(
                                   text: 'perfect property',
                                   style: const TextStyle().copyWith(color: AppColors.primary),
                                 ),
-                                const TextSpan(text: ' 👋'),
                               ],
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'Buy, Rent or Sell verified properties with complete trust.',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, fontSize: 11),
                           ),
                         ],
                       ),
@@ -212,25 +211,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(_heroImages.length, (i) {
-                final active = i == _heroPageIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 16 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.primary : AppColors.border,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

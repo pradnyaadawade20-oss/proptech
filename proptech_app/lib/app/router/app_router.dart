@@ -19,6 +19,10 @@ import '../../features/properties/add_property_screen.dart';
 import '../../features/chat/chat_list_screen.dart';
 import '../../features/chat/chat_detail_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/profile/settings_screen.dart';
+import '../../features/profile/help_support_screen.dart';
+import '../../features/profile/about_screen.dart';
+import '../../features/profile/legal_screen.dart';
 import '../../features/search/search_screen.dart';
 import '../../features/search/category_screen.dart';
 import '../../features/search/all_categories_screen.dart';
@@ -182,7 +186,30 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RouteNames.chatDetail,
-      builder: (context, state) => ChatDetailScreen(chatId: state.pathParameters['id']!),
+      builder: (context, state) => ChatDetailScreen(
+        chatId: state.pathParameters['id']!,
+        propertyId: state.uri.queryParameters['propertyId'],
+      ),
+    ),
+    GoRoute(
+      path: RouteNames.settings,
+      builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.helpSupport,
+      builder: (context, state) => const HelpSupportScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.about,
+      builder: (context, state) => const AboutScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.privacy,
+      builder: (context, state) => LegalScreen.privacy(),
+    ),
+    GoRoute(
+      path: RouteNames.terms,
+      builder: (context, state) => LegalScreen.terms(),
     ),
     GoRoute(
       path: RouteNames.ownerDashboard,
