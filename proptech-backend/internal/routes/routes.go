@@ -2,21 +2,29 @@ package routes
 
 import (
 	"proptech-backend/internal/handlers"
+	"proptech-backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
 func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
+	auth := middleware.AuthRequired()
+
 	properties := router.Group("/api/properties")
 	{
 		properties.GET("", h.GetAllProperties)
-		properties.GET("/my", h.GetMyProperties)
-		properties.GET("/dashboard-stats", h.GetDashboardStats)
 		properties.GET("/:id", h.GetPropertyByID)
-		properties.POST("", h.CreateProperty)
-		properties.PUT("/:id", h.UpdateProperty)
-		properties.PATCH("/:id/status", h.UpdateListingStatus)
-		properties.DELETE("/:id", h.DeleteProperty)
+	}
+
+	myProperties := router.Group("/api/properties")
+	myProperties.Use(auth)
+	{
+		myProperties.GET("/my", h.GetMyProperties)
+		myProperties.GET("/dashboard-stats", h.GetDashboardStats)
+		myProperties.POST("", h.CreateProperty)
+		myProperties.PUT("/:id", h.UpdateProperty)
+		myProperties.PATCH("/:id/status", h.UpdateListingStatus)
+		myProperties.DELETE("/:id", h.DeleteProperty)
 	}
 }
 
@@ -25,12 +33,18 @@ func RegisterAuthRoutes(router *gin.Engine, h *handlers.AuthHandler) {
 	{
 		auth.POST("/send-otp", h.SendOTP)
 		auth.POST("/verify-otp", h.VerifyOTP)
-		auth.PATCH("/users/:id/role", h.SwitchRole)
+	}
+
+	authProtected := router.Group("/api/auth")
+	authProtected.Use(middleware.AuthRequired())
+	{
+		authProtected.PATCH("/users/:id/role", h.SwitchRole)
 	}
 }
 
 func RegisterFavoriteRoutes(router *gin.Engine, h *handlers.FavoriteHandler) {
 	favorites := router.Group("/api/favorites")
+	favorites.Use(middleware.AuthRequired())
 	{
 		favorites.GET("", h.GetFavorites)
 		favorites.POST("", h.AddFavorite)
@@ -40,6 +54,7 @@ func RegisterFavoriteRoutes(router *gin.Engine, h *handlers.FavoriteHandler) {
 
 func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 	visits := router.Group("/api/visits")
+	visits.Use(middleware.AuthRequired())
 	{
 		visits.GET("", h.GetVisits)
 		visits.POST("", h.CreateVisit)
@@ -68,6 +83,7 @@ func RegisterProfileRoutes(router *gin.Engine, h *handlers.ProfileHandler) {
 
 func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 	agreements := router.Group("/api/agreements")
+	agreements.Use(middleware.AuthRequired())
 	{
 		agreements.GET("", h.GetAgreements)
 		agreements.GET("/:id", h.GetAgreementByID)

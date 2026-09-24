@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
+	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/repository"
 
@@ -18,7 +20,26 @@ func NewPropertyHandler(repo *repository.PropertyRepository) *PropertyHandler {
 }
 
 func (h *PropertyHandler) GetAllProperties(c *gin.Context) {
-	properties, err := h.repo.GetAll(c.Request.Context())
+	filter := models.PropertyFilter{
+		Location:      c.Query("location"),
+		BHK:           c.Query("bhk"),
+		Furnishing:    c.Query("furnishing"),
+		Category:      c.Query("category"),
+		ListingStatus: c.Query("listing_status"),
+		Sort:          c.Query("sort"),
+	}
+	if v := c.Query("min_price"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			filter.MinPrice = &parsed
+		}
+	}
+	if v := c.Query("max_price"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			filter.MaxPrice = &parsed
+		}
+	}
+
+	properties, err := h.repo.GetFiltered(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -36,12 +57,10 @@ func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 
-// GetMyProperties returns all properties belonging to the logged-in owner.
-// Expects owner_id as a query param for now (until auth middleware sets it on the context).
 func (h *PropertyHandler) GetMyProperties(c *gin.Context) {
-	ownerID := c.Query("owner_id")
-	if ownerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "owner_id is required"})
+	ownerID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	properties, err := h.repo.GetByOwnerID(c.Request.Context(), ownerID)
@@ -59,6 +78,13 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 		return
 	}
 
+	ownerID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	req.OwnerID = ownerID
+
 	property, err := h.repo.Create(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -70,6 +96,15 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 
 func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userOwnsProperty(c, id, userID) {
+		return
+	}
 
 	var req models.UpdatePropertyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -89,6 +124,15 @@ func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 func (h *PropertyHandler) DeleteProperty(c *gin.Context) {
 	id := c.Param("id")
 
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userOwnsProperty(c, id, userID) {
+		return
+	}
+
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -97,10 +141,17 @@ func (h *PropertyHandler) DeleteProperty(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Property deleted"})
 }
 
-// UpdateListingStatus marks a property Available, Rented, or Sold — used
-// from My Properties (owner/broker), feeds the dashboard stat pills.
 func (h *PropertyHandler) UpdateListingStatus(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userOwnsProperty(c, id, userID) {
+		return
+	}
 
 	var req models.UpdateListingStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -117,13 +168,10 @@ func (h *PropertyHandler) UpdateListingStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 
-// GetDashboardStats backs OwnerDashboardScreen / BrokerDashboardScreen's
-// "My Properties" card, Active Leads, and Visits This Week.
-// Expects owner_id as a query param for now (until auth middleware sets it on the context).
 func (h *PropertyHandler) GetDashboardStats(c *gin.Context) {
-	ownerID := c.Query("owner_id")
-	if ownerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "owner_id is required"})
+	ownerID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
@@ -134,4 +182,17 @@ func (h *PropertyHandler) GetDashboardStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+func (h *PropertyHandler) userOwnsProperty(c *gin.Context, propertyID, userID string) bool {
+	property, err := h.repo.GetByID(c.Request.Context(), propertyID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
+		return false
+	}
+	if property.OwnerID == nil || *property.OwnerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you don't own this property"})
+		return false
+	}
+	return true
 }

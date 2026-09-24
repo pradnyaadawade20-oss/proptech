@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"fmt"
+
+	"proptech-backend/internal/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"proptech-backend/internal/models"
 )
 
 type PropertyRepository struct {
@@ -39,6 +41,72 @@ func (r *PropertyRepository) GetAll(ctx context.Context) ([]models.Property, err
 	return properties, nil
 }
 
+func (r *PropertyRepository) GetFiltered(ctx context.Context, f models.PropertyFilter) ([]models.Property, error) {
+	query := `
+		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at
+		FROM properties
+		WHERE 1=1
+	`
+	var args []interface{}
+	argN := 0
+
+	addArg := func(v interface{}) string {
+		argN++
+		args = append(args, v)
+		return fmt.Sprintf("$%d", argN)
+	}
+
+	if f.Location != "" {
+		query += " AND location ILIKE " + addArg("%"+f.Location+"%")
+	}
+	if f.MinPrice != nil {
+		query += " AND price >= " + addArg(*f.MinPrice)
+	}
+	if f.MaxPrice != nil {
+		query += " AND price <= " + addArg(*f.MaxPrice)
+	}
+	if f.BHK != "" {
+		query += " AND bhk = " + addArg(f.BHK)
+	}
+	if f.Furnishing != "" {
+		query += " AND furnishing = " + addArg(f.Furnishing)
+	}
+	if f.Category != "" {
+		query += " AND category = " + addArg(f.Category)
+	}
+	if f.ListingStatus != "" {
+		query += " AND listing_status = " + addArg(f.ListingStatus)
+	}
+
+	switch f.Sort {
+	case "price_asc":
+		query += " ORDER BY price ASC"
+	case "price_desc":
+		query += " ORDER BY price DESC"
+	case "rating":
+		query += " ORDER BY rating DESC"
+	default:
+		query += " ORDER BY created_at DESC"
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var properties []models.Property
+	for rows.Next() {
+		var p models.Property
+		err := rows.Scan(&p.ID, &p.OwnerID, &p.Title, &p.ImageURL, &p.Price, &p.PriceUnit, &p.BHK, &p.Furnishing, &p.Location, &p.IsVerified, &p.Rating, &p.ReviewCount, &p.Category, &p.Amenities, &p.ListingStatus, &p.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		properties = append(properties, p)
+	}
+	return properties, nil
+}
+
 func (r *PropertyRepository) GetByID(ctx context.Context, id string) (*models.Property, error) {
 	var p models.Property
 	err := r.db.QueryRow(ctx, `
@@ -52,8 +120,6 @@ func (r *PropertyRepository) GetByID(ctx context.Context, id string) (*models.Pr
 	return &p, nil
 }
 
-// GetByOwnerID returns all properties listed by a specific owner
-// (used for the "My Properties" / Owner Dashboard screens).
 func (r *PropertyRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Property, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at
@@ -108,9 +174,6 @@ func (r *PropertyRepository) Update(ctx context.Context, id string, req models.U
 	return &p, nil
 }
 
-// UpdateListingStatus marks a property Available, Rented, or Sold —
-// used by My Properties (owner/broker) to update the stat pills shown
-// on their dashboard.
 func (r *PropertyRepository) UpdateListingStatus(ctx context.Context, id string, status string) (*models.Property, error) {
 	var p models.Property
 	err := r.db.QueryRow(ctx, `
@@ -126,9 +189,6 @@ func (r *PropertyRepository) UpdateListingStatus(ctx context.Context, id string,
 	return &p, nil
 }
 
-// GetDashboardStats aggregates one owner/broker's listings by status, plus
-// their active leads (open conversations) and visits scheduled in the next
-// 7 days — backs OwnerDashboardScreen / BrokerDashboardScreen's stat cards.
 func (r *PropertyRepository) GetDashboardStats(ctx context.Context, ownerID string) (*models.DashboardStats, error) {
 	var s models.DashboardStats
 

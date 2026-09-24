@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/repository"
 
@@ -17,11 +18,20 @@ func NewAgreementHandler(repo *repository.AgreementRepository) *AgreementHandler
 	return &AgreementHandler{repo: repo}
 }
 
-// POST /api/agreements — tenant/owner raises a request for an agreement
 func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req models.CreateAgreementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.OwnerID != userID && req.TenantID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you must be the owner or tenant on this agreement"})
 		return
 	}
 
@@ -33,11 +43,10 @@ func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"agreement": agreement})
 }
 
-// GET /api/agreements?user_id=... — all agreements where user is owner or tenant
 func (h *AgreementHandler) GetAgreements(c *gin.Context) {
-	userID := c.Query("user_id")
-	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
@@ -49,20 +58,38 @@ func (h *AgreementHandler) GetAgreements(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"agreements": agreements})
 }
 
-// GET /api/agreements/:id
 func (h *AgreementHandler) GetAgreementByID(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	agreement, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "agreement not found"})
 		return
 	}
+	if agreement.OwnerID != userID && agreement.TenantID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you're not a party on this agreement"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
 }
 
-// PUT /api/agreements/:id/draft — fill in terms, moves status -> draft_ready
 func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userIsParty(c, id, userID) {
+		return
+	}
 
 	var req models.UpdateDraftRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,27 +105,51 @@ func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
 }
 
-// POST /api/agreements/:id/sign — draw or type signature, no OTP
 func (h *AgreementHandler) SignAgreement(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	agreement, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agreement not found"})
+		return
+	}
 
 	var req models.SignAgreementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if (req.SignerRole == "owner" && agreement.OwnerID != userID) ||
+		(req.SignerRole == "tenant" && agreement.TenantID != userID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only sign as yourself"})
+		return
+	}
 
-	agreement, err := h.repo.Sign(c.Request.Context(), id, req)
+	signed, err := h.repo.Sign(c.Request.Context(), id, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
+	c.JSON(http.StatusOK, gin.H{"agreement": signed})
 }
 
-// PATCH /api/agreements/:id/status — cancel / reject
 func (h *AgreementHandler) UpdateStatus(c *gin.Context) {
 	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userIsParty(c, id, userID) {
+		return
+	}
 
 	var req models.UpdateAgreementStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -112,4 +163,17 @@ func (h *AgreementHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
+}
+
+func (h *AgreementHandler) userIsParty(c *gin.Context, agreementID, userID string) bool {
+	agreement, err := h.repo.GetByID(c.Request.Context(), agreementID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agreement not found"})
+		return false
+	}
+	if agreement.OwnerID != userID && agreement.TenantID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you're not a party on this agreement"})
+		return false
+	}
+	return true
 }

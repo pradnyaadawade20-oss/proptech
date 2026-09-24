@@ -21,8 +21,8 @@ class ApiClient {
   // vEthernet, or WSL adapter, those aren't reachable from the phone).
   // Physical device and PC must be on the same Wi-Fi network.
   // Swap this if the PC's IP changes (e.g. new network, DHCP renewal).
-  static const String _lanIp = '192.168.1.8'; // TODO verify this is the Wi-Fi adapter's IP, not a virtual one
-  static const int _port = 8091;
+  static const String _lanIp = '192.168.1.30'; // TODO verify this is the Wi-Fi adapter's IP, not a virtual one
+  static const int _port = 9091;
 
   static String get _baseUrl {
     if (kIsWeb) return 'http://localhost:$_port';

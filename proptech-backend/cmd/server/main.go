@@ -48,7 +48,7 @@ func main() {
 	favoriteHandler := handlers.NewFavoriteHandler(favoriteRepo)
 
 	visitRepo := repository.NewVisitRepository(dbPool)
-	visitHandler := handlers.NewVisitHandler(visitRepo)
+	visitHandler := handlers.NewVisitHandler(visitRepo, propertyRepo)
 
 	messageRepo := repository.NewMessageRepository(dbPool)
 	messageHandler := handlers.NewMessageHandler(messageRepo)
