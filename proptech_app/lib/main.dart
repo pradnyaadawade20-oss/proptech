@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,14 +8,25 @@ import 'features/notifications/push_notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Requires `flutterfire configure` to have generated
-  // lib/firebase_options.dart for this project (see PUSH_NOTIFICATIONS.md).
-  await Firebase.initializeApp();
-  await PushNotificationService.instance.init();
-
+  // Show the app immediately. Push setup must never block (or crash) startup:
+  // if Firebase isn't configured for this platform (web/desktop), or the
+  // device has no Google Play services, the UI still has to appear.
   runApp(
     const ProviderScope(
       child: ProptechApp(),
     ),
   );
+
+  _initPush();
+}
+
+Future<void> _initPush() async {
+  try {
+    await Firebase.initializeApp().timeout(const Duration(seconds: 10));
+    await PushNotificationService.instance
+        .init()
+        .timeout(const Duration(seconds: 15));
+  } catch (e) {
+    debugPrint('Push notifications disabled: $e');
+  }
 }

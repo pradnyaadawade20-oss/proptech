@@ -14,11 +14,11 @@ class ApiClient {
   late final Dio dio = _buildDio();
 
   Dio _buildDio() {
-    final dio = Dio(
+    final dio = Dio(  
       BaseOptions(
         baseUrl: _baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},
       ),
     );
@@ -41,4 +41,4 @@ class ApiClient {
 
     return dio;
   }
-}
+}     
