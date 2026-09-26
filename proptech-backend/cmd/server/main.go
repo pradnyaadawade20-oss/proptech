@@ -89,7 +89,7 @@ func main() {
 	routes.RegisterAgreementRoutes(router, agreementHandler)
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
-	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
+    routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
