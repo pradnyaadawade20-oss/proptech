@@ -98,8 +98,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 profile.email.isNotEmpty ? profile.email : 'Add your email',
                 style: AppTextStyles.bodySmall,
               ),
-              const SizedBox(height: 2),
-              Text(profile.phone, style: AppTextStyles.bodySmall),
+              if (profile.phone.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(profile.phone, style: AppTextStyles.bodySmall),
+              ],
             ],
           ),
         ),

@@ -1,17 +1,33 @@
 import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
+import '../favorites/favorite_service.dart';
 
 class AuthResult {
   final bool success;
   final String? errorMessage;
-  AuthResult.success() : success = true, errorMessage = null;
-  AuthResult.failure(this.errorMessage) : success = false;
+
+  /// From send-otp: false when the server could not deliver the email
+  /// (only possible while the backend runs with DEV_SKIP_OTP=true).
+  final bool emailSent;
+
+  /// From send-otp: true when the backend allows skipping OTP (testing only).
+  final bool skipAvailable;
+
+  AuthResult.success({this.emailSent = true, this.skipAvailable = false})
+      : success = true,
+        errorMessage = null;
+  AuthResult.failure(this.errorMessage)
+      : success = false,
+        emailSent = false,
+        skipAvailable = false;
 }
 
-/// Talks to /api/auth/send-otp and /api/auth/verify-otp. On successful
-/// verification, persists the JWT + user id via TokenStore so the rest
-/// of the app (ApiClient interceptor, screens needing user_id) can use
+/// Talks to /api/auth/send-otp and /api/auth/verify-otp.
+///
+/// Flow: email + password (+ name for first-time signup) -> backend emails a
+/// 6-digit OTP -> verify -> JWT + user id are persisted via TokenStore so the
+/// rest of the app (ApiClient interceptor, screens needing user_id) can use
 /// them without re-fetching.
 class AuthService {
   AuthService._();
@@ -19,41 +35,74 @@ class AuthService {
 
   final Dio _dio = ApiClient.instance.dio;
 
-  /// Returns the OTP for convenience during development (backend currently
-  /// echoes it back since there's no real SMS gateway wired up yet).
-  Future<String?> sendOtp(String phone) async {
+  /// Validates the credentials server-side and emails an OTP.
+  /// The OTP itself is never returned to the app.
+  Future<AuthResult> sendOtp({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
     try {
-      final response = await _dio.post('/api/auth/send-otp', data: {'phone': phone});
-      return response.data['otp'] as String?;
+      final response = await _dio.post('/api/auth/send-otp', data: {
+        'name': name,
+        'email': email,
+        'password': password,
+      });
+      final data = response.data;
+      return AuthResult.success(
+        emailSent: !(data is Map && data['email_sent'] == false),
+        skipAvailable: data is Map && data['skip_available'] == true,
+      );
     } on DioException catch (e) {
-      throw Exception(_extractError(e));
+      return AuthResult.failure(_extractError(e));
     }
   }
 
   Future<AuthResult> verifyOtp({
-    required String phone,
-    required String name,
+    required String email,
     required String otp,
     String role = 'tenant',
   }) async {
     try {
       final response = await _dio.post('/api/auth/verify-otp', data: {
-        'phone': phone,
-        'name': name,
+        'email': email,
         'otp': otp,
         'role': role,
       });
-
-      final token = response.data['token'] as String;
-      final user = response.data['user'] as Map<String, dynamic>;
-
-      await TokenStore.instance.saveToken(token);
-      await TokenStore.instance.saveUserId(user['id'] as String);
-
+      await _saveSession(response.data);
       return AuthResult.success();
     } on DioException catch (e) {
       return AuthResult.failure(_extractError(e));
     }
+  }
+
+  /// TESTING ONLY: logs in without an OTP. The backend rejects this (404)
+  /// unless it runs with DEV_SKIP_OTP=true, and it needs a prior successful
+  /// sendOtp for the same email (which already checked the password).
+  Future<AuthResult> skipOtp({
+    required String email,
+    String role = 'tenant',
+  }) async {
+    try {
+      final response = await _dio.post('/api/auth/skip-otp', data: {
+        'email': email,
+        'role': role,
+      });
+      await _saveSession(response.data);
+      return AuthResult.success();
+    } on DioException catch (e) {
+      return AuthResult.failure(_extractError(e));
+    }
+  }
+
+  Future<void> _saveSession(dynamic data) async {
+    final token = data['token'] as String;
+    final user = data['user'] as Map<String, dynamic>;
+
+    await TokenStore.instance.saveToken(token);
+    await TokenStore.instance.saveUserId(user['id'] as String);
+
+    FavoriteService.instance.syncFavoriteFlags();
   }
 
   String _extractError(DioException e) {

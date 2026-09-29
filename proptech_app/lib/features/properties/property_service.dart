@@ -30,6 +30,18 @@ class PropertyService {
     }
   }
 
+  /// Fetches real properties from the backend and replaces the shared
+  /// dummyProperties list every screen reads from. Call this once at app
+  /// startup (main.dart) and again on pull-to-refresh / after creating a
+  /// listing, so the whole app shows real data instead of anything mock.
+  Future<void> loadReal() async {
+    final fetched = await getAll();
+    dummyProperties
+      ..clear()
+      ..addAll(fetched);
+    notifyPropertiesChanged();
+  }
+
   /// Properties listed by a specific owner (backs the "Listed" count on
   /// Owner Details, and the My Properties screen). Backend endpoint is
   /// /api/properties/my?owner_id=... (kept as "/my" for the logged-in

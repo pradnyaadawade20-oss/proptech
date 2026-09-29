@@ -5,6 +5,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import 'auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,31 +16,66 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _loading = false;
+
+  static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  void _sendOtp() {
-    if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name')),
-      );
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _sendOtp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    if (name.isEmpty) {
+      _snack('Please enter your name');
       return;
     }
-    if (_phoneController.text.trim().length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid 10-digit phone number')),
-      );
+    if (!_emailRegex.hasMatch(email)) {
+      _snack('Enter a valid email address');
       return;
     }
+    if (password.length < 8) {
+      _snack('Password must be at least 8 characters');
+      return;
+    }
+
+    setState(() => _loading = true);
+    final result = await AuthService.instance.sendOtp(
+      name: name,
+      email: email,
+      password: password,
+    );
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (!result.success) {
+      _snack(result.errorMessage ?? 'Could not send OTP. Please try again.');
+      return;
+    }
+
     context.push(
       RouteNames.otpVerification,
-      extra: {'name': _nameController.text.trim(), 'phone': _phoneController.text.trim()},
+      extra: {
+        'name': name,
+        'email': email,
+        'password': password,
+        'emailSent': result.emailSent.toString(),
+        'skipAvailable': result.skipAvailable.toString(),
+      },
     );
   }
 
@@ -47,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,21 +96,36 @@ class _LoginScreenState extends State<LoginScreen> {
               AppTextField(
                 hint: 'Full name',
                 controller: _nameController,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
-                hint: 'Phone number',
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('+91', style: TextStyle(fontWeight: FontWeight.w600)),
+                hint: 'Email address',
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                prefixIcon: const Icon(Icons.email_outlined),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                hint: 'Password (min 8 characters)',
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
               AppButton(
                 label: 'Send OTP',
-                onPressed: _sendOtp,
+                loading: _loading,
+                onPressed: _loading ? null : _sendOtp,
               ),
             ],
           ),

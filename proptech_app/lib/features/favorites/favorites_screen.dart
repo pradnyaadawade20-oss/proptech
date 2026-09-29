@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
+import 'favorite_service.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -29,11 +30,25 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 return PropertyCard(
                   property: property,
                   onTap: () => context.push('/property/${property.id}'),
-                  onFavoriteTap: () {
+                  onFavoriteTap: () async {
                     setState(() {
                       final idx = dummyProperties.indexWhere((p) => p.id == property.id);
                       dummyProperties[idx] = property.copyWith(isFavorite: false);
                     });
+                    try {
+                      await FavoriteService.instance.remove(property.id);
+                    } catch (e) {
+                      // Revert if the backend call failed, so the list stays truthful.
+                      setState(() {
+                        final idx = dummyProperties.indexWhere((p) => p.id == property.id);
+                        if (idx != -1) dummyProperties[idx] = property.copyWith(isFavorite: true);
+                      });
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not remove favorite: $e')),
+                        );
+                      }
+                    }
                   },
                 );
               },

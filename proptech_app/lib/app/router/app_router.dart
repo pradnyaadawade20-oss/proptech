@@ -51,7 +51,13 @@ final GoRouter appRouter = GoRouter(
       path: RouteNames.otpVerification,
       builder: (context, state) {
         final extra = state.extra as Map<String, String>;
-        return OtpScreen(phoneNumber: extra['phone']!, name: extra['name']!);
+        return OtpScreen(
+          email: extra['email']!,
+          name: extra['name']!,
+          password: extra['password']!,
+          emailSent: extra['emailSent'] != 'false',
+          skipAvailable: extra['skipAvailable'] == 'true',
+        );
       },
     ),
     GoRoute(

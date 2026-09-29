@@ -15,12 +15,3 @@ class OwnerStats {
     required this.visitsThisWeek,
   });
 }
-
-final dummyOwnerStats = OwnerStats(
-  totalProperties: 8,
-  available: 5,
-  rented: 2,
-  sold: 1,
-  activeLeads: 12,
-  visitsThisWeek: 4,
-);

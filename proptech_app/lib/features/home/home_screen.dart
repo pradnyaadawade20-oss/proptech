@@ -8,6 +8,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
 import '../properties/recently_viewed_store.dart';
+import '../favorites/favorite_service.dart';
 import '../auth/role_switcher_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -80,11 +81,28 @@ class _HomeScreenState extends State<HomeScreen> {
     context.push(RouteNames.search, extra: query);
   }
 
-  void _toggleFavorite(String id) {
+  void _toggleFavorite(String id) async {
     final index = dummyProperties.indexWhere((p) => p.id == id);
-    if (index != -1) {
-      dummyProperties[index] = dummyProperties[index].copyWith(isFavorite: !dummyProperties[index].isFavorite);
-      notifyPropertiesChanged();
+    if (index == -1) return;
+
+    final wasFavorite = dummyProperties[index].isFavorite;
+
+    dummyProperties[index] = dummyProperties[index].copyWith(isFavorite: !wasFavorite);
+    notifyPropertiesChanged();
+
+    try {
+      await FavoriteService.instance.toggle(id, currentlyFavorite: wasFavorite);
+    } catch (e) {
+      final revertIndex = dummyProperties.indexWhere((p) => p.id == id);
+      if (revertIndex != -1) {
+        dummyProperties[revertIndex] = dummyProperties[revertIndex].copyWith(isFavorite: wasFavorite);
+        notifyPropertiesChanged();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update favorite: $e')),
+        );
+      }
     }
   }
 

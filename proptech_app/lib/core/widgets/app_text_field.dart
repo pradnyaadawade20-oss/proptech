@@ -5,7 +5,10 @@ class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final bool obscureText;
   final Widget? prefixIcon;
+  final Widget? suffixIcon;
   final TextInputType keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
 
   const AppTextField({
     super.key,
@@ -13,7 +16,10 @@ class AppTextField extends StatelessWidget {
     this.controller,
     this.obscureText = false,
     this.prefixIcon,
+    this.suffixIcon,
     this.keyboardType = TextInputType.text,
+    this.textInputAction,
+    this.autofillHints,
   });
 
   @override
@@ -22,9 +28,12 @@ class AppTextField extends StatelessWidget {
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: prefixIcon,
+        suffixIcon: suffixIcon,
       ),
     );
   }

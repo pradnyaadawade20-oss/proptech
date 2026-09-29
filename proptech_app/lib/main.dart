@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app/app.dart';
 import 'features/notifications/push_notification_service.dart';
+import 'features/properties/property_service.dart';
+import 'features/favorites/favorite_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,20 @@ void main() async {
   );
 
   _initPush();
+  _loadProperties();
+}
+
+/// Fetches real listings from the backend right after the UI appears.
+/// HomeScreen/SearchScreen etc. already rebuild on propertiesVersion
+/// changes, so they'll pick this up automatically once it lands — no need
+/// to block the splash/home screen waiting for it.
+Future<void> _loadProperties() async {
+  try {
+    await PropertyService.instance.loadReal().timeout(const Duration(seconds: 60));
+    await FavoriteService.instance.syncFavoriteFlags().timeout(const Duration(seconds: 60));
+  } catch (e) {
+    debugPrint('Failed to load properties from backend: $e');
+  }
 }
 
 Future<void> _initPush() async {
