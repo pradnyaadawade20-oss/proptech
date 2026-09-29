@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../favorites/favorite_service.dart';
-
+import '../properties/property_store.dart';
 class AuthResult {
   final bool success;
   final String? errorMessage;
@@ -103,8 +103,7 @@ class AuthService {
 
     await TokenStore.instance.saveToken(token);
     await TokenStore.instance.saveUserId(user['id'] as String);
-
-    FavoriteService.instance.syncFavoriteFlags();
+    await PropertyStore.instance.load();
   }
 
   String _extractError(DioException e) {

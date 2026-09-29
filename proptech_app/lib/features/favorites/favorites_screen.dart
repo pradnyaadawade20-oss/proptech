@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
-import 'favorite_service.dart';
+import '../properties/property_store.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -12,10 +12,10 @@ class FavoritesScreen extends StatefulWidget {
   State<FavoritesScreen> createState() => _FavoritesScreenState();
 }
 
-class _FavoritesScreenState extends State<FavoritesScreen> {
+class _FavoritesScreenState extends State<FavoritesScreen> with PropertyStoreListener<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
-    final favorites = dummyProperties.where((p) => p.isFavorite).toList();
+    final favorites = PropertyStore.instance.all.where((p) => p.isFavorite).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
@@ -30,26 +30,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 return PropertyCard(
                   property: property,
                   onTap: () => context.push('/property/${property.id}'),
-                  onFavoriteTap: () async {
-                    setState(() {
-                      final idx = dummyProperties.indexWhere((p) => p.id == property.id);
-                      dummyProperties[idx] = property.copyWith(isFavorite: false);
-                    });
-                    try {
-                      await FavoriteService.instance.remove(property.id);
-                    } catch (e) {
-                      // Revert if the backend call failed, so the list stays truthful.
-                      setState(() {
-                        final idx = dummyProperties.indexWhere((p) => p.id == property.id);
-                        if (idx != -1) dummyProperties[idx] = property.copyWith(isFavorite: true);
-                      });
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Could not remove favorite: $e')),
-                        );
-                      }
-                    }
-                  },
+                  onFavoriteTap: () => PropertyStore.instance.toggleFavorite(property.id),
                 );
               },
             ),
