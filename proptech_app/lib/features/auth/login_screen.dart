@@ -175,8 +175,9 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboardOpen ? 0 : width * footerFactor * _footerAspect;
           double natural() => heroH + topPad + 6 + formUnits * s + footerH();
 
-          if (natural() > height) footerFactor = 0.72;
-          if (natural() > height) {
+          // With the keyboard open the page scrolls, so keep normal sizes.
+          if (!keyboardOpen && natural() > height) footerFactor = 0.72;
+          if (!keyboardOpen && natural() > height) {
             s = ((height - heroH - topPad - 6 - footerH()) / formUnits)
                 .clamp(0.4, s)
                 .toDouble();
@@ -193,8 +194,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ? const ClampingScrollPhysics()
                 : const NeverScrollableScrollPhysics(),
             child: SizedBox(
-              height: contentH,
+              height: keyboardOpen ? null : contentH,
               child: Column(
+                mainAxisSize:
+                    keyboardOpen ? MainAxisSize.min : MainAxisSize.max,
                 children: [
                   // Hero banner (logo, headline, house, wave are in the image).
                   // It starts below the status bar; the strip behind the
@@ -393,8 +396,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                  const Spacer(),
-                  _Footer(s: s, factor: footerFactor),
+                  // Takes whatever height is left, so it can never overflow.
+                  if (!keyboardOpen)
+                    Expanded(child: _Footer(s: s, factor: footerFactor)),
+                  if (keyboardOpen) const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -724,62 +729,69 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    if (mq.viewInsets.bottom > 0) return const SizedBox(height: 12);
+    if (MediaQuery.of(context).viewInsets.bottom > 0) {
+      return const SizedBox.shrink();
+    }
 
-    final w = mq.size.width;
-    final h = w * factor * _footerAspect;
+    return LayoutBuilder(builder: (context, box) {
+      final w = box.maxWidth;
+      // Never taller than the space left; crops the empty sky on top
+      // instead of overflowing.
+      final h = math.min(w * factor * _footerAspect, box.maxHeight);
+      if (h < 8) return const SizedBox.shrink();
 
-    Widget img({Color? tint}) => Image.asset(
-          _asset,
+      Widget img({Color? tint}) => Image.asset(
+            _asset,
+            width: w,
+            height: h,
+            fit: BoxFit.cover,
+            alignment: Alignment.bottomCenter,
+            filterQuality: FilterQuality.high,
+            color: tint,
+            colorBlendMode: tint == null ? null : BlendMode.srcIn,
+          );
+
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
           width: w,
           height: h,
-          fit: BoxFit.cover,
-          alignment: Alignment.bottomCenter,
-          filterQuality: FilterQuality.high,
-          color: tint,
-          colorBlendMode: tint == null ? null : BlendMode.srcIn,
-        );
-
-    // Flush with the bottom edge, edge-to-edge (no side gap).
-    return SizedBox(
-      width: w,
-      height: h,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          // Ground shadow: blurred dark-teal copy pushed down/right.
-          Positioned.fill(
-            child: Transform.translate(
-              offset: Offset(w * 0.012, h * 0.035),
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: Opacity(
-                  opacity: 0.35,
-                  child: img(tint: const Color(0xFF0F5C4D)),
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              // Ground shadow: blurred dark-teal copy pushed down/right.
+              Positioned.fill(
+                child: Transform.translate(
+                  offset: Offset(w * 0.012, h * 0.035),
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: Opacity(
+                      opacity: 0.35,
+                      child: img(tint: const Color(0xFF0F5C4D)),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              // Main illustration: tilted slightly back for a 3D feel.
+              Transform(
+                alignment: Alignment.bottomCenter,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.0012)
+                  ..rotateX(0.10),
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.matrix(<double>[
+                    0.92, 0, 0, 0, 0,
+                    0, 0.94, 0, 0, 0,
+                    0, 0, 0.93, 0, 0,
+                    0, 0, 0, 1.15, 0,
+                  ]),
+                  child: img(),
+                ),
+              ),
+            ],
           ),
-          // Main illustration, tilted slightly back for a 3D feel and
-          // darkened a touch so it pops off the background.
-          Transform(
-            alignment: Alignment.bottomCenter,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0012)
-              ..rotateX(0.10),
-            child: ColorFiltered(
-              colorFilter: const ColorFilter.matrix(<double>[
-                0.92, 0, 0, 0, 0,
-                0, 0.94, 0, 0, 0,
-                0, 0, 0.93, 0, 0,
-                0, 0, 0, 1.15, 0,
-              ]),
-              child: img(),
-            ),
-          ),
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 }
