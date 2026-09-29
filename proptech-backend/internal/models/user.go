@@ -17,13 +17,16 @@ type User struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// SendOTPRequest: email + password (+ name for first-time signup). The server
+// emails a 6-digit code; nothing is created until that code is verified.
 type SendOTPRequest struct {
-	Phone string `json:"phone" binding:"required"`
+	Name     string `json:"name"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 type VerifyOTPRequest struct {
-	Phone string   `json:"phone" binding:"required"`
-	Name  string   `json:"name" binding:"required"`
+	Email string   `json:"email" binding:"required,email"`
 	OTP   string   `json:"otp" binding:"required"`
 	Role  string   `json:"role"`  // optional, defaults to "tenant"; kept for single-role callers
 	Roles []string `json:"roles"` // optional — matches RoleSelectionScreen's multi-select ("Continue with N roles")

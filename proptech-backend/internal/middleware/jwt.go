@@ -20,10 +20,10 @@ func getSecretFromEnv() string {
 	return "proptech-secret-key-change-in-production"
 }
 
-func GenerateToken(userID, phone, role string) (string, error) {
+func GenerateToken(userID, email, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"phone":   phone,
+		"email":   email,
 		"role":    role,
 		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(),
 	}
@@ -64,8 +64,8 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 		c.Set("user_id", userID)
-		if phone, ok := claims["phone"].(string); ok {
-			c.Set("phone", phone)
+		if email, ok := claims["email"].(string); ok {
+			c.Set("email", email)
 		}
 		if role, ok := claims["role"].(string); ok {
 			c.Set("role", role)

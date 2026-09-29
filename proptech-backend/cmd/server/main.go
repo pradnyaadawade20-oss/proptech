@@ -8,6 +8,7 @@ import (
 
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
+	"proptech-backend/internal/mail"
 	"proptech-backend/internal/migrate"
 	"proptech-backend/internal/push"
 	"proptech-backend/internal/repository"
@@ -15,15 +16,16 @@ import (
 	"proptech-backend/migrations"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment variables")
-	}
+	config.LoadDotEnv()
 
 	cfg := config.LoadConfig()
+	log.Println("Email OTP:", cfg.EmailTransport())
+	if cfg.DevSkipOTP {
+		log.Println("WARNING: DEV_SKIP_OTP=true — OTP verification can be skipped. Turn this off before real users sign up.")
+	}
 
 	dbPool, err := config.NewDBPool(cfg)
 	if err != nil {
@@ -42,7 +44,18 @@ func main() {
 	propertyHandler := handlers.NewPropertyHandler(propertyRepo)
 
 	userRepo := repository.NewUserRepository(dbPool)
-	authHandler := handlers.NewAuthHandler(userRepo)
+	otpRepo := repository.NewEmailOTPRepository(dbPool)
+	mailer := mail.New(mail.Config{
+		Host:        cfg.SMTPHost,
+		Port:        cfg.SMTPPort,
+		Username:    cfg.SMTPUser,
+		Password:    cfg.SMTPPass,
+		BrevoAPIKey: cfg.BrevoAPIKey,
+		FromEmail:   cfg.EmailFrom,
+		FromName:    cfg.EmailName,
+		DevLogOTP:   cfg.DevLogOTP,
+	})
+	authHandler := handlers.NewAuthHandler(userRepo, otpRepo, mailer, cfg.DevSkipOTP)
 	profileHandler := handlers.NewProfileHandler(userRepo)
 
 	favoriteRepo := repository.NewFavoriteRepository(dbPool)
@@ -89,7 +102,7 @@ func main() {
 	routes.RegisterAgreementRoutes(router, agreementHandler)
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
-    routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
+	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
