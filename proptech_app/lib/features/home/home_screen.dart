@@ -288,34 +288,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Quick-action icons row inside dark teal card
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.primaryDark,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: SizedBox(
-              height: 78,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                children: [
-                  _HeroIconItem(icon: Icons.home_outlined, label: 'Buy', onTap: () => context.push('/category/buy')),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.vpn_key_outlined, label: 'Rent', onTap: () => context.push('/category/rent')),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.apartment_outlined, label: 'Commercial', onTap: () => context.push('/category/commercial')),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.landscape_outlined, label: 'Plot/Land', onTap: () => context.push('/category/plot')),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.bed_outlined, label: 'PG', onTap: () => context.push('/category/pg')),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.add_circle_outline, label: 'Post', onTap: () => context.push(RouteNames.addProperty)),
-                  const _HeroIconDivider(),
-                  _HeroIconItem(icon: Icons.arrow_forward, label: 'View all', onTap: () => context.push('/all-categories')),
-                ],
-              ),
+          // Quick-action icons row — plain background, outlined circles
+          SizedBox(
+            height: 78,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              children: [
+                _HeroIconItem(icon: Icons.home_outlined, label: 'Buy', onTap: () => context.push('/category/buy')),
+                _HeroIconItem(icon: Icons.vpn_key_outlined, label: 'Rent', onTap: () => context.push('/category/rent')),
+                _HeroIconItem(icon: Icons.apartment_outlined, label: 'Commercial', onTap: () => context.push('/category/commercial')),
+                _HeroIconItem(icon: Icons.landscape_outlined, label: 'Plot/Land', onTap: () => context.push('/category/plot')),
+                _HeroIconItem(icon: Icons.bed_outlined, label: 'PG', onTap: () => context.push('/category/pg')),
+                _HeroIconItem(icon: Icons.add_circle_outline, label: 'Post', onTap: () => context.push(RouteNames.addProperty)),
+                _HeroIconItem(icon: Icons.arrow_forward, label: 'View all', onTap: () => context.push('/all-categories')),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1141,8 +1128,12 @@ class _HeroIconItem extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: Icon(icon, color: AppColors.primaryDark, size: 18),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border, width: 1.2),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 18),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1150,25 +1141,11 @@ class _HeroIconItem extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w600),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _HeroIconDivider extends StatelessWidget {
-  const _HeroIconDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      color: Colors.white24,
     );
   }
 }
