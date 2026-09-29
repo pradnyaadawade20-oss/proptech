@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/router/route_names.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -16,6 +17,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
@@ -23,9 +25,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
+  /// Accepts "98765 43210", "09876543210", "+91 98765 43210" and returns the
+  /// plain 10-digit number, or null if it isn't a valid Indian mobile number.
+  static String? _cleanPhone(String raw) {
+    var d = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (d.length == 12 && d.startsWith('91')) d = d.substring(2);
+    if (d.length == 11 && d.startsWith('0')) d = d.substring(1);
+    return RegExp(r'^[6-9][0-9]{9}$').hasMatch(d) ? d : null;
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -37,11 +49,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _sendOtp() async {
     final name = _nameController.text.trim();
+    final phone = _cleanPhone(_phoneController.text);
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
 
     if (name.isEmpty) {
       _snack('Please enter your name');
+      return;
+    }
+    if (phone == null) {
+      _snack('Enter a valid 10-digit mobile number');
       return;
     }
     if (!_emailRegex.hasMatch(email)) {
@@ -56,6 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     final result = await AuthService.instance.sendOtp(
       name: name,
+      phone: phone,
       email: email,
       password: password,
     );
@@ -71,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
       RouteNames.otpVerification,
       extra: {
         'name': name,
+        'phone': phone,
         'email': email,
         'password': password,
         'emailSent': result.emailSent.toString(),
@@ -98,6 +117,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _nameController,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.name],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                hint: 'Mobile number (10 digits)',
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                prefixIcon: const Icon(Icons.phone_outlined),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                  LengthLimitingTextInputFormatter(16),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(

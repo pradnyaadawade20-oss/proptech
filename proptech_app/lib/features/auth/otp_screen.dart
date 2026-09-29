@@ -16,6 +16,7 @@ import 'auth_service.dart';
 class OtpScreen extends StatefulWidget {
   final String email;
   final String name;
+  final String phone;
   final String password;
 
   /// False when the server couldn't deliver the email (testing mode only).
@@ -28,6 +29,7 @@ class OtpScreen extends StatefulWidget {
     super.key,
     required this.email,
     required this.name,
+    this.phone = '',
     required this.password,
     this.emailSent = true,
     this.skipAvailable = false,
@@ -86,6 +88,7 @@ class _OtpScreenState extends State<OtpScreen> {
     });
     final result = await AuthService.instance.sendOtp(
       name: widget.name,
+      phone: widget.phone,
       email: widget.email,
       password: widget.password,
     );
@@ -190,7 +193,15 @@ class _OtpScreenState extends State<OtpScreen> {
                 hintText: '••••••',
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            if (_skipAvailable)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _loading ? null : _skip,
+                  child: const Text('Skip for now'),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.md),
             AppButton(
               label: 'Verify & Continue',
               loading: _loading,
@@ -215,15 +226,6 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: const Text('Change email'),
               ),
             ),
-            if (_skipAvailable) ...[
-              const Divider(height: AppSpacing.xl),
-              Center(
-                child: TextButton(
-                  onPressed: _loading ? null : _skip,
-                  child: const Text('Skip for now (testing only)'),
-                ),
-              ),
-            ],
           ],
         ),
       ),

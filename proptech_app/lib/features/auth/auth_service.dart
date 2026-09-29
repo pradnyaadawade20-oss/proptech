@@ -39,12 +39,14 @@ class AuthService {
   /// The OTP itself is never returned to the app.
   Future<AuthResult> sendOtp({
     required String name,
+    required String phone,
     required String email,
     required String password,
   }) async {
     try {
       final response = await _dio.post('/api/auth/send-otp', data: {
         'name': name,
+        'phone': phone,
         'email': email,
         'password': password,
       });

@@ -55,6 +55,7 @@ final GoRouter appRouter = GoRouter(
         return OtpScreen(
           email: extra['email']!,
           name: extra['name']!,
+          phone: extra['phone'] ?? '',
           password: extra['password']!,
           emailSent: extra['emailSent'] != 'false',
           skipAvailable: extra['skipAvailable'] == 'true',
