@@ -30,18 +30,18 @@ class PropertyService {
     }
   }
 
-<<<<<<< HEAD
   /// Fetches real properties from the backend and replaces the shared
-  /// dummyProperties list every screen reads from. Call this once at app
-  /// startup (main.dart) and again on pull-to-refresh / after creating a
-  /// listing, so the whole app shows real data instead of anything mock.
+  /// property list every screen reads from (PropertyStore.instance.all).
+  /// Call this once at app startup (main.dart) and again on pull-to-refresh /
+  /// after creating a listing, so the whole app shows real data.
   Future<void> loadReal() async {
     final fetched = await getAll();
     dummyProperties
       ..clear()
       ..addAll(fetched);
     notifyPropertiesChanged();
-=======
+  }
+
   Future<Property> getById(String id) async {
     try {
       final response = await _dio.get('/api/properties/$id');
@@ -49,7 +49,6 @@ class PropertyService {
     } on DioException catch (e) {
       throw _toException(e);
     }
->>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
   }
 
   /// Properties listed by a specific owner (backs the "Listed" count on

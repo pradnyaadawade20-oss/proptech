@@ -9,7 +9,6 @@ import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
-import '../favorites/favorite_service.dart';
 import '../auth/role_switcher_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -157,34 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
     context.push(RouteNames.search, extra: query);
   }
 
-<<<<<<< HEAD
-  void _toggleFavorite(String id) async {
-    final index = dummyProperties.indexWhere((p) => p.id == id);
-    if (index == -1) return;
-
-    final wasFavorite = dummyProperties[index].isFavorite;
-
-    dummyProperties[index] = dummyProperties[index].copyWith(isFavorite: !wasFavorite);
-    notifyPropertiesChanged();
-
-    try {
-      await FavoriteService.instance.toggle(id, currentlyFavorite: wasFavorite);
-    } catch (e) {
-      final revertIndex = dummyProperties.indexWhere((p) => p.id == id);
-      if (revertIndex != -1) {
-        dummyProperties[revertIndex] = dummyProperties[revertIndex].copyWith(isFavorite: wasFavorite);
-        notifyPropertiesChanged();
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update favorite: $e')),
-        );
-      }
+  Future<void> _toggleFavorite(String id) async {
+    final ok = await PropertyStore.instance.toggleFavorite(id);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update favorite. Please log in and try again.')),
+      );
     }
-=======
-  void _toggleFavorite(String id) {
-    PropertyStore.instance.toggleFavorite(id);
->>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
   }
 
   @override

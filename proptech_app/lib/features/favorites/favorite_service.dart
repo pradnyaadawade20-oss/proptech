@@ -30,6 +30,13 @@ class FavoriteService {
     }
   }
 
+  /// Ids of the logged-in user's favorite properties. PropertyStore.load()
+  /// uses this to mark hearts. Throws when not logged in (caller handles it).
+  Future<Set<String>> getFavoriteIds() async {
+    final favorites = await getAll();
+    return favorites.map((p) => p.id).toSet();
+  }
+
   Future<void> add(String propertyId) async {
     try {
       await _dio.post('/api/favorites', data: {'property_id': propertyId});
@@ -47,9 +54,10 @@ class FavoriteService {
   }
 
   /// Toggles a favorite on the backend, then updates the shared
-  /// dummyProperties list so every screen (home, search, favorites) shows
-  /// the new heart state immediately. Throws if the API call fails, so the
-  /// caller can revert its optimistic UI update.
+  /// property list (dummyProperties == PropertyStore.instance.all) so every
+  /// screen (home, search, favorites) shows the new heart state immediately.
+  /// Throws if the API call fails, so the caller can revert its optimistic
+  /// UI update.
   Future<void> toggle(String propertyId, {required bool currentlyFavorite}) async {
     if (currentlyFavorite) {
       await remove(propertyId);

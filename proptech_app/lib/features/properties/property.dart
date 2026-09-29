@@ -1,9 +1,11 @@
 /// Property model. Fields mirror the backend API response (/api/properties).
 /// Real data is held in PropertyStore (see property_store.dart).
 library;
+
 import 'package:flutter/foundation.dart';
 import 'property_extras.dart';
 import 'property_store.dart';
+
 class Property {
   final String id;
   final String title;
@@ -200,14 +202,11 @@ class Property {
   }
 }
 
-<<<<<<< HEAD
-/// Shared in-memory property list every screen (home, search, favorites,
-/// categories, map...) reads from. It starts empty and gets filled by
-/// PropertyService.loadReal() — nothing here is hardcoded/mock anymore.
-List<Property> dummyProperties = [];
+/// Legacy alias: older screens (favorites, search, category...) still read and
+/// write `dummyProperties`. It is the very same list as
+/// PropertyStore.instance.all, so there is only one source of truth.
+List<Property> get dummyProperties => PropertyStore.instance.all;
 
-=======
->>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
 /// Matches a property against the same "property type" categories used in
 /// the search screen's quick-filter chips (Apartment/Villa/PG/House/Office).
 /// Shared so search screen and saved-search alert checks stay in sync.
