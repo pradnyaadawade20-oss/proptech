@@ -71,7 +71,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, 
 // CreateWithEmail creates an email/password account (emailVerified=false only
 // when the OTP step was skipped in testing mode). `roles` is every
 // role the person picked, `role` is whichever they started with.
-func (r *UserRepository) CreateWithEmail(ctx context.Context, name, email, passwordHash, role string, roles []string, emailVerified bool) (*models.User, error) {
+func (r *UserRepository) CreateWithEmail(ctx context.Context, name, email, phone, passwordHash, role string, roles []string, emailVerified bool) (*models.User, error) {
 	if role == "" {
 		role = "tenant"
 	}
@@ -79,10 +79,33 @@ func (r *UserRepository) CreateWithEmail(ctx context.Context, name, email, passw
 		roles = []string{role}
 	}
 	return scanUser(r.db.QueryRow(ctx, `
-		INSERT INTO users (name, email, password_hash, email_verified, role, roles, active_role)
-		VALUES ($1, $2, $3, $6, $4, $5, $4)
+		INSERT INTO users (name, email, password_hash, email_verified, role, roles, active_role, phone)
+		VALUES ($1, $2, $3, $6, $4, $5, $4, NULLIF($7, ''))
 		RETURNING `+userColumns,
-		name, normalizeEmail(email), passwordHash, role, roles, emailVerified))
+		name, normalizeEmail(email), passwordHash, role, roles, emailVerified, phone))
+}
+
+// PhoneTaken reports whether any account already uses this (normalized) phone.
+func (r *UserRepository) PhoneTaken(ctx context.Context, phone string) (bool, error) {
+	var taken bool
+	err := r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)`, phone).Scan(&taken)
+	return taken, err
+}
+
+// SetPhoneIfEmpty fills in the phone for an older account that signed up
+// before phone was collected. It never overwrites an existing number and
+// does nothing (returns false) if another account already owns this number.
+func (r *UserRepository) SetPhoneIfEmpty(ctx context.Context, id, phone string) (bool, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE users SET phone = $2
+		WHERE id = $1
+		  AND (phone IS NULL OR phone = '')
+		  AND NOT EXISTS (SELECT 1 FROM users WHERE phone = $2)
+	`, id, phone)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // MarkEmailVerified is called after a successful OTP login.

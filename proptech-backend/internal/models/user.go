@@ -21,6 +21,7 @@ type User struct {
 // emails a 6-digit code; nothing is created until that code is verified.
 type SendOTPRequest struct {
 	Name     string `json:"name"`
+	Phone    string `json:"phone"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }

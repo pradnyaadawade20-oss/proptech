@@ -14,6 +14,7 @@ type EmailOTP struct {
 	Email        string
 	OTPHash      string
 	Name         string
+	Phone        string
 	PasswordHash string
 	Attempts     int
 	ExpiresAt    time.Time
@@ -31,9 +32,9 @@ func NewEmailOTPRepository(db *pgxpool.Pool) *EmailOTPRepository {
 func (r *EmailOTPRepository) Get(ctx context.Context, email string) (*EmailOTP, error) {
 	var o EmailOTP
 	err := r.db.QueryRow(ctx, `
-		SELECT email, otp_hash, name, password_hash, attempts, expires_at, last_sent_at
+		SELECT email, otp_hash, name, COALESCE(phone, ''), password_hash, attempts, expires_at, last_sent_at
 		FROM email_otps WHERE email = $1
-	`, strings.ToLower(email)).Scan(&o.Email, &o.OTPHash, &o.Name, &o.PasswordHash, &o.Attempts, &o.ExpiresAt, &o.LastSentAt)
+	`, strings.ToLower(email)).Scan(&o.Email, &o.OTPHash, &o.Name, &o.Phone, &o.PasswordHash, &o.Attempts, &o.ExpiresAt, &o.LastSentAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -44,18 +45,19 @@ func (r *EmailOTPRepository) Get(ctx context.Context, email string) (*EmailOTP, 
 }
 
 // Upsert replaces any previous OTP for this email and resets attempts.
-func (r *EmailOTPRepository) Upsert(ctx context.Context, email, otpHash, name, passwordHash string, expiresAt time.Time) error {
+func (r *EmailOTPRepository) Upsert(ctx context.Context, email, otpHash, name, phone, passwordHash string, expiresAt time.Time) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO email_otps (email, otp_hash, name, password_hash, attempts, expires_at, last_sent_at)
-		VALUES ($1, $2, $3, $4, 0, $5, NOW())
+		INSERT INTO email_otps (email, otp_hash, name, phone, password_hash, attempts, expires_at, last_sent_at)
+		VALUES ($1, $2, $3, $6, $4, 0, $5, NOW())
 		ON CONFLICT (email) DO UPDATE
 		SET otp_hash = EXCLUDED.otp_hash,
 		    name = EXCLUDED.name,
+		    phone = EXCLUDED.phone,
 		    password_hash = EXCLUDED.password_hash,
 		    attempts = 0,
 		    expires_at = EXCLUDED.expires_at,
 		    last_sent_at = NOW()
-	`, strings.ToLower(email), otpHash, name, passwordHash, expiresAt)
+	`, strings.ToLower(email), otpHash, name, passwordHash, expiresAt, phone)
 	return err
 }
 

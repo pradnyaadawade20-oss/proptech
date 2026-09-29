@@ -28,6 +28,10 @@ services:
           property: database
       - key: DB_SSLMODE
         value: require
+      # TESTING ONLY: lets the app open the OTP screen + show "Skip" even when
+      # the email can't be sent (Render free blocks SMTP). Remove before real users.
+      - key: DEV_SKIP_OTP
+        value: "true"
 
 databases:
   - name: proptech-db

@@ -56,6 +56,29 @@ func generateOTP() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
+// normalizePhone turns "98765 43210", "09876543210", "+91 98765-43210" etc.
+// into "+919876543210". Returns "" if it isn't a valid Indian mobile number
+// (10 digits, starting with 6-9).
+func normalizePhone(raw string) string {
+	var digits strings.Builder
+	for _, r := range raw {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	d := digits.String()
+	switch {
+	case len(d) == 12 && strings.HasPrefix(d, "91"):
+		d = d[2:]
+	case len(d) == 11 && strings.HasPrefix(d, "0"):
+		d = d[1:]
+	}
+	if len(d) != 10 || d[0] < '6' || d[0] > '9' {
+		return ""
+	}
+	return "+91" + d
+}
+
 func hashOTP(email, otp string) string {
 	sum := sha256.Sum256([]byte(email + ":" + otp))
 	return hex.EncodeToString(sum[:])
@@ -84,6 +107,14 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 		return
 	}
 
+	// Phone is required for a new signup. For an existing account it is
+	// optional, but if given it must be valid (used to back-fill old accounts).
+	phone := normalizePhone(req.Phone)
+	if strings.TrimSpace(req.Phone) != "" && phone == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number"})
+		return
+	}
+
 	var pendingName, pendingHash string
 	if user != nil {
 		if existingHash == "" || bcrypt.CompareHashAndPassword([]byte(existingHash), []byte(req.Password)) != nil {
@@ -91,6 +122,20 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 			return
 		}
 	} else {
+		if phone == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Please enter your mobile number"})
+			return
+		}
+		taken, err := h.userRepo.PhoneTaken(ctx, phone)
+		if err != nil {
+			log.Printf("send-otp: phone lookup failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong. Please try again."})
+			return
+		}
+		if taken {
+			c.JSON(http.StatusConflict, gin.H{"error": "This mobile number is already registered with another account"})
+			return
+		}
 		if name == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Please enter your name"})
 			return
@@ -127,7 +172,7 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 		return
 	}
 
-	if err := h.otpRepo.Upsert(ctx, email, hashOTP(email, otp), pendingName, pendingHash, time.Now().Add(otpTTL)); err != nil {
+	if err := h.otpRepo.Upsert(ctx, email, hashOTP(email, otp), pendingName, phone, pendingHash, time.Now().Add(otpTTL)); err != nil {
 		log.Printf("send-otp: store failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong. Please try again."})
 		return
@@ -257,14 +302,22 @@ func (h *AuthHandler) completeLogin(c *gin.Context, email string, rec *repositor
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Please go back and sign up again."})
 			return
 		}
-		user, err = h.userRepo.CreateWithEmail(ctx, rec.Name, email, rec.PasswordHash, role, roles, emailVerified)
+		user, err = h.userRepo.CreateWithEmail(ctx, rec.Name, email, rec.Phone, rec.PasswordHash, role, roles, emailVerified)
 		if err != nil {
 			log.Printf("verify-otp: create user failed: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create your account. Please try again."})
 			return
 		}
-	} else if emailVerified {
-		_ = h.userRepo.MarkEmailVerified(ctx, user.ID)
+	} else {
+		if emailVerified {
+			_ = h.userRepo.MarkEmailVerified(ctx, user.ID)
+		}
+		// Older account created before phone was collected: fill it in now.
+		if user.Phone == "" && rec.Phone != "" {
+			if saved, err := h.userRepo.SetPhoneIfEmpty(ctx, user.ID, rec.Phone); err == nil && saved {
+				user.Phone = rec.Phone
+			}
+		}
 	}
 
 	token, err := middleware.GenerateToken(user.ID, user.Email, user.Role)
