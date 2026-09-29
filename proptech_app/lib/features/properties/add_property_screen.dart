@@ -26,7 +26,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
   final _locationController = TextEditingController();
-  final _imageUrlController = TextEditingController();
 
   String _category = 'Residential';
   String _bhk = '1 BHK';
@@ -58,7 +57,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     _titleController.dispose();
     _priceController.dispose();
     _locationController.dispose();
-    _imageUrlController.dispose();
     _floorPlanUrlController.dispose();
     super.dispose();
   }
@@ -130,14 +128,17 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       return;
     }
 
+    if (_pickedImage == null) {
+      _showError('Please choose a photo from your gallery.');
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
-      final created = await PropertyService.instance.create(
+      var created = await PropertyService.instance.create(
         ownerId: ownerId,
         title: _titleController.text.trim(),
-        imageUrl: _imageUrlController.text.trim().isEmpty
-            ? 'https://images.unsplash.com/photo-1568605114967-8130f3a36994'
-            : _imageUrlController.text.trim(),
+        imageUrl: '', // set for real right after upload below
         price: double.tryParse(_priceController.text.trim()) ?? 0,
         priceUnit: _priceUnit,
         bhk: _bhk,
@@ -146,6 +147,20 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         category: _category,
         amenities: _selectedAmenities.toList(),
       );
+
+      // Upload the exact photo the owner picked and use the real
+      // image_url the backend gives back — so this is the photo that
+      // shows up everywhere (My Properties, Home, and the buyer's
+      // browse/detail screens).
+      try {
+        final realImageUrl = await PropertyService.instance.uploadImage(created.id, _pickedImage!);
+        created = created.copyWith(imageUrl: realImageUrl);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _submitting = false);
+        _showError('Could not upload photo: $e');
+        return;
+      }
 
       // Also drop it into dummyProperties so it shows up immediately in
       // screens (Home, My Properties) that haven't been switched over to
@@ -460,23 +475,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ? (kIsWeb
                     ? Image.network(_pickedImage!.path, fit: BoxFit.cover)
                     : Image.file(File(_pickedImage!.path), fit: BoxFit.cover))
-                : _imageUrlController.text.trim().isEmpty
-                    ? Container(
-                        color: AppColors.surfaceSoft,
-                        child: const Center(
-                          child: Icon(Icons.image_outlined, size: 40, color: AppColors.textHint),
-                        ),
-                      )
-                    : Image.network(
-                        _imageUrlController.text.trim(),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.surfaceSoft,
-                          child: const Center(
-                            child: Icon(Icons.broken_image_outlined, size: 40, color: AppColors.textHint),
-                          ),
-                        ),
-                      ),
+                : Container(
+                    color: AppColors.surfaceSoft,
+                    child: const Center(
+                      child: Icon(Icons.image_outlined, size: 40, color: AppColors.textHint),
+                    ),
+                  ),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -498,29 +502,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               ),
             ],
           ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        Row(
-          children: [
-            const Expanded(child: Divider(color: AppColors.border)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              child: Text('OR', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-            ),
-            const Expanded(child: Divider(color: AppColors.border)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        TextFormField(
-          controller: _imageUrlController,
-          decoration: const InputDecoration(
-            labelText: 'Image URL (optional)',
-            hintText: 'Paste an image link',
-            prefixIcon: Icon(Icons.link),
-          ),
-          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: AppSpacing.xl),
 
@@ -625,7 +606,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     if (image != null) {
       setState(() {
         _pickedImage = image;
-        _imageUrlController.clear();
       });
     }
   }

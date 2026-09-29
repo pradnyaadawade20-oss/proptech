@@ -136,11 +136,11 @@ class Property {
     );
   }
 
-  Property copyWith({bool? isFavorite}) {
+  Property copyWith({bool? isFavorite, String? imageUrl}) {
     return Property(
       id: id,
       title: title,
-      imageUrl: imageUrl,
+      imageUrl: imageUrl ?? this.imageUrl,
       price: price,
       priceUnit: priceUnit,
       bhk: bhk,

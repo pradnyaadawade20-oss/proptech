@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// Change values here to re-theme the entire app.
 class AppColors {
   AppColors._();
-  static const Color primary = Color(0xFF075E54); // deep teal — buttons, active tabs
+  static const Color primary = Color.fromARGB(237, 7, 94, 77); // deep teal — buttons, active tabs
   static const Color primaryDark = Color(0xFF04413A); // headings / strong highlights
   static const Color primaryLight = Color(0xFFB8CEC8); // sage — selected states / badges
   static const Color secondary = Color(0xFFE8D39A); // champagne — accent buttons/highlights
