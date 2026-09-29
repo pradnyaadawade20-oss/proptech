@@ -7,6 +7,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../auth/role_switcher_sheet.dart';
 import '../owner/dashboard_service.dart';
 import '../owner/owner_stats.dart';
+import '../profile/profile_service.dart';
 
 /// Broker's home screen. Structurally mirrors OwnerDashboardScreen since
 /// a broker manages listings the same way an owner does — the difference
@@ -21,11 +22,15 @@ class BrokerDashboardScreen extends StatefulWidget {
 
 class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
   late Future<OwnerStats> _statsFuture;
+  String _name = '';
 
   @override
   void initState() {
     super.initState();
     _statsFuture = DashboardService.instance.getDashboardStats();
+    ProfileService.instance.getMyProfile().then((profile) {
+      if (mounted) setState(() => _name = profile.name);
+    }).catchError((_) {});
   }
 
   void _retry() {
@@ -44,7 +49,7 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
             title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hey Rahul Sharma 👋', style: AppTextStyles.h3),
+            Text(_name.isEmpty ? 'Hey there 👋' : 'Hey $_name 👋', style: AppTextStyles.h3),
             Text(
               'Manage clients, listings & leads',
               style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
@@ -106,20 +111,6 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
               decoration: const BoxDecoration(color: AppColors.primaryDark),
               child: Stack(
                 children: [
-                  Positioned(
-                    right: -AppSpacing.md,
-                    top: -AppSpacing.md,
-                    bottom: -AppSpacing.md,
-                    child: Opacity(
-                      opacity: 0.55,
-                      child: Image.network(
-                        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500',
-                        width: 260,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(

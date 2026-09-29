@@ -6,12 +6,14 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/app_button.dart';
-import '../../core/widgets/room_360_viewer.dart';
 import '../../core/widgets/gallery_viewer_screen.dart';
 import '../../core/widgets/video_tour_player.dart';
 import '../../core/widgets/document_verification_card.dart';
 import '../../core/api/token_store.dart';
+import '../profile/profile_service.dart';
+import '../visits/visit_service.dart';
 import 'property.dart';
+import 'property_store.dart';
 import 'recently_viewed_store.dart';
 
 class PropertyDetailScreen extends StatefulWidget {
@@ -22,7 +24,7 @@ class PropertyDetailScreen extends StatefulWidget {
   State<PropertyDetailScreen> createState() => _PropertyDetailScreenState();
 }
 
-class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
+class _PropertyDetailScreenState extends State<PropertyDetailScreen> with PropertyStoreListener<PropertyDetailScreen> {
   final PageController _imagePageController = PageController();
   int _imageIndex = 0;
 
@@ -33,6 +35,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     // so it doesn't interfere with this screen's own build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       RecentlyViewedStore.instance.markViewed(widget.propertyId);
+      _ensureLoaded();
     });
   }
 
@@ -40,6 +43,16 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   void dispose() {
     _imagePageController.dispose();
     super.dispose();
+  }
+
+  bool _notFound = false;
+
+  /// Property might not be cached yet (opened from a link / notification).
+  Future<void> _ensureLoaded() async {
+    if (PropertyStore.instance.byId(widget.propertyId) != null) return;
+    final fetched = await PropertyStore.instance.ensure(widget.propertyId);
+    if (!mounted) return;
+    if (fetched == null) setState(() => _notFound = true);
   }
 
   void _openGallery(Property property, int initialIndex) {
@@ -52,12 +65,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   }
 
   void _toggleFavorite(Property property) {
-    final index = dummyProperties.indexWhere((p) => p.id == property.id);
-    if (index != -1) {
-      dummyProperties[index] = property.copyWith(isFavorite: !property.isFavorite);
-      notifyPropertiesChanged();
-      setState(() {});
-    }
+    PropertyStore.instance.toggleFavorite(property.id);
   }
 
   Future<void> _bookVisit(Property property) async {
@@ -69,15 +77,23 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-    if (!mounted) return;
-    final timeLabel = time != null ? ' at ${time.format(context)}' : '';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Visit requested for ${property.title} on ${date.day}/${date.month}/${date.year}$timeLabel',
+    if (time == null || !mounted) return;
+    final scheduledAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await VisitService.instance.create(propertyId: property.id, scheduledAt: scheduledAt);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Visit requested for ${property.title} on ${date.day}/${date.month}/${date.year} at ${time.format(context)}',
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not book visit: ${e.toString().replaceFirst('Exception: ', '')}')),
+      );
+    }
   }
 
   void _contactOwner(Property property) {
@@ -93,12 +109,19 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
       );
       return;
     }
+    var ownerName = property.ownerName;
+    if (ownerName.isEmpty && property.ownerId.isNotEmpty) {
+      try {
+        ownerName = (await ProfileService.instance.getProfile(property.ownerId)).name;
+      } catch (_) {}
+    }
+    if (!mounted) return;
     context.push(
       '/property/${property.id}/agreement/request',
       extra: {
         'propertyTitle': property.title,
         'propertyImageUrl': property.imageUrl,
-        'counterpartyName': property.ownerName,
+        'counterpartyName': ownerName,
         'ownerId': property.ownerId,
         'tenantId': tenantId,
       },
@@ -143,10 +166,15 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final property = dummyProperties.firstWhere(
-      (p) => p.id == widget.propertyId,
-      orElse: () => dummyProperties.first,
-    );
+    final property = PropertyStore.instance.byId(widget.propertyId);
+    if (property == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: _notFound ? const Text('Property not found') : const CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -303,12 +331,14 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                         Expanded(
                           child: Text(property.location, style: AppTextStyles.bodySmall),
                         ),
-                        const Icon(Icons.star, size: 16, color: Colors.amber),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${property.rating} (${property.reviewCount} reviews)',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                        ),
+                        if (property.reviewCount > 0) ...[
+                          const Icon(Icons.star, size: 16, color: Colors.amber),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${property.rating.toStringAsFixed(1)} (${property.reviewCount} reviews)',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -326,20 +356,18 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                     ),
                     const Divider(height: AppSpacing.xl),
 
-                    // About
-                    Text('About Property', style: AppTextStyles.h3),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Well ventilated, spacious ${property.bhk} in a prime location with easy access to metro, schools, and markets.',
-                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
 
                     // Property Details — possession, age, floor, facing, area.
-                    Text('Property Details', style: AppTextStyles.h3),
-                    const SizedBox(height: AppSpacing.sm),
-                    _PropertyDetailsGrid(property: property),
-                    const SizedBox(height: AppSpacing.lg),
+                    if (property.possessionStatus.isNotEmpty ||
+                        property.ageOfPropertyYears >= 0 ||
+                        property.totalFloors > 0 ||
+                        property.facing.isNotEmpty ||
+                        property.area > 0) ...[
+                      Text('Property Details', style: AppTextStyles.h3),
+                      const SizedBox(height: AppSpacing.sm),
+                      _PropertyDetailsGrid(property: property),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
 
                     // Verification — RERA registration check + documents.
                     // Always shown; the card itself decides whether to
@@ -390,12 +418,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
                       _NearbyLandmarksSection(property: property),
                       const SizedBox(height: AppSpacing.lg),
                     ],
-
-                    // 360° room view (Hall, Bedroom, Kitchen, Washroom)
-                    Text('360° Room View', style: AppTextStyles.h3),
-                    const SizedBox(height: AppSpacing.sm),
-                    const Room360Preview(),
-                    const SizedBox(height: AppSpacing.lg),
 
                     // Gallery thumbnails — real photos, tap any to open the
                     // fullscreen swipeable viewer at that exact image.
@@ -659,13 +681,14 @@ class _SimilarPropertyCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(_formatPrice(property), style: AppTextStyles.price.copyWith(fontSize: 13)),
-                      Row(
-                        children: [
-                          const Icon(Icons.star, size: 12, color: Colors.amber),
-                          const SizedBox(width: 2),
-                          Text('${property.rating}', style: AppTextStyles.caption),
-                        ],
-                      ),
+                      if (property.reviewCount > 0)
+                        Row(
+                          children: [
+                            const Icon(Icons.star, size: 12, color: Colors.amber),
+                            const SizedBox(width: 2),
+                            Text(property.rating.toStringAsFixed(1), style: AppTextStyles.caption),
+                          ],
+                        ),
                     ],
                   ),
                 ],
@@ -806,26 +829,31 @@ class _PropertyDetailsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <(IconData, String, String)>[
-      (
-        Icons.event_available_outlined,
-        'Possession',
-        property.possessionDate != null
-            ? '${property.possessionStatus} • ${property.possessionDate!.day}/${property.possessionDate!.month}/${property.possessionDate!.year}'
-            : property.possessionStatus,
-      ),
-      (
-        Icons.cake_outlined,
-        'Age of Property',
-        property.ageOfPropertyYears == 0 ? 'New Construction' : '${property.ageOfPropertyYears} yrs old',
-      ),
-      (
-        Icons.stairs_outlined,
-        'Floor',
-        '${property.floorNumber} of ${property.totalFloors}',
-      ),
-      (Icons.explore_outlined, 'Facing', property.facing),
-      (Icons.square_foot_outlined, 'Area', '${property.area.toStringAsFixed(0)} sqft'),
+      if (property.possessionStatus.isNotEmpty)
+        (
+          Icons.event_available_outlined,
+          'Possession',
+          property.possessionDate != null
+              ? '${property.possessionStatus} • ${property.possessionDate!.day}/${property.possessionDate!.month}/${property.possessionDate!.year}'
+              : property.possessionStatus,
+        ),
+      if (property.ageOfPropertyYears >= 0)
+        (
+          Icons.cake_outlined,
+          'Age of Property',
+          property.ageOfPropertyYears == 0 ? 'New Construction' : '${property.ageOfPropertyYears} yrs old',
+        ),
+      if (property.totalFloors > 0)
+        (
+          Icons.stairs_outlined,
+          'Floor',
+          '${property.floorNumber} of ${property.totalFloors}',
+        ),
+      if (property.facing.isNotEmpty) (Icons.explore_outlined, 'Facing', property.facing),
+      if (property.area > 0) (Icons.square_foot_outlined, 'Area', '${property.area.toStringAsFixed(0)} sqft'),
     ];
+
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return GridView.count(
       crossAxisCount: 2,

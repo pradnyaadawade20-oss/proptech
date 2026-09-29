@@ -2,6 +2,7 @@ enum VisitStatus { pending, confirmed, completed, cancelled }
 
 class Visit {
   final String id;
+  final String propertyId;
   final String propertyTitle;
   final String propertyImageUrl;
   final String visitorName;
@@ -10,37 +11,27 @@ class Visit {
 
   const Visit({
     required this.id,
+    this.propertyId = '',
     required this.propertyTitle,
     required this.propertyImageUrl,
     required this.visitorName,
     required this.scheduledAt,
     required this.status,
   });
-}
 
-final List<Visit> dummyVisits = [
-  Visit(
-    id: '1',
-    propertyTitle: '2 BHK Apartment',
-    propertyImageUrl: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2',
-    visitorName: 'Rahul Sharma',
-    scheduledAt: DateTime.now().add(const Duration(days: 1, hours: 3)),
-    status: VisitStatus.pending,
-  ),
-  Visit(
-    id: '2',
-    propertyTitle: '1 BHK Apartment',
-    propertyImageUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688',
-    visitorName: 'Priya Verma',
-    scheduledAt: DateTime.now().add(const Duration(days: 2)),
-    status: VisitStatus.confirmed,
-  ),
-  Visit(
-    id: '3',
-    propertyTitle: 'PG for Boys',
-    propertyImageUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267',
-    visitorName: 'Aman Gupta',
-    scheduledAt: DateTime.now().subtract(const Duration(days: 1)),
-    status: VisitStatus.completed,
-  ),
-];
+  factory Visit.fromJson(Map<String, dynamic> json) {
+    final statusName = json['status'] as String? ?? 'pending';
+    return Visit(
+      id: json['id'] as String,
+      propertyId: json['property_id'] as String? ?? '',
+      propertyTitle: json['property_title'] as String? ?? '',
+      propertyImageUrl: json['property_image_url'] as String? ?? '',
+      visitorName: json['visitor_name'] as String? ?? '',
+      scheduledAt: DateTime.tryParse(json['scheduled_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      status: VisitStatus.values.firstWhere(
+        (s) => s.name == statusName,
+        orElse: () => VisitStatus.pending,
+      ),
+    );
+  }
+}

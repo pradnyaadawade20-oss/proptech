@@ -5,6 +5,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 import 'saved_search.dart';
 import 'saved_search_store.dart';
 
@@ -19,7 +20,7 @@ class SavedSearchResultsScreen extends StatefulWidget {
   State<SavedSearchResultsScreen> createState() => _SavedSearchResultsScreenState();
 }
 
-class _SavedSearchResultsScreenState extends State<SavedSearchResultsScreen> {
+class _SavedSearchResultsScreenState extends State<SavedSearchResultsScreen> with PropertyStoreListener<SavedSearchResultsScreen> {
   @override
   void initState() {
     super.initState();
@@ -67,12 +68,7 @@ class _SavedSearchResultsScreenState extends State<SavedSearchResultsScreen> {
                         property: property,
                         onTap: () => context.push('/property/${property.id}'),
                         onFavoriteTap: () {
-                          final i = dummyProperties.indexWhere((p) => p.id == property.id);
-                          if (i != -1) {
-                            dummyProperties[i] = property.copyWith(isFavorite: !property.isFavorite);
-                            notifyPropertiesChanged();
-                            setState(() {});
-                          }
+                          PropertyStore.instance.toggleFavorite(property.id);
                         },
                       );
                     },

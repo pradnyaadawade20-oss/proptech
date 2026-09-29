@@ -1,8 +1,9 @@
-/// Basic Property model. Fields mirror the future backend API response
-/// so switching from dummy data to real API later is just a data-source swap.
+/// Property model. Fields mirror the backend API response (/api/properties).
+/// Real data is held in PropertyStore (see property_store.dart).
 library;
 import 'package:flutter/foundation.dart';
 import 'property_extras.dart';
+import 'property_store.dart';
 class Property {
   final String id;
   final String title;
@@ -61,11 +62,13 @@ class Property {
   /// backs `verificationDocuments` with real, viewable images.
   final List<OwnershipDocument> ownershipDocuments;
 
-  // --- Owner info (placeholder until Properties are backend-connected;
-  // ownerId defaults to a dummy id so the Agreement flow has something to
-  // send — swap for the real owner_id once GET /api/properties returns it) ---
+  // --- Owner info (owner_id comes from GET /api/properties) ---
   final String ownerId;
   final String ownerName;
+
+  /// 'available' | 'rented' | 'sold'
+  final String listingStatus;
+  final DateTime? createdAt;
 
   const Property({
     required this.id,
@@ -78,18 +81,18 @@ class Property {
     required this.location,
     this.isVerified = false,
     this.isFavorite = false,
-    this.rating = 4.5,
+    this.rating = 0,
     this.reviewCount = 0,
-    this.amenities = const ['wifi', 'parking', 'lift', 'power_backup'],
+    this.amenities = const [],
     this.category = 'Residential',
-    this.area = 1000,
-    this.possessionStatus = 'Ready to Move',
-    this.ageOfPropertyYears = 0,
-    this.floorNumber = 1,
-    this.totalFloors = 1,
-    this.facing = 'North',
-    this.latitude = 19.0760,
-    this.longitude = 72.8777,
+    this.area = 0,
+    this.possessionStatus = '',
+    this.ageOfPropertyYears = -1, // -1 = unknown
+    this.floorNumber = 0,
+    this.totalFloors = 0,
+    this.facing = '',
+    this.latitude = 0,
+    this.longitude = 0,
     this.additionalImageUrls = const [],
     this.videoTourUrl,
     this.floorPlanUrl,
@@ -100,8 +103,10 @@ class Property {
     this.priceHistory = const [],
     this.nearbyLandmarks = const [],
     this.ownershipDocuments = const [],
-    this.ownerId = '11111111-1111-1111-1111-111111111101', // dummy Owner seed id, replace once Properties are backend-connected
-    this.ownerName = 'Property Owner',
+    this.ownerId = '',
+    this.ownerName = '',
+    this.listingStatus = 'available',
+    this.createdAt,
   });
 
   /// Full ordered gallery: cover image first, then any additional photos.
@@ -115,28 +120,45 @@ class Property {
   /// present yet (area, facing, gallery, etc.) fall back to defaults so
   /// this Property still renders fine in every existing screen.
   factory Property.fromJson(Map<String, dynamic> json) {
+    double num_(String k, [double d = 0]) => (json[k] as num?)?.toDouble() ?? d;
+    int int_(String k, [int d = 0]) => (json[k] as num?)?.toInt() ?? d;
+    final gallery = (json['additional_image_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const <String>[];
     return Property(
       id: json['id'] as String,
       title: json['title'] as String? ?? '',
-      imageUrl: (json['image_url'] as String?)?.isNotEmpty == true
-          ? json['image_url'] as String
-          : 'https://images.unsplash.com/photo-1568605114967-8130f3a36994',
-      price: (json['price'] as num?)?.toDouble() ?? 0,
+      imageUrl: json['image_url'] as String? ?? '',
+      price: num_('price'),
       priceUnit: json['price_unit'] as String? ?? '',
       bhk: json['bhk'] as String? ?? '',
       furnishing: json['furnishing'] as String? ?? '',
       location: json['location'] as String? ?? '',
       isVerified: json['is_verified'] as bool? ?? false,
-      rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
-      reviewCount: json['review_count'] as int? ?? 0,
-      amenities: (json['amenities'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const ['wifi', 'parking', 'lift', 'power_backup'],
+      rating: num_('rating'),
+      reviewCount: int_('review_count'),
+      amenities: (json['amenities'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       category: json['category'] as String? ?? 'Residential',
       ownerId: json['owner_id'] as String? ?? '',
+      ownerName: json['owner_name'] as String? ?? '',
+      listingStatus: json['listing_status'] as String? ?? 'available',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
+      // Optional fields — used automatically once the backend starts sending them.
+      area: num_('area'),
+      latitude: num_('latitude'),
+      longitude: num_('longitude'),
+      additionalImageUrls: gallery,
+      videoTourUrl: json['video_tour_url'] as String?,
+      floorPlanUrl: json['floor_plan_url'] as String?,
+      reraNumber: json['rera_number'] as String?,
+      isPriceNegotiable: json['is_price_negotiable'] as bool? ?? false,
     );
   }
 
-  Property copyWith({bool? isFavorite, String? imageUrl}) {
+  Property copyWith({
+    bool? isFavorite,
+    String? imageUrl,
+    List<String>? additionalImageUrls,
+    String? videoTourUrl,
+  }) {
     return Property(
       id: id,
       title: title,
@@ -160,8 +182,8 @@ class Property {
       facing: facing,
       latitude: latitude,
       longitude: longitude,
-      additionalImageUrls: additionalImageUrls,
-      videoTourUrl: videoTourUrl,
+      additionalImageUrls: additionalImageUrls ?? this.additionalImageUrls,
+      videoTourUrl: videoTourUrl ?? this.videoTourUrl,
       floorPlanUrl: floorPlanUrl,
       reraNumber: reraNumber,
       verificationDocuments: verificationDocuments,
@@ -170,15 +192,22 @@ class Property {
       priceHistory: priceHistory,
       nearbyLandmarks: nearbyLandmarks,
       ownershipDocuments: ownershipDocuments,
+      ownerId: ownerId,
+      ownerName: ownerName,
+      listingStatus: listingStatus,
+      createdAt: createdAt,
     );
   }
 }
 
+<<<<<<< HEAD
 /// Shared in-memory property list every screen (home, search, favorites,
 /// categories, map...) reads from. It starts empty and gets filled by
 /// PropertyService.loadReal() — nothing here is hardcoded/mock anymore.
 List<Property> dummyProperties = [];
 
+=======
+>>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
 /// Matches a property against the same "property type" categories used in
 /// the search screen's quick-filter chips (Apartment/Villa/PG/House/Office).
 /// Shared so search screen and saved-search alert checks stay in sync.
@@ -235,7 +264,7 @@ List<Property> filterProperties(
 /// Used for the "Similar Properties" section on the property detail screen.
 List<Property> similarProperties(Property target, {int limit = 8}) {
   final targetCity = target.location.split(',').last.trim().toLowerCase();
-  final candidates = dummyProperties.where((p) => p.id != target.id).toList();
+  final candidates = PropertyStore.instance.all.where((p) => p.id != target.id).toList();
 
   int score(Property p) {
     int s = 0;
@@ -279,12 +308,10 @@ List<Property> sortProperties(List<Property> input, String sortOption) {
       results.sort((a, b) => b.rating.compareTo(a.rating));
       break;
     case 'newest':
-      // dummyProperties order acts as a recency proxy (later index = posted
-      // more recently) until a real `createdAt` field comes from the backend.
       results.sort((a, b) {
-        final ia = dummyProperties.indexWhere((p) => p.id == a.id);
-        final ib = dummyProperties.indexWhere((p) => p.id == b.id);
-        return ib.compareTo(ia);
+        final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return db.compareTo(da);
       });
       break;
     case 'area_large':
@@ -297,7 +324,7 @@ List<Property> sortProperties(List<Property> input, String sortOption) {
   return results;
 }
 
-/// Notifies listening screens whenever dummyProperties changes (add/favorite toggle),
+/// Notifies listening screens whenever PropertyStore changes (load/add/favorite toggle),
 /// so they can refresh and show the latest data.
 final ValueNotifier<int> propertiesVersion = ValueNotifier(0);
 
@@ -305,41 +332,10 @@ void notifyPropertiesChanged() {
   propertiesVersion.value++;
 }
 
-/// Gives each property a spread-out map position without needing to hand-edit
-/// every dummy entry with real coordinates. If a property already has a
-/// non-default lat/lng (e.g. once real data comes from the backend), that
-/// value is used as-is.
+/// Real map position. Properties without stored coordinates (0,0) have no
+/// position and are skipped on the map.
 extension PropertyMapLocation on Property {
-  static const double _defaultLat = 19.0760;
-  static const double _defaultLng = 72.8777;
+  bool get hasMapPosition => latitude != 0 || longitude != 0;
 
-  // Major Indian cities used as anchor points so properties spread out
-  // realistically across the whole country instead of clustering in one spot.
-  static const List<({double lat, double lng})> _cityAnchors = [
-    (lat: 19.0760, lng: 72.8777), // Mumbai
-    (lat: 18.5204, lng: 73.8567), // Pune
-    (lat: 28.6139, lng: 77.2090), // Delhi
-    (lat: 12.9716, lng: 77.5946), // Bengaluru
-    (lat: 17.3850, lng: 78.4867), // Hyderabad
-    (lat: 13.0827, lng: 80.2707), // Chennai
-    (lat: 22.5726, lng: 88.3639), // Kolkata
-    (lat: 23.0225, lng: 72.5714), // Ahmedabad
-    (lat: 26.9124, lng: 75.7873), // Jaipur
-    (lat: 21.1458, lng: 79.0882), // Nagpur
-  ];
-
-  ({double lat, double lng}) get mapPosition {
-    if (latitude != _defaultLat || longitude != _defaultLng) {
-      return (lat: latitude, lng: longitude);
-    }
-    // Deterministic pseudo-random position based on the property id:
-    // pick a city anchor, then jitter a little around it so markers
-    // spread across India instead of sitting in a single straight line.
-    final hash = id.hashCode;
-    final anchor = _cityAnchors[hash.abs() % _cityAnchors.length];
-    final jitterLat = (((hash % 1000) / 1000) - 0.5) * 0.6;
-    final jitterLng = ((((hash ~/ 1000) % 1000) / 1000) - 0.5) * 0.6;
-
-    return (lat: anchor.lat + jitterLat, lng: anchor.lng + jitterLng);
-  }
+  ({double lat, double lng}) get mapPosition => (lat: latitude, lng: longitude);
 }

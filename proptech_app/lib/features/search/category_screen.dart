@@ -5,6 +5,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 import 'property_filters.dart';
 import 'advanced_filter_sheet.dart';
 import 'map_search_screen.dart';
@@ -19,7 +20,7 @@ class CategoryScreen extends StatefulWidget {
   State<CategoryScreen> createState() => _CategoryScreenState();
 }
 
-class _CategoryScreenState extends State<CategoryScreen> {
+class _CategoryScreenState extends State<CategoryScreen> with PropertyStoreListener<CategoryScreen> {
   String _sortOption = 'default'; // default, price_low, price_high, rating
   bool _verifiedOnly = false;
   PropertyFilters _advancedFilters = PropertyFilters();
@@ -28,70 +29,70 @@ class _CategoryScreenState extends State<CategoryScreen> {
     List<Property> results;
     switch (widget.filterType) {
       case 'rent':
-        results = dummyProperties
+        results = PropertyStore.instance.all
             .where((p) => p.category == 'Residential' && p.priceUnit == '/month' && p.bhk != 'PG')
             .toList();
         break;
       case 'buy':
-        results = dummyProperties
+        results = PropertyStore.instance.all
             .where((p) => p.category == 'Residential' && p.priceUnit != '/month')
             .toList();
         break;
       case 'pg':
-        results = dummyProperties.where((p) => p.bhk == 'PG').toList();
+        results = PropertyStore.instance.all.where((p) => p.bhk == 'PG').toList();
         break;
       case 'commercial':
-        results = dummyProperties.where((p) => p.category == 'Commercial').toList();
+        results = PropertyStore.instance.all.where((p) => p.category == 'Commercial').toList();
         break;
       case 'plot':
-        results = dummyProperties.where((p) => p.category == 'Plot/Land').toList();
+        results = PropertyStore.instance.all.where((p) => p.category == 'Plot/Land').toList();
         break;
       case '1bhk':
-        results = dummyProperties.where((p) => p.bhk == '1 BHK').toList();
+        results = PropertyStore.instance.all.where((p) => p.bhk == '1 BHK').toList();
         break;
       case '2bhk':
-        results = dummyProperties.where((p) => p.bhk == '2 BHK').toList();
+        results = PropertyStore.instance.all.where((p) => p.bhk == '2 BHK').toList();
         break;
       case 'rooms':
-        results = dummyProperties.where((p) => p.bhk == 'PG' || p.bhk == '1 BHK').toList();
+        results = PropertyStore.instance.all.where((p) => p.bhk == 'PG' || p.bhk == '1 BHK').toList();
         break;
       case 'villa':
-        results = dummyProperties.where((p) => p.bhk == '4 BHK' || p.title.toLowerCase().contains('bungalow') || p.title.toLowerCase().contains('villa')).toList();
+        results = PropertyStore.instance.all.where((p) => p.bhk == '4 BHK' || p.title.toLowerCase().contains('bungalow') || p.title.toLowerCase().contains('villa')).toList();
         break;
       case 'owner':
         // Heuristic: individually rented-out residential homes are typically owner-posted
-        results = dummyProperties.where((p) => p.category == 'Residential' && p.priceUnit == '/month').toList();
+        results = PropertyStore.instance.all.where((p) => p.category == 'Residential' && p.priceUnit == '/month').toList();
         break;
       case 'dealer':
         // Everything else (buy, commercial, plot) is typically posted by dealers/builders
-        results = dummyProperties.where((p) => !(p.category == 'Residential' && p.priceUnit == '/month')).toList();
+        results = PropertyStore.instance.all.where((p) => !(p.category == 'Residential' && p.priceUnit == '/month')).toList();
         break;
       case 'furnished':
-        results = dummyProperties
+        results = PropertyStore.instance.all
             .where((p) => p.furnishing == 'Furnished' || p.furnishing == 'Fully Furnished')
             .toList();
         break;
       case 'semifurnished':
-        results = dummyProperties.where((p) => p.furnishing == 'Semi Furnished').toList();
+        results = PropertyStore.instance.all.where((p) => p.furnishing == 'Semi Furnished').toList();
         break;
       case 'unfurnished':
-        results = dummyProperties.where((p) => p.furnishing == 'Unfurnished').toList();
+        results = PropertyStore.instance.all.where((p) => p.furnishing == 'Unfurnished').toList();
         break;
       case 'family':
-        results = dummyProperties
+        results = PropertyStore.instance.all
             .where((p) => p.category == 'Residential' && (p.bhk == '2 BHK' || p.bhk == '3 BHK' || p.bhk == '4 BHK'))
             .toList();
         break;
       case 'singles':
-        results = dummyProperties
+        results = PropertyStore.instance.all
             .where((p) => p.category == 'Residential' && (p.bhk == '1 BHK' || p.bhk == '1 RK' || p.bhk == 'PG'))
             .toList();
         break;
       case 'petfriendly':
-        results = dummyProperties.where((p) => p.category == 'Residential').toList();
+        results = PropertyStore.instance.all.where((p) => p.category == 'Residential').toList();
         break;
       default:
-        results = List.of(dummyProperties);
+        results = List.of(PropertyStore.instance.all);
     }
 
     if (_verifiedOnly) {

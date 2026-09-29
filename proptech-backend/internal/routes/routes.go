@@ -19,6 +19,8 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 		properties.DELETE("/:id", h.DeleteProperty)
 		properties.POST("/:id/image", h.UploadPropertyImage)
 		properties.GET("/:id/image", h.ServePropertyImage)
+		properties.POST("/:id/media", h.UploadPropertyMedia)
+		properties.GET("/:id/media/:mediaId", h.ServePropertyMedia)
 	}
 }
 

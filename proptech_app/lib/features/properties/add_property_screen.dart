@@ -8,6 +8,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
 import 'property.dart';
+import 'property_store.dart';
 import 'property_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -48,7 +49,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   ];
 
   final List<String> _stepTitles = ['Basic Details', 'Location & Price', 'Amenities', 'Photos'];
-  XFile? _pickedImage;
+  /// Photos in display order — the first one is the cover photo.
+  final List<XFile> _pickedImages = [];
+  XFile? _pickedVideo;
+  int _pickedVideoBytes = 0;
+  static const int _maxPhotos = 10;
+  static const int _maxVideoMb = 50;
   XFile? _pickedFloorPlan;
   final _floorPlanUrlController = TextEditingController();
   @override
@@ -128,8 +134,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       return;
     }
 
-    if (_pickedImage == null) {
-      _showError('Please choose a photo from your gallery.');
+    if (_pickedImages.isEmpty) {
+      _showError('Please choose at least one photo from your gallery.');
       return;
     }
 
@@ -148,12 +154,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         amenities: _selectedAmenities.toList(),
       );
 
-      // Upload the exact photo the owner picked and use the real
-      // image_url the backend gives back — so this is the photo that
-      // shows up everywhere (My Properties, Home, and the buyer's
-      // browse/detail screens).
+      // The first photo is the cover — it shows up everywhere (My
+      // Properties, Home, and the buyer's browse/detail screens).
       try {
-        final realImageUrl = await PropertyService.instance.uploadImage(created.id, _pickedImage!);
+        final realImageUrl = await PropertyService.instance.uploadImage(created.id, _pickedImages.first);
         created = created.copyWith(imageUrl: realImageUrl);
       } catch (e) {
         if (!mounted) return;
@@ -162,15 +166,31 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         return;
       }
 
-      // Also drop it into dummyProperties so it shows up immediately in
-      // screens (Home, My Properties) that haven't been switched over to
-      // fetch from the API yet.
-      dummyProperties.add(created);
-      notifyPropertiesChanged();
+      // Remaining photos + the video go into the listing's gallery / video tour.
+      final extraImages = _pickedImages.skip(1).toList();
+      String? mediaWarning;
+      if (extraImages.isNotEmpty || _pickedVideo != null) {
+        try {
+          final media = await PropertyService.instance.uploadMedia(
+            created.id,
+            images: extraImages,
+            video: _pickedVideo,
+          );
+          created = created.copyWith(
+            additionalImageUrls: media.imageUrls,
+            videoTourUrl: media.videoUrl,
+          );
+        } catch (e) {
+          // The listing itself is already created — don't lose it.
+          mediaWarning = 'Listed, but some photos/video could not be uploaded: $e';
+        }
+      }
+
+      PropertyStore.instance.add(created);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Property listed successfully!')),
+        SnackBar(content: Text(mediaWarning ?? 'Property listed successfully!')),
       );
       context.pop();
     } catch (e) {
@@ -465,16 +485,20 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return _buildStepCard(
       heading: 'Add photos',
       children: [
-        Text('Preview', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        Row(
+          children: [
+            Text('Photos', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+            const Spacer(),
+            Text('${_pickedImages.length}/$_maxPhotos', style: AppTextStyles.bodySmall),
+          ],
+        ),
         const SizedBox(height: AppSpacing.sm),
         ClipRRect(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           child: AspectRatio(
             aspectRatio: 16 / 9,
-            child: _pickedImage != null
-                ? (kIsWeb
-                    ? Image.network(_pickedImage!.path, fit: BoxFit.cover)
-                    : Image.file(File(_pickedImage!.path), fit: BoxFit.cover))
+            child: _pickedImages.isNotEmpty
+                ? _photoThumb(_pickedImages.first)
                 : Container(
                     color: AppColors.surfaceSoft,
                     child: const Center(
@@ -483,26 +507,88 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   ),
           ),
         ),
+        if (_pickedImages.length > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _pickedImages.length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+              itemBuilder: (context, i) => _buildPhotoTile(i),
+            ),
+          ),
+        ] else if (_pickedImages.length == 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: 72, child: Align(alignment: Alignment.centerLeft, child: _buildPhotoTile(0))),
+        ],
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          _pickedImages.isEmpty
+              ? 'Select one or more photos. The first one becomes the cover.'
+              : 'First photo is the cover. Tap a photo to make it the cover.',
+          style: AppTextStyles.bodySmall,
+        ),
         const SizedBox(height: AppSpacing.md),
 
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _pickFromGallery,
-                icon: const Icon(Icons.photo_library_outlined, size: 18),
-                label: const Text('Choose from Gallery'),
-              ),
-            ),
-            if (_pickedImage != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                onPressed: () => setState(() => _pickedImage = null),
-                icon: const Icon(Icons.close, color: AppColors.error),
-              ),
-            ],
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _pickedImages.length >= _maxPhotos ? null : _pickFromGallery,
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: Text(_pickedImages.isEmpty ? 'Choose from Gallery' : 'Add more photos'),
+          ),
         ),
+        const SizedBox(height: AppSpacing.xl),
+
+        // Video tour — optional, shown as "Video Tour" on the detail screen.
+        Text('Video Tour (optional)', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'A short walkthrough video (up to $_maxVideoMb MB) helps buyers/tenants trust your listing.',
+          style: AppTextStyles.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (_pickedVideo != null)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.videocam_outlined, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_pickedVideo!.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text('${(_pickedVideoBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
+                          style: AppTextStyles.bodySmall),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => setState(() {
+                    _pickedVideo = null;
+                    _pickedVideoBytes = 0;
+                  }),
+                  icon: const Icon(Icons.close, color: AppColors.error),
+                ),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _pickVideo,
+              icon: const Icon(Icons.video_library_outlined, size: 18),
+              label: const Text('Add Video'),
+            ),
+          ),
         const SizedBox(height: AppSpacing.xl),
 
         // Floor plan — optional, shown as its own section on the detail
@@ -600,13 +686,87 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     }
   }
 
+  Widget _photoThumb(XFile file) => kIsWeb
+      ? Image.network(file.path, fit: BoxFit.cover)
+      : Image.file(File(file.path), fit: BoxFit.cover);
+
+  Widget _buildPhotoTile(int i) {
+    final isCover = i == 0;
+    return GestureDetector(
+      onTap: isCover
+          ? null
+          : () => setState(() {
+                final f = _pickedImages.removeAt(i);
+                _pickedImages.insert(0, f);
+              }),
+      child: SizedBox(
+        width: 72,
+        height: 72,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              child: _photoThumb(_pickedImages[i]),
+            ),
+            if (isCover)
+              Positioned(
+                left: 4,
+                bottom: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Cover', style: TextStyle(color: Colors.white, fontSize: 10)),
+                ),
+              ),
+            Positioned(
+              right: 2,
+              top: 2,
+              child: GestureDetector(
+                onTap: () => setState(() => _pickedImages.removeAt(i)),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 14, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickFromGallery() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (image != null) {
-      setState(() {
-        _pickedImage = image;
-      });
+    final images = await picker.pickMultiImage(imageQuality: 80);
+    if (images.isEmpty) return;
+    final room = _maxPhotos - _pickedImages.length;
+    setState(() => _pickedImages.addAll(images.take(room)));
+    if (images.length > room) {
+      _showError('You can add up to $_maxPhotos photos — extra ones were skipped.');
     }
+  }
+
+  Future<void> _pickVideo() async {
+    final picker = ImagePicker();
+    final video = await picker.pickVideo(
+      source: ImageSource.gallery,
+      maxDuration: const Duration(minutes: 3),
+    );
+    if (video == null) return;
+    final bytes = await video.length();
+    if (bytes > _maxVideoMb * 1024 * 1024) {
+      _showError('Video is too large. Please pick one under $_maxVideoMb MB.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pickedVideo = video;
+      _pickedVideoBytes = bytes;
+    });
   }
 }

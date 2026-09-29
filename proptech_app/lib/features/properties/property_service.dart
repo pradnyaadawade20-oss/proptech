@@ -1,11 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import '../../core/api/api_client.dart';
 import 'property.dart';
 
 /// Talks to /api/properties/*. Add Property and Home listing use this to
-/// create/list real properties (with real UUIDs + owner_id) instead of
-/// the local dummyProperties list.
+/// create/list real properties (with real UUIDs + owner_id).
 class PropertyService {
   PropertyService._();
   static final PropertyService instance = PropertyService._();
@@ -30,6 +30,7 @@ class PropertyService {
     }
   }
 
+<<<<<<< HEAD
   /// Fetches real properties from the backend and replaces the shared
   /// dummyProperties list every screen reads from. Call this once at app
   /// startup (main.dart) and again on pull-to-refresh / after creating a
@@ -40,6 +41,15 @@ class PropertyService {
       ..clear()
       ..addAll(fetched);
     notifyPropertiesChanged();
+=======
+  Future<Property> getById(String id) async {
+    try {
+      final response = await _dio.get('/api/properties/$id');
+      return Property.fromJson(response.data['property'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+>>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
   }
 
   /// Properties listed by a specific owner (backs the "Listed" count on
@@ -99,6 +109,45 @@ class PropertyService {
       });
       final response = await _dio.post('/api/properties/$propertyId/image', data: formData);
       return response.data['image_url'] as String;
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Uploads the extra gallery photos and/or the walkthrough video for
+  /// [propertyId] (the cover photo goes through [uploadImage]). Returns the
+  /// property's full list of extra photo URLs and its video URL (or null).
+  Future<({List<String> imageUrls, String? videoUrl})> uploadMedia(
+    String propertyId, {
+    List<XFile> images = const [],
+    XFile? video,
+  }) async {
+    try {
+      Future<MultipartFile> part(XFile f) async => kIsWeb
+          ? MultipartFile.fromBytes(await f.readAsBytes(), filename: f.name)
+          : await MultipartFile.fromFile(f.path, filename: f.name);
+
+      final formData = FormData();
+      for (final img in images) {
+        formData.files.add(MapEntry('images', await part(img)));
+      }
+      if (video != null) {
+        formData.files.add(MapEntry('video', await part(video)));
+      }
+      final response = await _dio.post(
+        '/api/properties/$propertyId/media',
+        data: formData,
+        // Videos are big — allow far longer than the default 60s.
+        options: Options(
+          sendTimeout: const Duration(minutes: 10),
+          receiveTimeout: const Duration(minutes: 10),
+        ),
+      );
+      final data = response.data as Map<String, dynamic>;
+      final urls = (data['additional_image_urls'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList();
+      return (imageUrls: urls, videoUrl: data['video_tour_url'] as String?);
     } on DioException catch (e) {
       throw _toException(e);
     }

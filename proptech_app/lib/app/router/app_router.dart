@@ -9,6 +9,7 @@ import '../../features/properties/property_detail_screen.dart';
 import '../../features/search/map_search_screen.dart';
 import '../../features/properties/owner_detail_screen.dart';
 import '../../features/properties/property.dart';
+import '../../features/properties/property_store.dart';
 import 'route_names.dart';
 import '../../features/auth/otp_screen.dart';
 import '../../features/owner/owner_dashboard_screen.dart';
@@ -183,10 +184,13 @@ final GoRouter appRouter = GoRouter(
       path: '/property/:id/owner',
       builder: (context, state) {
         final id = state.pathParameters['id']!;
-        final property = dummyProperties.firstWhere(
-          (p) => p.id == id,
-          orElse: () => dummyProperties.first,
-        );
+        final property = PropertyStore.instance.byId(id);
+        if (property == null) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: const Center(child: Text('Property not found')),
+          );
+        }
         return OwnerDetailScreen(property: property);
       },
     ),

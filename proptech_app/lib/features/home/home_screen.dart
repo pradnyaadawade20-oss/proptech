@@ -7,6 +7,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
 import '../favorites/favorite_service.dart';
 import '../auth/role_switcher_sheet.dart';
@@ -25,29 +26,21 @@ class _HomeScreenState extends State<HomeScreen> {
   String _homeQuery = '';
   bool _showHomeSuggestions = false;
 
-  final PageController _heroPageController = PageController();
-  int _heroPageIndex = 0;
-  final List<String> _heroImages = const [
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500',
-    'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=500',
-    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=500',
-  ];
-
   final PageController _listBannerController = PageController();
   int _listBannerIndex = 0;
   final List<Map<String, String>> _listBannerSlides = const [
     {
-      'image': 'https://images.unsplash.com/photo-1568605114967-8130f3a36994',
+      'image': 'assets/images/onboarding_1.jpg',
       'title': 'List your property',
       'subtitle': 'Get verified & find the right buyers or tenants faster.',
     },
     {
-      'image': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750',
+      'image': 'assets/images/onboarding_2.jpg',
       'title': 'Sell faster with us',
-      'subtitle': 'Reach thousands of verified buyers in your city.',
+      'subtitle': 'Reach verified buyers in your city.',
     },
     {
-      'image': 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9',
+      'image': 'assets/images/onboarding_3.jpg',
       'title': 'Zero brokerage rentals',
       'subtitle': 'List your rental and connect directly with tenants.',
     },
@@ -56,23 +49,106 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    properties = List.of(dummyProperties);
+    properties = List.of(PropertyStore.instance.all);
     RecentlyViewedStore.instance.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => PropertyStore.instance.load());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _heroPageController.dispose();
     _listBannerController.dispose();
     super.dispose();
   }
 
   List<String> get _homeLocationSuggestions {
     if (_homeQuery.isEmpty) return [];
-    final locations = dummyProperties.map((p) => p.location).toSet().toList()..sort();
+    final locations = PropertyStore.instance.all.map((p) => p.location).toSet().toList()..sort();
     return locations.where((loc) => loc.toLowerCase().contains(_homeQuery.toLowerCase())).toList();
+  }
+
+  // ---- Real numbers / images derived from the loaded listings ----
+  int _count(bool Function(Property) test) => PropertyStore.instance.all.where(test).length;
+
+  String _countLabel(int n) => n == 1 ? '1 Property' : '$n Properties';
+
+  String _imageFor(bool Function(Property) test) {
+    for (final p in PropertyStore.instance.all) {
+      if (test(p) && p.imageUrl.isNotEmpty) return p.imageUrl;
+    }
+    return '';
+  }
+
+  bool _isBuy(Property p) => p.category == 'Residential' && p.priceUnit != '/month';
+  bool _isRent(Property p) => p.category == 'Residential' && p.priceUnit == '/month' && p.bhk != 'PG';
+  bool _isFurnished(Property p) => p.furnishing == 'Furnished' || p.furnishing == 'Fully Furnished';
+
+  String _priceText(Property p) {
+    final v = p.price;
+    final String s;
+    if (v >= 10000000) {
+      s = '₹${(v / 10000000).toStringAsFixed(2)} Cr';
+    } else if (v >= 100000) {
+      s = '₹${(v / 100000).toStringAsFixed(2)} L';
+    } else {
+      s = '₹${v.toStringAsFixed(0)}';
+    }
+    return p.priceUnit.isEmpty ? s : '$s ${p.priceUnit}';
+  }
+
+  String _timeAgo(DateTime? t) {
+    if (t == null) return '';
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+    if (d.inHours < 24) return '${d.inHours} hrs ago';
+    if (d.inDays == 1) return '1 day ago';
+    return '${d.inDays} days ago';
+  }
+
+  List<Map<String, String>> get _recentlyPostedItems {
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    final list = List<Property>.of(PropertyStore.instance.all)
+      ..sort((a, b) => (b.createdAt ?? epoch).compareTo(a.createdAt ?? epoch));
+    return list
+        .take(6)
+        .map((p) => {
+              'id': p.id,
+              'image': p.imageUrl,
+              'price': _priceText(p),
+              'title': p.title,
+              'subtitle': p.location,
+              'time': _timeAgo(p.createdAt),
+            })
+        .toList();
+  }
+
+  Widget _storeStatus() {
+    final store = PropertyStore.instance;
+    if (store.loading && !store.loaded) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (store.error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        child: Column(
+          children: [
+            Text(store.error!, style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+            TextButton(onPressed: store.load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: Center(
+        child: Text('No properties listed yet', style: AppTextStyles.bodySmall),
+      ),
+    );
   }
 
   void _goToSearchResults(String query) {
@@ -81,6 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
     context.push(RouteNames.search, extra: query);
   }
 
+<<<<<<< HEAD
   void _toggleFavorite(String id) async {
     final index = dummyProperties.indexWhere((p) => p.id == id);
     if (index == -1) return;
@@ -104,6 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+=======
+  void _toggleFavorite(String id) {
+    PropertyStore.instance.toggleFavorite(id);
+>>>>>>> 259e153 (feat: multi photo + video upload, media endpoints, home hero image)
   }
 
   @override
@@ -111,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ValueListenableBuilder<int>(
       valueListenable: propertiesVersion,
       builder: (context, _, __) {
-        properties = List.of(dummyProperties);
+        properties = List.of(PropertyStore.instance.all);
         return _buildScaffold(context);
       },
     );
@@ -150,7 +231,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: RefreshIndicator(
+        onRefresh: () => PropertyStore.instance.load(),
+        child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
           // Greeting heading + hero banner (gradient-fade image, like "List your property" banner)
@@ -167,17 +251,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: 0,
                     bottom: 0,
                     width: 160,
-                    child: PageView.builder(
-                      controller: _heroPageController,
-                      itemCount: _heroImages.length,
-                      onPageChanged: (i) => setState(() => _heroPageIndex = i),
-                      itemBuilder: (context, index) => CachedNetworkImage(
-                        imageUrl: _heroImages[index],
-                        width: 160,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(width: 160, color: AppColors.primaryLight),
-                        errorWidget: (_, __, ___) => Container(width: 160, color: AppColors.primaryLight),
-                      ),
+                    child: Image.asset(
+                      'assets/images/hero_house.jpg',
+                      width: 160,
+                      fit: BoxFit.cover,
                     ),
                   ),
                   // Fade so text stays readable, matches background color on the left
@@ -392,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           right: -20,
                           bottom: -20,
                           top: 0,
-                          child: Image.network(
+                          child: Image.asset(
                             slide['image']!,
                             width: 180,
                             fit: BoxFit.cover,
@@ -503,7 +580,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          SizedBox(
+          properties.isEmpty
+              ? _storeStatus()
+              : SizedBox(
             height: 300,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
@@ -587,168 +666,76 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // ---------------- Recently posted properties ----------------
-          const _FadeSlideIn(
-            delayMs: 0,
-            child: _SectionHeader(
-              title: 'Recently posted properties',
-              subtitle: 'Fresh properties, be quick before they rent out',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FadeSlideIn(
-            delayMs: 50,
-            child: SizedBox(
-              height: 250,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _recentlyPosted.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final item = _recentlyPosted[index];
-                  return _RecentlyPostedCard(
-                    data: item,
-                    onTap: () => context.push('/property/${item['id']}'),
-                  );
-                },
+          if (_recentlyPostedItems.isNotEmpty) ...[
+            const _FadeSlideIn(
+              delayMs: 0,
+              child: _SectionHeader(
+                title: 'Recently posted properties',
+                subtitle: 'Fresh properties, be quick before they rent out',
               ),
             ),
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
-
-          // ---------------- Recommended Projects ----------------
-          const _FadeSlideIn(
-            delayMs: 100,
-            child: _SectionHeader(
-              title: 'Recommended Projects',
-              subtitle: 'The most searched projects near you',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FadeSlideIn(
-            delayMs: 150,
-            child: SizedBox(
-              height: 210,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _recommendedProjects.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final item = _recommendedProjects[index];
-                  return _ProjectCard(
-                    data: item,
-                    onTap: () => context.push('/property/${item['id']}'),
-                  );
-                },
+            const SizedBox(height: AppSpacing.md),
+            _FadeSlideIn(
+              delayMs: 50,
+              child: SizedBox(
+                height: 250,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _recentlyPostedItems.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+                  itemBuilder: (context, index) {
+                    final item = _recentlyPostedItems[index];
+                    return _RecentlyPostedCard(
+                      data: item,
+                      onTap: () => context.push('/property/${item['id']}'),
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
-
-          // ---------------- Curated rental collections ----------------
-          const _FadeSlideIn(
-            delayMs: 200,
-            child: _SectionHeader(
-              title: 'Curated rental collections',
-              subtitle: 'Handpicked for how you live',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FadeSlideIn(
-            delayMs: 250,
-            child: SizedBox(
-              height: 150,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _rentalCollections.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final item = _rentalCollections[index];
-                  return _CollectionCard(
-                    data: item,
-                    onTap: () => context.push('/category/${item['type']}'),
-                  );
-                },
-              ),
-            ),
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xl),
+          ],
 
           // ---------------- Homes by furnishing ----------------
-          const _FadeSlideIn(
-            delayMs: 300,
-            child: _SectionHeader(
-              title: 'Homes by furnishing',
-              subtitle: 'Choose your preferred furnishing',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FadeSlideIn(
-            delayMs: 350,
-            child: SizedBox(
-              height: 140,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _furnishingOptions.length,
-                separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final item = _furnishingOptions[index];
-                  return _ImageLabelTile(
-                    imageUrl: item['image']!,
-                    label: item['label']!,
-                    onTap: () => context.push('/category/${item['type']}'),
-                  );
-                },
+          if (PropertyStore.instance.all.isNotEmpty) ...[
+            const _FadeSlideIn(
+              delayMs: 300,
+              child: _SectionHeader(
+                title: 'Homes by furnishing',
+                subtitle: 'Choose your preferred furnishing',
               ),
             ),
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
-
-          // ---------------- Properties posted by ----------------
-          _FadeSlideIn(
-            delayMs: 400,
-            child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Properties\nposted by', style: AppTextStyles.h2.copyWith(height: 1.2)),
-                const SizedBox(height: AppSpacing.md),
-                Row(
+            const SizedBox(height: AppSpacing.md),
+            _FadeSlideIn(
+              delayMs: 350,
+              child: SizedBox(
+                height: 140,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
                   children: [
-                    Expanded(
-                      child: _PostedByCard(
-                        icon: Icons.badge_outlined,
-                        label: 'Dealer',
-                        subtitle: '9,300+ Properties',
-                        onTap: () => context.push('/category/dealer'),
-                      ),
+                    _ImageLabelTile(
+                      imageUrl: _imageFor(_isFurnished),
+                      label: 'Furnished (${_count(_isFurnished)})',
+                      onTap: () => context.push('/category/furnished'),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: _PostedByCard(
-                        icon: Icons.person_outline,
-                        label: 'Owner',
-                        subtitle: '710+ Properties',
-                        onTap: () => context.push('/category/owner'),
-                      ),
+                    _ImageLabelTile(
+                      imageUrl: _imageFor((p) => p.furnishing == 'Semi Furnished'),
+                      label: 'Semifurnished (${_count((p) => p.furnishing == 'Semi Furnished')})',
+                      onTap: () => context.push('/category/semifurnished'),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    _ImageLabelTile(
+                      imageUrl: _imageFor((p) => p.furnishing == 'Unfurnished'),
+                      label: 'Unfurnished (${_count((p) => p.furnishing == 'Unfurnished')})',
+                      onTap: () => context.push('/category/unfurnished'),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-            ),
-          ),
-
-          const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xl),
+          ],
 
           // ---------------- Apartments, Villas and more ----------------
           const _FadeSlideIn(
@@ -765,9 +752,9 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: _CategoryImageCard(
-                    title: 'Residential\nApartment',
-                    subtitle: '9,800+ Properties',
-                    imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00',
+                    title: 'Homes\nfor Sale',
+                    subtitle: _countLabel(_count(_isBuy)),
+                    imageUrl: _imageFor(_isBuy),
                     bgColor: AppColors.primaryLight,
                     onTap: () => context.push('/category/buy'),
                   ),
@@ -775,9 +762,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: _CategoryImageCard(
-                    title: 'Studio\nApartment',
-                    subtitle: '90+ Properties',
-                    imageUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688',
+                    title: 'Homes\nfor Rent',
+                    subtitle: _countLabel(_count(_isRent)),
+                    imageUrl: _imageFor(_isRent),
                     bgColor: const Color(0xFFDCE7F0),
                     onTap: () => context.push('/category/rent'),
                   ),
@@ -807,13 +794,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 96,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: _bhkChoices.length,
+                    itemCount: 3,
                     separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
                     itemBuilder: (context, index) {
-                      final item = _bhkChoices[index];
+                      final labels = ['1 RK/1 BHK', '2 BHK', '3 BHK'];
+                      final tests = <bool Function(Property)>[
+                        (p) => p.bhk == '1 RK' || p.bhk == '1 BHK',
+                        (p) => p.bhk == '2 BHK',
+                        (p) => p.bhk == '3 BHK',
+                      ];
                       return _BhkCard(
-                        label: item['label']!,
-                        subtitle: item['subtitle']!,
+                        label: labels[index],
+                        subtitle: _countLabel(_count(tests[index])),
                         onTap: () => context.push(RouteNames.search),
                       );
                     },
@@ -827,100 +819,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: AppSpacing.xl),
         ],
       ),
+      ),
     );
   }
 }
-
-// ==================== Dummy dashboard data ====================
-
-final List<Map<String, String>> _recentlyPosted = [
-  {
-    'id': 'rp1',
-    'image': 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267',
-    'price': '₹10,000 /month',
-    'title': '1 RK Studio Apartment',
-    'subtitle': 'In Priyadarshani CHS, Gaurish Nagar',
-    'time': '22 hrs ago',
-  },
-  {
-    'id': 'rp2',
-    'image': 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2',
-    'price': '₹10,000 /month',
-    'title': '1 RK Studio Apartment',
-    'subtitle': 'In Priyadarshani CHS, Savitribai Rd',
-    'time': '23 hrs ago',
-  },
-  {
-    'id': 'rp3',
-    'image': 'https://images.unsplash.com/photo-1502672023488-70e25813eb80',
-    'price': '₹6,500 /month',
-    'title': '1 RK Studio Apartment',
-    'subtitle': 'In apartment complex, Chembur',
-    'time': '1 day ago',
-  },
-  {
-    'id': 'rp4',
-    'image': 'https://images.unsplash.com/photo-1493809842364-78817add7ffb',
-    'price': '₹18,000 /month',
-    'title': '2 BHK Apartment',
-    'subtitle': 'In Sunrise Towers, Andheri',
-    'time': '2 days ago',
-  },
-];
-
-final List<Map<String, String>> _recommendedProjects = [
-  {
-    'id': 'proj1',
-    'image': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab',
-    'title': 'Marathon Neopark',
-    'subtitle': '1 BHK · 1 RK Studio Apartment in Bhandup West, Mumbai',
-  },
-  {
-    'id': 'proj2',
-    'image': 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00',
-    'title': 'Sayba Swarnaz',
-    'subtitle': '1, 2 BHK Apartment in Kandivali, Mumbai',
-  },
-  {
-    'id': 'proj3',
-    'image': 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750',
-    'title': 'Lodha Amara',
-    'subtitle': '2, 3 BHK Apartment in Thane West, Mumbai',
-  },
-];
-
-final List<Map<String, String>> _rentalCollections = [
-  {
-    'type': 'family',
-    'image': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c',
-    'title': 'For Family',
-    'subtitle': '10,000+ Properties',
-  },
-  {
-    'type': 'singles',
-    'image': 'https://images.unsplash.com/photo-1522771930-78848d9293e8',
-    'title': 'For Singles',
-    'subtitle': '5,900+ Properties',
-  },
-  {
-    'type': 'petfriendly',
-    'image': 'https://images.unsplash.com/photo-1560185127-6ed189bf02f4',
-    'title': 'Pet Friendly',
-    'subtitle': '3,200+ Properties',
-  },
-];
-
-final List<Map<String, String>> _furnishingOptions = [
-  {'type': 'furnished', 'image': 'https://images.unsplash.com/photo-1493809842364-78817add7ffb', 'label': 'Furnished'},
-  {'type': 'semifurnished', 'image': 'https://images.unsplash.com/photo-1595428774223-ef52624120d2', 'label': 'Semifurnished'},
-  {'type': 'unfurnished', 'image': 'https://images.unsplash.com/photo-1519710164239-da123dc03ef4', 'label': 'Unfurnished'},
-];
-
-final List<Map<String, String>> _bhkChoices = [
-  {'label': '1 RK/1 BHK', 'subtitle': '2,000+ Properties'},
-  {'label': '2 BHK', 'subtitle': '4,700+ Properties'},
-  {'label': '3 BHK', 'subtitle': '2,100+ Properties'},
-];
 
 // ==================== Reusable dashboard widgets ====================
 
@@ -1104,7 +1006,7 @@ class _RecentlyPostedCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text('Posted by Owner  ', style: AppTextStyles.caption),
+                      Text('Posted  ', style: AppTextStyles.caption),
                       Flexible(
                         child: Text(
                           data['time']!,
@@ -1115,117 +1017,6 @@ class _RecentlyPostedCard extends StatelessWidget {
                     ],
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProjectCard extends StatelessWidget {
-  final Map<String, String> data;
-  final VoidCallback onTap;
-  const _ProjectCard({required this.data, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 220,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  child: CachedNetworkImage(
-                    imageUrl: data['image']!,
-                    height: 140,
-                    width: 220,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(height: 140, color: AppColors.divider),
-                    errorWidget: (_, __, ___) => Container(height: 140, color: AppColors.divider, child: const Icon(Icons.location_city, size: 32)),
-                  ),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: const Icon(Icons.favorite_border, size: 14, color: AppColors.textSecondary),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(data['title']!, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700, color: AppColors.primaryDark)),
-            const SizedBox(height: 2),
-            Text(data['subtitle']!, style: AppTextStyles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CollectionCard extends StatelessWidget {
-  final Map<String, String> data;
-  final VoidCallback onTap;
-  const _CollectionCard({required this.data, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 190,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            CachedNetworkImage(
-              imageUrl: data['image']!,
-              height: 150,
-              width: 190,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => Container(height: 150, color: AppColors.divider),
-              errorWidget: (_, __, ___) => Container(height: 150, color: AppColors.divider),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.black.withValues(alpha: 0.0), Colors.black.withValues(alpha: 0.45)],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              top: 12,
-              child: Text(
-                data['title']!,
-                style: AppTextStyles.h3.copyWith(color: Colors.white),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              bottom: 12,
-              right: 12,
-              child: Text(
-                data['subtitle']!,
-                style: AppTextStyles.bodySmall.copyWith(color: Colors.white),
               ),
             ),
           ],
@@ -1263,42 +1054,6 @@ class _ImageLabelTile extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(label, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PostedByCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-  const _PostedByCard({required this.icon, required this.label, required this.subtitle, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle),
-              child: Icon(icon, color: AppColors.primary, size: 20),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(label, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(subtitle, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),

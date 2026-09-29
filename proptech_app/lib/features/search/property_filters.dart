@@ -71,7 +71,7 @@ class PropertyFilters {
       if (p.price < priceRange.start || p.price > priceRange.end) return false;
       if (p.area < areaRange.start || p.area > areaRange.end) return false;
       if (possessionStatus != null && p.possessionStatus != possessionStatus) return false;
-      if (maxAgeYears != null && p.ageOfPropertyYears > maxAgeYears!) return false;
+      if (maxAgeYears != null && (p.ageOfPropertyYears < 0 || p.ageOfPropertyYears > maxAgeYears!)) return false;
       if (p.floorNumber < floorRange.start || p.floorNumber > floorRange.end) return false;
       if (facing != null && p.facing != facing) return false;
       return true;

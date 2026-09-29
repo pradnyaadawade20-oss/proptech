@@ -4,14 +4,35 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
+import '../../core/api/token_store.dart';
 import 'property.dart';
+import 'property_store.dart';
 
-class MyPropertiesScreen extends StatelessWidget {
+class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
 
   @override
+  State<MyPropertiesScreen> createState() => _MyPropertiesScreenState();
+}
+
+class _MyPropertiesScreenState extends State<MyPropertiesScreen> with PropertyStoreListener<MyPropertiesScreen> {
+  String? _myId;
+
+  @override
+  void initState() {
+    super.initState();
+    TokenStore.instance.getUserId().then((id) {
+      if (mounted) setState(() => _myId = id);
+    });
+    if (!PropertyStore.instance.loaded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => PropertyStore.instance.load());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final properties = dummyProperties;
+    // Only the logged-in user's own listings (not everyone's).
+    final properties = PropertyStore.instance.all.where((p) => _myId != null && p.ownerId == _myId).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Properties')),

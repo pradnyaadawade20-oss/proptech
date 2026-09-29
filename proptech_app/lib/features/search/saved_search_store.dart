@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 import 'saved_search.dart';
 
 /// Persists the user's saved searches and figures out which of them have
 /// new matching properties ("naya property is criteria ka aaye to notify
 /// karo"). There's no push backend here, so "notify" means: check the
-/// current dummyProperties list against each saved search's criteria and
+/// current PropertyStore.instance.all list against each saved search's criteria and
 /// surface anything the user hasn't seen yet as an in-app alert/badge.
 class SavedSearchStore {
   SavedSearchStore._();
@@ -66,7 +67,7 @@ class SavedSearchStore {
   /// All properties currently matching a saved search's criteria.
   List<Property> matchingProperties(SavedSearch search) {
     return filterProperties(
-      dummyProperties,
+      PropertyStore.instance.all,
       query: search.query,
       type: search.type,
       budgetStart: search.budgetStart,

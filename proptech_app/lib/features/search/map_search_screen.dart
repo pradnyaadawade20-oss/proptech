@@ -11,6 +11,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 
 /// Shows all (or a pre-filtered list of) properties as pins on a real
 /// street map of India. Uses OpenStreetMap tiles via flutter_map — free,
@@ -24,8 +25,7 @@ class MapSearchScreen extends StatefulWidget {
   State<MapSearchScreen> createState() => _MapSearchScreenState();
 }
 
-class _MapSearchScreenState extends State<MapSearchScreen>
-    with TickerProviderStateMixin {
+class _MapSearchScreenState extends State<MapSearchScreen> with TickerProviderStateMixin, PropertyStoreListener<MapSearchScreen> {
   late final AnimatedMapController _mapController;
   final TextEditingController _searchController = TextEditingController();
   final Dio _dio = Dio();
@@ -69,7 +69,7 @@ class _MapSearchScreenState extends State<MapSearchScreen>
     super.dispose();
   }
 
-  List<Property> get _properties => widget.properties ?? dummyProperties;
+  List<Property> get _properties => widget.properties ?? PropertyStore.instance.all;
 
   // --- Search ---
 
@@ -221,7 +221,7 @@ class _MapSearchScreenState extends State<MapSearchScreen>
         Marker(point: entry.value, width: 90, height: 40, child: _cityLabel(entry.key)),
     ];
 
-    for (final p in _properties) {
+    for (final p in _properties.where((p) => p.hasMapPosition)) {
       final pos = p.mapPosition;
       final isSelected = _selectedProperty?.id == p.id;
       markers.add(

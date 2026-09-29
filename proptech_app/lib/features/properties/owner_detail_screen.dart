@@ -102,9 +102,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.star, color: Colors.amber, size: 18),
-                    const SizedBox(width: 4),
-                    Text('${property.rating.toStringAsFixed(1)} • Property Owner', style: AppTextStyles.bodyMedium),
+                    Text('Property Owner', style: AppTextStyles.bodyMedium),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),

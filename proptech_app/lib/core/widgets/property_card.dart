@@ -127,16 +127,18 @@ class PropertyCard extends StatelessWidget {
                         const SizedBox(width: 6),
                       ],
                       const Spacer(),
-                      const Icon(Icons.star, size: 14, color: Colors.amber),
-                      const SizedBox(width: 2),
-                      Flexible(
-                        child: Text(
-                          '${property.rating} (${property.reviewCount})',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      if (property.reviewCount > 0) ...[
+                        const Icon(Icons.star, size: 14, color: Colors.amber),
+                        const SizedBox(width: 2),
+                        Flexible(
+                          child: Text(
+                            '${property.rating.toStringAsFixed(1)} (${property.reviewCount})',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],

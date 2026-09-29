@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'property.dart';
+import 'property_store.dart';
 
 /// Tracks the ids of properties the user has opened, most-recently-viewed
 /// first, persisted locally so the list survives an app restart.
@@ -70,7 +71,7 @@ class RecentlyViewedStore {
     final result = <Property>[];
     for (final id in ids) {
       Property? match;
-      for (final p in dummyProperties) {
+      for (final p in PropertyStore.instance.all) {
         if (p.id == id) {
           match = p;
           break;

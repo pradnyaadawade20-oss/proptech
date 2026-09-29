@@ -19,6 +19,10 @@ type Property struct {
 	Amenities     []string  `json:"amenities"`
 	ListingStatus string    `json:"listing_status"`
 	CreatedAt     time.Time `json:"created_at"`
+
+	// Filled by PropertyRepository.AttachMedia (not columns on properties).
+	AdditionalImageURLs []string `json:"additional_image_urls"`
+	VideoTourURL        *string  `json:"video_tour_url,omitempty"`
 }
 
 type PropertyFilter struct {

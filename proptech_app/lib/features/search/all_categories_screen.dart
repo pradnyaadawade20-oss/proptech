@@ -6,6 +6,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 
 class AllCategoriesScreen extends StatefulWidget {
   const AllCategoriesScreen({super.key});
@@ -14,7 +15,7 @@ class AllCategoriesScreen extends StatefulWidget {
   State<AllCategoriesScreen> createState() => _AllCategoriesScreenState();
 }
 
-class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
+class _AllCategoriesScreenState extends State<AllCategoriesScreen> with PropertyStoreListener<AllCategoriesScreen> {
   int _selectedIndex = 0;
 
   final List<Map<String, dynamic>> _sidebarItems = const [
@@ -124,7 +125,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         return _buildListingPanel(
           context,
           title: 'Buy Residential',
-          properties: dummyProperties
+          properties: PropertyStore.instance.all
               .where((p) => p.category == 'Residential' && p.priceUnit != '/month')
               .toList(),
         );
@@ -132,7 +133,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         return _buildListingPanel(
           context,
           title: 'Rent / PG',
-          properties: dummyProperties
+          properties: PropertyStore.instance.all
               .where((p) => p.category == 'Residential' && p.priceUnit == '/month')
               .toList(),
         );
@@ -140,7 +141,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         return _buildListingPanel(
           context,
           title: 'Buy Commercial',
-          properties: dummyProperties
+          properties: PropertyStore.instance.all
               .where((p) => p.category == 'Commercial' && p.priceUnit != '/month')
               .toList(),
         );
@@ -148,7 +149,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
         return _buildListingPanel(
           context,
           title: 'Lease Commercial',
-          properties: dummyProperties
+          properties: PropertyStore.instance.all
               .where((p) => p.category == 'Commercial' && p.priceUnit == '/month')
               .toList(),
         );
@@ -317,12 +318,7 @@ class _AllCategoriesScreenState extends State<AllCategoriesScreen> {
                       property: property,
                       onTap: () => context.push('/property/${property.id}'),
                       onFavoriteTap: () {
-                        final i = dummyProperties.indexWhere((p) => p.id == property.id);
-                        if (i != -1) {
-                          dummyProperties[i] = property.copyWith(isFavorite: !property.isFavorite);
-                          notifyPropertiesChanged();
-                          setState(() {});
-                        }
+                        PropertyStore.instance.toggleFavorite(property.id);
                       },
                     );
                   },

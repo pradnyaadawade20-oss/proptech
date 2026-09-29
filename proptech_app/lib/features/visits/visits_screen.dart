@@ -3,27 +3,79 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import 'visit.dart';
+import 'visit_service.dart';
 
-class VisitsScreen extends StatelessWidget {
+class VisitsScreen extends StatefulWidget {
   const VisitsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final visits = dummyVisits;
+  State<VisitsScreen> createState() => _VisitsScreenState();
+}
 
+class _VisitsScreenState extends State<VisitsScreen> {
+  late Future<List<Visit>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  /// Visits on properties I own (visit requests) followed by visits I booked.
+  Future<List<Visit>> _load() async {
+    final results = await Future.wait([
+      VisitService.instance.getVisits(asOwner: true),
+      VisitService.instance.getVisits(),
+    ]);
+    final all = [...results[0], ...results[1]];
+    final seen = <String>{};
+    final unique = all.where((v) => seen.add(v.id)).toList()
+      ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
+    return unique;
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _future = _load());
+    await _future.catchError((_) => <Visit>[]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Visit Requests')),
-      body: visits.isEmpty
-          ? const Center(child: Text('No visit requests yet'))
-          : ListView.separated(
+      body: FutureBuilder<List<Visit>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(snapshot.error.toString().replaceFirst('Exception: ', '')),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextButton(onPressed: _refresh, child: const Text('Retry')),
+                ],
+              ),
+            );
+          }
+          final visits = snapshot.data ?? [];
+          if (visits.isEmpty) {
+            return const Center(child: Text('No visit requests yet'));
+          }
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView.separated(
               padding: const EdgeInsets.all(AppSpacing.md),
               itemCount: visits.length,
               separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, index) {
-                final visit = visits[index];
-                return _VisitCard(visit: visit);
-              },
+              itemBuilder: (context, index) => _VisitCard(visit: visits[index]),
             ),
+          );
+        },
+      ),
     );
   }
 }
@@ -72,12 +124,25 @@ class _VisitCard extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-            child: Image.network(
-              visit.propertyImageUrl,
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
-            ),
+            child: visit.propertyImageUrl.isEmpty
+                ? Container(
+                    width: 64,
+                    height: 64,
+                    color: AppColors.divider,
+                    child: const Icon(Icons.home_outlined),
+                  )
+                : Image.network(
+                    visit.propertyImageUrl,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 64,
+                      height: 64,
+                      color: AppColors.divider,
+                      child: const Icon(Icons.home_outlined),
+                    ),
+                  ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

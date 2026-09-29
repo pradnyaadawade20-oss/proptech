@@ -97,6 +97,7 @@ func (h *PropertyHandler) GetAllProperties(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.repo.AttachMedia(c.Request.Context(), properties, baseURL(c))
 	c.JSON(http.StatusOK, gin.H{"properties": properties})
 }
 
@@ -107,6 +108,9 @@ func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 		return
 	}
+	one := []models.Property{*property}
+	h.repo.AttachMedia(c.Request.Context(), one, baseURL(c))
+	property = &one[0]
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 
@@ -123,6 +127,7 @@ func (h *PropertyHandler) GetMyProperties(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.repo.AttachMedia(c.Request.Context(), properties, baseURL(c))
 	c.JSON(http.StatusOK, gin.H{"properties": properties})
 }
 

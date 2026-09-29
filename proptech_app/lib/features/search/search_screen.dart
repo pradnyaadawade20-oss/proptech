@@ -8,6 +8,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../../core/services/place_autocomplete_service.dart';
 import '../properties/property.dart';
+import '../properties/property_store.dart';
 import 'saved_search.dart';
 import 'saved_search_store.dart';
 import 'saved_searches_screen.dart';
@@ -21,7 +22,7 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _query = '';
@@ -37,7 +38,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _recentSearches = ['Powai, Mumbai', 'Andheri West', 'Bandra East'];
 
   List<String> get _allLocations {
-    final locations = dummyProperties.map((p) => p.location).toSet().toList();
+    final locations = PropertyStore.instance.all.map((p) => p.location).toSet().toList();
     locations.sort();
     return locations;
   }
@@ -124,7 +125,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   List<Property> get _filteredProperties {
     final results = filterProperties(
-      dummyProperties,
+      PropertyStore.instance.all,
       query: _query,
       type: _selectedType,
       budgetStart: _budget.start,
@@ -535,12 +536,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       property: property,
                       onTap: () => context.push('/property/${property.id}'),
                       onFavoriteTap: () {
-                        final i = dummyProperties.indexWhere((p) => p.id == property.id);
-                        if (i != -1) {
-                          dummyProperties[i] = property.copyWith(isFavorite: !property.isFavorite);
-                          notifyPropertiesChanged();
-                          setState(() {});
-                        }
+                        PropertyStore.instance.toggleFavorite(property.id);
                       },
                     );
                   },
