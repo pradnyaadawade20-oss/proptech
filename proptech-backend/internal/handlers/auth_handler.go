@@ -15,6 +15,7 @@ import (
 	"proptech-backend/internal/mail"
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -327,6 +328,9 @@ func (h *AuthHandler) completeLogin(c *gin.Context, email string, rec *repositor
 	}
 
 	_ = h.otpRepo.Delete(ctx, email) // single use
+
+	// Login alert (delayed so this device can register its push token first).
+	notify.SendLater(6*time.Second, user.ID, "account", "New login", "You just signed in to PropTech.")
 
 	c.JSON(http.StatusOK, gin.H{
 		"user":  user,

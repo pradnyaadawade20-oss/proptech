@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +39,12 @@ func (h *VisitHandler) CreateVisit(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Tell the property owner someone wants to visit.
+	if property, perr := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID); perr == nil && property.OwnerID != nil {
+		notify.Send(*property.OwnerID, "visit", "New visit request",
+			fmt.Sprintf("%s wants to visit %s", nameOr(visit.VisitorName, "Someone"), visit.PropertyTitle))
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"visit": visit})
@@ -90,6 +98,8 @@ func (h *VisitHandler) UpdateVisitStatus(c *gin.Context) {
 		return
 	}
 
+	h.notifyVisitStatus(c, visit, userID)
+
 	c.JSON(http.StatusOK, gin.H{"visit": visit})
 }
 
@@ -130,4 +140,26 @@ func (h *VisitHandler) userCanActOnVisit(c *gin.Context, visitID, userID string)
 
 	c.JSON(http.StatusForbidden, gin.H{"error": "you can't modify this visit"})
 	return false
+}
+
+// notifyVisitStatus tells the *other* party that the visit status changed:
+// visitor changed it -> owner is told; owner changed it -> visitor is told.
+func (h *VisitHandler) notifyVisitStatus(c *gin.Context, visit *models.Visit, actorID string) {
+	title := "Visit " + visit.Status
+	if actorID == visit.VisitorID {
+		if property, err := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID); err == nil && property.OwnerID != nil {
+			notify.Send(*property.OwnerID, "visit", title,
+				fmt.Sprintf("%s marked the visit to %s as %s", nameOr(visit.VisitorName, "The visitor"), visit.PropertyTitle, visit.Status))
+		}
+		return
+	}
+	notify.Send(visit.VisitorID, "visit", title,
+		fmt.Sprintf("Your visit to %s is now %s", visit.PropertyTitle, visit.Status))
+}
+
+func nameOr(name, fallback string) string {
+	if name == "" {
+		return fallback
+	}
+	return name
 }

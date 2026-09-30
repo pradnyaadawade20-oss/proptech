@@ -52,8 +52,17 @@ func (s *Sender) SendToTokens(ctx context.Context, tokens []string, title, body 
 			Body:  body,
 		},
 		Data: data,
+		// Shown by the system even when the app is closed / killed:
+		// heads-up on the home screen and full text on the lock screen.
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
+			Notification: &messaging.AndroidNotification{
+				ChannelID:             "proptech_alerts", // created by the app (sound + vibration on)
+				Priority:              messaging.PriorityHigh,
+				Visibility:            messaging.VisibilityPublic, // show content on lock screen
+				DefaultSound:          true,
+				DefaultVibrateTimings: true,
+			},
 		},
 		APNS: &messaging.APNSConfig{
 			Payload: &messaging.APNSPayload{
