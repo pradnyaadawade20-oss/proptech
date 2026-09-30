@@ -3,6 +3,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../properties/property_store.dart';
 import '../../core/session/user_session.dart';
+import '../favorites/favorite_service.dart';
 
 class AuthResult {
   final bool success;

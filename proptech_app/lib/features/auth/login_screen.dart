@@ -165,8 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _snack(result.errorMessage ?? 'Google sign-in failed');
       return;
     }
-    context.go(RouteNames.roleSelection);
-  }
+context.go(RouteNames.home);  }
 
   @override
   Widget build(BuildContext context) {
