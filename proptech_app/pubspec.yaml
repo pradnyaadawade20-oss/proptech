@@ -57,6 +57,8 @@ dependencies:
   # Price trend chart on property detail screen
   fl_chart: ^0.69.2
 
+  google_sign_in: ^6.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

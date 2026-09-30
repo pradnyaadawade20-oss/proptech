@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
-import '../favorites/favorite_service.dart';
 import '../properties/property_store.dart';
 import '../../core/session/user_session.dart';
 

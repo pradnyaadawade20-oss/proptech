@@ -10,6 +10,7 @@ import (
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/mail"
 	"proptech-backend/internal/migrate"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/push"
 	"proptech-backend/internal/repository"
 	"proptech-backend/internal/routes"
@@ -83,6 +84,9 @@ func main() {
 	}
 	notificationHandler := handlers.NewNotificationHandler(notificationRepo, deviceTokenRepo, pushSender)
 	deviceTokenHandler := handlers.NewDeviceTokenHandler(deviceTokenRepo)
+
+	// Auto notifications (chat, visits, agreements, listings, login) use this.
+	notify.Init(dbPool, notificationRepo, deviceTokenRepo, pushSender)
 
 	router := gin.Default()
 

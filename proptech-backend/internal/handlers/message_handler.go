@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,9 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Push to the receiver: "New message from <name>".
+	notify.NewMessage(req.SenderID, req.ReceiverID, req.Text)
 
 	c.JSON(http.StatusCreated, gin.H{"message": message})
 }

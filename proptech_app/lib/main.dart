@@ -1,11 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app/app.dart';
 import 'features/notifications/push_notification_service.dart';
-import 'features/properties/property_service.dart';
-import 'features/favorites/favorite_service.dart';
 import 'features/properties/property_store.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

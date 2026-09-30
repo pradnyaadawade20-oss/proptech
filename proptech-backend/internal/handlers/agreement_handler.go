@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +43,9 @@ func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	notifyOtherParty(agreement, userID, "New agreement request",
+		fmt.Sprintf("%s requested an agreement for %s", notify.UserName(userID), agreement.PropertyTitle))
+
 	c.JSON(http.StatusCreated, gin.H{"agreement": agreement})
 }
 
@@ -102,6 +108,9 @@ func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	notifyOtherParty(agreement, userID, "Agreement draft updated",
+		fmt.Sprintf("The draft agreement for %s was updated", agreement.PropertyTitle))
+
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
 }
 
@@ -136,6 +145,9 @@ func (h *AgreementHandler) SignAgreement(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	notifyOtherParty(signed, userID, "Agreement signed",
+		fmt.Sprintf("%s signed the agreement for %s", notify.UserName(userID), signed.PropertyTitle))
+
 	c.JSON(http.StatusOK, gin.H{"agreement": signed})
 }
 
@@ -162,6 +174,9 @@ func (h *AgreementHandler) UpdateStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	notifyOtherParty(agreement, userID, "Agreement update",
+		fmt.Sprintf("The agreement for %s is now: %s", agreement.PropertyTitle, strings.ReplaceAll(agreement.Status, "_", " ")))
+
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
 }
 
@@ -176,4 +191,14 @@ func (h *AgreementHandler) userIsParty(c *gin.Context, agreementID, userID strin
 		return false
 	}
 	return true
+}
+
+// notifyOtherParty sends the notification to whichever side (owner / tenant)
+// did NOT perform the action.
+func notifyOtherParty(a *models.Agreement, actorID, title, body string) {
+	target := a.OwnerID
+	if actorID == a.OwnerID {
+		target = a.TenantID
+	}
+	notify.Send(target, "agreement", title, body)
 }

@@ -8,7 +8,6 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
-import 'property.dart';
 import 'property_store.dart';
 import 'property_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;

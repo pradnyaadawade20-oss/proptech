@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -146,6 +147,25 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if property.OwnerID != nil {
+		ownerID := *property.OwnerID
+		notify.Send(ownerID, "property", "Property listed",
+			fmt.Sprintf("Your property \"%s\" is now live.", property.Title))
+
+		// Tell everyone else about the new listing (set NOTIFY_NEW_LISTINGS=false to turn off).
+		if os.Getenv("NOTIFY_NEW_LISTINGS") != "false" {
+			title, location := property.Title, property.Location
+			go func() {
+				who := notify.UserName(ownerID)
+				if who == "" {
+					who = "Someone"
+				}
+				notify.BroadcastExcept(ownerID, "property", "New property listed",
+					fmt.Sprintf("%s added %s in %s", who, title, location))
+			}()
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"property": property})

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"proptech-backend/internal/middleware"
+	"proptech-backend/internal/notify"
 
 	"github.com/gin-gonic/gin"
 )
@@ -140,6 +141,8 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
+
+	notify.SendLater(6*time.Second, user.ID, "account", "New login", "You just signed in to PropTech.")
 
 	c.JSON(http.StatusOK, gin.H{
 		"user":  user,
