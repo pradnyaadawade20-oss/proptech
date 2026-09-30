@@ -30,6 +30,7 @@ func RegisterAuthRoutes(router *gin.Engine, h *handlers.AuthHandler) {
 		auth.POST("/send-otp", h.SendOTP)
 		auth.POST("/verify-otp", h.VerifyOTP)
 		auth.POST("/skip-otp", h.SkipOTP) // only works when DEV_SKIP_OTP=true
+		auth.POST("/google", h.GoogleLogin)
 		auth.PATCH("/users/:id/role", h.SwitchRole)
 	}
 }

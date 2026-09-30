@@ -90,6 +90,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"message": "PropTech backend is running",
+			"build":   "google-auth-v1",
 		})
 	})
 
