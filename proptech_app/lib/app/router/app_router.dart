@@ -30,6 +30,7 @@ import '../../features/favorites/favorites_screen.dart';
 import '../../features/agreement/agreement_request_screen.dart';
 import '../../features/agreement/draft_preview_screen.dart';
 import '../../features/agreement/agreement_status_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
 import 'main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -175,6 +176,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.myVisits,
       builder: (context, state) => const VisitsScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.notifications,
+      builder: (context, state) => const NotificationsScreen(),
     ),
     GoRoute(
       path: '/property/:id/owner',

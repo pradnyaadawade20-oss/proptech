@@ -75,6 +75,7 @@ func (h *NotificationHandler) sendPush(n *models.Notification) {
 	data := map[string]string{
 		"type":            n.Type,
 		"notification_id": n.ID,
+		"route":           n.Route,
 	}
 	invalid := h.pushSender.SendToTokens(ctx, tokens, n.Title, n.Body, data)
 	if len(invalid) > 0 {

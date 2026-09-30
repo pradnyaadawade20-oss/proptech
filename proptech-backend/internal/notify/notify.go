@@ -27,7 +27,25 @@ func Init(pool *pgxpool.Pool, n *repository.NotificationRepository, t *repositor
 
 // Send stores a notification for the user and pushes it to all their devices.
 func Send(userID, typ, title, body string) {
-	go send(userID, typ, title, body)
+	go send(userID, typ, title, body, "")
+}
+
+// SendRoute is like Send but also tells the app which screen to open when
+// the user taps the push (e.g. "/agreement/<id>/status", "/property/<id>").
+func SendRoute(userID, typ, title, body, route string) {
+	go send(userID, typ, title, body, route)
+}
+
+// defaultRoute is used when the caller did not give an explicit route.
+func defaultRoute(typ string) string {
+	switch typ {
+	case "message":
+		return "/chats"
+	case "visit":
+		return "/visits"
+	default:
+		return "/home"
+	}
 }
 
 // SendLater is like Send but waits first. Used for login alerts so that the
@@ -35,7 +53,7 @@ func Send(userID, typ, title, body string) {
 func SendLater(delay time.Duration, userID, typ, title, body string) {
 	go func() {
 		time.Sleep(delay)
-		send(userID, typ, title, body)
+		send(userID, typ, title, body, "")
 	}()
 }
 
@@ -48,12 +66,12 @@ func NewMessage(senderID, receiverID, text string) {
 		if name == "" {
 			name = "Someone"
 		}
-		send(receiverID, "message", "New message from "+name, truncate(text, 120))
+		send(receiverID, "message", "New message from "+name, truncate(text, 120), "/chats/"+senderID)
 	}()
 }
 
 // BroadcastExcept notifies every user except one (e.g. a new listing).
-func BroadcastExcept(exceptUserID, typ, title, body string) {
+func BroadcastExcept(exceptUserID, typ, title, body, route string) {
 	go func() {
 		if db == nil {
 			return
@@ -75,7 +93,7 @@ func BroadcastExcept(exceptUserID, typ, title, body string) {
 		rows.Close()
 		cancel()
 		for _, id := range ids {
-			send(id, typ, title, body)
+			send(id, typ, title, body, route)
 		}
 	}()
 }
@@ -98,7 +116,10 @@ func userName(ctx context.Context, userID string) string {
 	return strings.TrimSpace(name)
 }
 
-func send(userID, typ, title, body string) {
+func send(userID, typ, title, body, route string) {
+	if route == "" {
+		route = defaultRoute(typ)
+	}
 	if userID == "" || notifRepo == nil {
 		return
 	}
@@ -106,7 +127,7 @@ func send(userID, typ, title, body string) {
 	defer cancel()
 
 	n, err := notifRepo.Create(ctx, models.CreateNotificationRequest{
-		UserID: userID, Type: typ, Title: title, Body: body,
+		UserID: userID, Type: typ, Title: title, Body: body, Route: route,
 	})
 	if err != nil {
 		log.Println("notify: create failed:", err)
@@ -122,6 +143,7 @@ func send(userID, typ, title, body string) {
 	invalid := sender.SendToTokens(ctx, tokens, title, body, map[string]string{
 		"type":            typ,
 		"notification_id": n.ID,
+		"route":           route,
 	})
 	if len(invalid) > 0 {
 		_ = tokenRepo.DeleteInvalid(ctx, invalid)

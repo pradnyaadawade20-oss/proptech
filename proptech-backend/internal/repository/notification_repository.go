@@ -17,7 +17,7 @@ func NewNotificationRepository(db *pgxpool.Pool) *NotificationRepository {
 }
 
 const notificationSelectQuery = `
-	SELECT id, user_id, type, title, body, is_read, created_at
+	SELECT id, user_id, type, title, body, route, is_read, created_at
 	FROM notifications
 `
 
@@ -25,7 +25,7 @@ func scanNotification(row interface {
 	Scan(dest ...any) error
 }) (*models.Notification, error) {
 	var n models.Notification
-	err := row.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Body, &n.IsRead, &n.CreatedAt)
+	err := row.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Body, &n.Route, &n.IsRead, &n.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +59,10 @@ func (r *NotificationRepository) GetByID(ctx context.Context, id string) (*model
 func (r *NotificationRepository) Create(ctx context.Context, req models.CreateNotificationRequest) (*models.Notification, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `
-		INSERT INTO notifications (user_id, type, title, body)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO notifications (user_id, type, title, body, route)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
-	`, req.UserID, req.Type, req.Title, req.Body).Scan(&id)
+	`, req.UserID, req.Type, req.Title, req.Body, req.Route).Scan(&id)
 	if err != nil {
 		return nil, err
 	}

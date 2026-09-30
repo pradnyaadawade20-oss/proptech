@@ -153,8 +153,9 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 
 	if property.OwnerID != nil {
 		ownerID := *property.OwnerID
-		notify.Send(ownerID, "property", "Property listed",
-			fmt.Sprintf("Your property \"%s\" is now live.", property.Title))
+		propRoute := "/property/" + property.ID
+		notify.SendRoute(ownerID, "property", "Property listed",
+			fmt.Sprintf("Your property \"%s\" is now live.", property.Title), propRoute)
 
 		// Tell everyone else about the new listing (set NOTIFY_NEW_LISTINGS=false to turn off).
 		if os.Getenv("NOTIFY_NEW_LISTINGS") != "false" {
@@ -165,7 +166,7 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 					who = "Someone"
 				}
 				notify.BroadcastExcept(ownerID, "property", "New property listed",
-					fmt.Sprintf("%s added %s in %s", who, title, location))
+					fmt.Sprintf("%s added %s in %s", who, title, location), propRoute)
 			}()
 		}
 	}

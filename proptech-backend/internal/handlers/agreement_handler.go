@@ -200,5 +200,5 @@ func notifyOtherParty(a *models.Agreement, actorID, title, body string) {
 	if actorID == a.OwnerID {
 		target = a.TenantID
 	}
-	notify.Send(target, "agreement", title, body)
+	notify.SendRoute(target, "agreement", title, body, "/agreement/"+a.ID+"/status")
 }
