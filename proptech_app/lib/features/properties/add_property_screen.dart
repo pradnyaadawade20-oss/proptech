@@ -8,12 +8,16 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
+import 'property.dart';
 import 'property_store.dart';
 import 'property_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AddPropertyScreen extends StatefulWidget {
-  const AddPropertyScreen({super.key});
+  /// When set, the form edits this existing listing (pre-filled, no photos
+  /// step) instead of creating a new one.
+  final Property? editing;
+  const AddPropertyScreen({super.key, this.editing});
 
   @override
   State<AddPropertyScreen> createState() => _AddPropertyScreenState();
@@ -22,6 +26,7 @@ class AddPropertyScreen extends StatefulWidget {
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
+  bool get _isEdit => widget.editing != null;
   final int _totalSteps = 4;
 
   final _titleController = TextEditingController();
@@ -92,6 +97,61 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   static const int _maxVideoMb = 50;
   XFile? _pickedFloorPlan;
   final _floorPlanUrlController = TextEditingController();
+
+  // --- Edit mode: photos & video ---
+  static const int _maxExtraPhotos = 15;
+  final List<String> _existingExtras = []; // current gallery photo URLs (kept)
+  final List<String> _removedMediaUrls = []; // gallery photos to delete on save
+  final List<XFile> _newExtraImages = []; // photos added while editing
+  XFile? _newCover; // replaces the cover photo
+  bool _removeExistingVideo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.editing;
+    if (p == null) return;
+
+    String num0(double v) => v <= 0 ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
+    String int0(int v) => v <= 0 ? '' : v.toString();
+
+    // Older listings only have "locality, city" in `location`.
+    final parts = p.location.split(',');
+
+    _titleController.text = p.title;
+    _priceController.text = num0(p.price);
+    _areaController.text = num0(p.area);
+    _floorController.text = int0(p.floorNumber);
+    _totalFloorsController.text = int0(p.totalFloors);
+    _ageController.text = p.ageOfPropertyYears >= 0 ? p.ageOfPropertyYears.toString() : '';
+    _cityController.text = p.city.isNotEmpty ? p.city : (parts.length > 1 ? parts.last.trim() : '');
+    _localityController.text = p.locality.isNotEmpty ? p.locality : parts.first.trim();
+    _societyController.text = p.society;
+    _pincodeController.text = p.pincode;
+    _depositController.text = num0(p.securityDeposit);
+    _maintenanceController.text = num0(p.maintenanceCharges);
+    _descriptionController.text = p.description;
+
+    _category = _categoryOptions.contains(p.category) ? p.category : 'Residential';
+    _bhk = p.bhk;
+    _furnishing = _furnishingOptions.contains(p.furnishing) ? p.furnishing : 'Unfurnished';
+    _priceUnit = p.priceUnit == '/month' ? '/month' : '';
+    _selectedAmenities
+      ..clear()
+      ..addAll(p.amenities);
+    _bathrooms = p.bathrooms;
+    _balconies = p.balconies;
+    _facing = _facingOptions.contains(p.facing) ? p.facing : '';
+    _ownership = _ownershipOptions.contains(p.ownershipType) ? p.ownershipType : '';
+    _contactPref = _contactOptions.containsKey(p.contactPreference) ? p.contactPreference : 'both';
+    _negotiable = p.isPriceNegotiable;
+    _availableFrom = p.availableFrom;
+    _preferredTenants
+      ..clear()
+      ..addAll(p.preferredTenants);
+    _existingExtras.addAll(p.additionalImageUrls);
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -192,7 +252,92 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   bool _submitting = false;
 
+  /// Edit mode: saves every field back to the existing listing. Photos are
+  /// left untouched (the current cover image URL is sent back unchanged).
+  Future<void> _saveEdit() async {
+    final p = widget.editing!;
+    setState(() => _submitting = true);
+    try {
+      final city = _cityController.text.trim();
+      final locality = _localityController.text.trim();
+      await PropertyService.instance.update(
+        id: p.id,
+        title: _titleController.text.trim(),
+        imageUrl: p.imageUrl,
+        price: double.tryParse(_priceController.text.trim()) ?? 0,
+        priceUnit: _priceUnit,
+        bhk: _bhk,
+        furnishing: _furnishing,
+        location: '$locality, $city',
+        category: _category,
+        amenities: _selectedAmenities.toList(),
+        area: _toDouble(_areaController),
+        bathrooms: _isResidential ? _bathrooms : 0,
+        balconies: _isResidential ? _balconies : 0,
+        floorNumber: _isPlot ? 0 : _toInt(_floorController),
+        totalFloors: _isPlot ? 0 : _toInt(_totalFloorsController),
+        city: city,
+        locality: locality,
+        society: _societyController.text.trim(),
+        pincode: _pincodeController.text.trim(),
+        securityDeposit: _isRent ? _toDouble(_depositController) : 0,
+        maintenanceCharges: _toDouble(_maintenanceController),
+        preferredTenants: _isRent ? _preferredTenants.toList() : const [],
+        availableFrom: _availableFrom,
+        description: _descriptionController.text.trim(),
+        propertyAgeYears: (_isPlot || _ageController.text.trim().isEmpty) ? null : _toInt(_ageController),
+        facing: _facing,
+        ownershipType: _ownership,
+        isPriceNegotiable: _negotiable,
+        contactPreference: _contactPref,
+      );
+
+      // Photos / video. The details are already saved, so a failure here is
+      // reported but doesn't undo them.
+      String? mediaWarning;
+      try {
+        if (_newCover != null) {
+          await PropertyService.instance.uploadImage(p.id, _newCover!);
+        }
+        for (final url in _removedMediaUrls) {
+          await PropertyService.instance.deleteMedia(p.id, url);
+        }
+        final oldVideo = p.videoTourUrl;
+        if (_removeExistingVideo && _pickedVideo == null && oldVideo != null) {
+          await PropertyService.instance.deleteMedia(p.id, oldVideo);
+        }
+        if (_newExtraImages.isNotEmpty || _pickedVideo != null) {
+          // A new video replaces the old one on the server.
+          await PropertyService.instance.uploadMedia(
+            p.id,
+            images: _newExtraImages,
+            video: _pickedVideo,
+          );
+        }
+      } catch (e) {
+        mediaWarning = 'Details saved, but some photos/video could not be updated: ${e.toString().replaceFirst('Exception: ', '')}';
+      }
+
+      // Reload so every screen (home, search, detail) shows the new details.
+      await PropertyStore.instance.load();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mediaWarning ?? 'Property updated')),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _showError('Could not save changes: ${e.toString().replaceFirst('Exception: ', '')}');
+    }
+  }
+
   Future<void> _submit() async {
+    if (_isEdit) {
+      await _saveEdit();
+      return;
+    }
     final ownerId = await TokenStore.instance.getUserId();
     if (!mounted) return;
     if (ownerId == null) {
@@ -297,7 +442,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: _back,
         ),
-        title: Text(_stepTitles[_currentStep]),
+        title: Text(_isEdit ? 'Edit: ${_stepTitles[_currentStep]}' : _stepTitles[_currentStep]),
       ),
       body: Column(
         children: [
@@ -340,7 +485,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 _buildBasicDetailsStep(),
                 _buildLocationPriceStep(),
                 _buildAmenitiesStep(),
-                _buildPhotosStep(),
+                _isEdit ? _buildEditPhotosStep() : _buildPhotosStep(),
               ],
             ),
           ),
@@ -349,8 +494,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: AppButton(
-              label: _isLastStep ? 'List Property' : 'Next',
-              onPressed: _next,
+              label: _isLastStep ? (_isEdit ? 'Save Changes' : 'List Property') : 'Next',
+              loading: _submitting,
+              onPressed: _submitting ? null : _next,
             ),
           ),
         ],
@@ -760,6 +906,211 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             );
           }).toList(),
         ),
+      ],
+    );
+  }
+
+  // ── Edit mode: photos & video ─────────────────────────────────────────
+  Widget _editThumb({required Widget image, required VoidCallback onRemove}) {
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(borderRadius: BorderRadius.circular(AppSpacing.radiusSm), child: image),
+          Positioned(
+            right: 2,
+            top: 2,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickNewCover() async {
+    final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (image == null || !mounted) return;
+    setState(() => _newCover = image);
+  }
+
+  Future<void> _pickMoreExtras() async {
+    final images = await ImagePicker().pickMultiImage(imageQuality: 80);
+    if (images.isEmpty || !mounted) return;
+    final room = _maxExtraPhotos - _existingExtras.length - _newExtraImages.length;
+    setState(() => _newExtraImages.addAll(images.take(room)));
+    if (images.length > room) {
+      _showError('A listing can have up to $_maxExtraPhotos extra photos — extra ones were skipped.');
+    }
+  }
+
+  Widget _buildEditPhotosStep() {
+    final p = widget.editing!;
+    final extrasCount = _existingExtras.length + _newExtraImages.length;
+    final hasOldVideo = p.videoTourUrl != null && !_removeExistingVideo;
+
+    return _buildStepCard(
+      heading: 'Photos & video',
+      children: [
+        Text('Cover photo', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.sm),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _newCover != null
+                ? _photoThumb(_newCover!)
+                : Image.network(
+                    p.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.surfaceSoft,
+                      child: const Center(child: Icon(Icons.image_outlined, size: 40, color: AppColors.textHint)),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _pickNewCover,
+            icon: const Icon(Icons.photo_outlined, size: 18),
+            label: Text(_newCover == null ? 'Change cover photo' : 'Pick a different cover photo'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        Row(
+          children: [
+            Text('More photos', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+            const Spacer(),
+            Text('$extrasCount/$_maxExtraPhotos', style: AppTextStyles.bodySmall),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (extrasCount == 0)
+          Text('No extra photos yet.', style: AppTextStyles.bodySmall)
+        else
+          SizedBox(
+            height: 72,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final url in _existingExtras)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: _editThumb(
+                      image: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceSoft),
+                      ),
+                      onRemove: () => setState(() {
+                        _existingExtras.remove(url);
+                        _removedMediaUrls.add(url);
+                      }),
+                    ),
+                  ),
+                for (final img in _newExtraImages)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: _editThumb(
+                      image: _photoThumb(img),
+                      onRemove: () => setState(() => _newExtraImages.remove(img)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: extrasCount >= _maxExtraPhotos ? null : _pickMoreExtras,
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: const Text('Add more photos'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        Text('Video Tour (optional)', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'A short walkthrough video (up to $_maxVideoMb MB) helps buyers/tenants trust your listing.',
+          style: AppTextStyles.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (_pickedVideo != null)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.videocam_outlined, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_pickedVideo!.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        '${(_pickedVideoBytes / (1024 * 1024)).toStringAsFixed(1)} MB — will replace the current video',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => setState(() {
+                    _pickedVideo = null;
+                    _pickedVideoBytes = 0;
+                  }),
+                  icon: const Icon(Icons.close, color: AppColors.error),
+                ),
+              ],
+            ),
+          )
+        else if (hasOldVideo)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSoft,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.videocam_outlined, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                const Expanded(child: Text('Current video tour')),
+                TextButton(onPressed: _pickVideo, child: const Text('Replace')),
+                IconButton(
+                  onPressed: () => setState(() => _removeExistingVideo = true),
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                ),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _pickVideo,
+              icon: const Icon(Icons.video_library_outlined, size: 18),
+              label: const Text('Add Video'),
+            ),
+          ),
       ],
     );
   }

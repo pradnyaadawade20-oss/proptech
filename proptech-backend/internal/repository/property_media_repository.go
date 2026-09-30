@@ -129,3 +129,16 @@ func (r *PropertyRepository) AttachMedia(ctx context.Context, props []models.Pro
 		}
 	}
 }
+
+// DeleteMedia removes one extra photo or the video tour. It returns false
+// when no such media exists for that property. (Compares as text so a
+// malformed id gives "not found" instead of a uuid parse error.)
+func (r *PropertyRepository) DeleteMedia(ctx context.Context, propertyID, mediaID string) (bool, error) {
+	tag, err := r.db.Exec(ctx,
+		`DELETE FROM property_media WHERE id::text = $1 AND property_id::text = $2`,
+		mediaID, propertyID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}

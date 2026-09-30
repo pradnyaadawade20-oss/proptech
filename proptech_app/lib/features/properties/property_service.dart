@@ -138,6 +138,102 @@ class PropertyService {
     }
   }
 
+  /// Saves changes to an existing listing (PUT /api/properties/:id). The
+  /// backend replaces every field, so the edit form passes the full set
+  /// (pre-filled from the current property). Only the owner may do this.
+  Future<Property> update({
+    required String id,
+    required String title,
+    required String imageUrl,
+    required double price,
+    required String priceUnit,
+    required String bhk,
+    required String furnishing,
+    required String location,
+    required String category,
+    required List<String> amenities,
+    double area = 0,
+    int bathrooms = 0,
+    int balconies = 0,
+    int floorNumber = 0,
+    int totalFloors = 0,
+    String city = '',
+    String locality = '',
+    String society = '',
+    String pincode = '',
+    double securityDeposit = 0,
+    double maintenanceCharges = 0,
+    List<String> preferredTenants = const [],
+    DateTime? availableFrom,
+    String description = '',
+    int? propertyAgeYears,
+    String facing = '',
+    String ownershipType = '',
+    bool isPriceNegotiable = false,
+    String contactPreference = 'both',
+  }) async {
+    try {
+      String? dateOnly(DateTime? d) => d == null
+          ? null
+          : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+      final response = await _dio.put('/api/properties/$id', data: {
+        'title': title,
+        'image_url': imageUrl,
+        'price': price,
+        'price_unit': priceUnit,
+        'bhk': bhk,
+        'furnishing': furnishing,
+        'location': location,
+        'category': category,
+        'amenities': amenities,
+        'area': area,
+        'bathrooms': bathrooms,
+        'balconies': balconies,
+        'floor_number': floorNumber,
+        'total_floors': totalFloors,
+        'city': city,
+        'locality': locality,
+        'society': society,
+        'pincode': pincode,
+        'security_deposit': securityDeposit,
+        'maintenance_charges': maintenanceCharges,
+        'preferred_tenants': preferredTenants,
+        'available_from': dateOnly(availableFrom),
+        'description': description,
+        'property_age_years': propertyAgeYears,
+        'facing': facing,
+        'ownership_type': ownershipType,
+        'is_price_negotiable': isPriceNegotiable,
+        'contact_preference': contactPreference,
+      });
+      return Property.fromJson(response.data['property'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Removes one gallery photo or the video tour, identified by its URL
+  /// (.../api/properties/<id>/media/<mediaId>). Only the owner can.
+  Future<void> deleteMedia(String propertyId, String mediaUrl) async {
+    try {
+      final mediaId = Uri.parse(mediaUrl).pathSegments.last;
+      await _dio.delete('/api/properties/$propertyId/media/$mediaId');
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Permanently deletes a listing (only its owner can). The backend also
+  /// removes its photos, visits, favorites and agreements.
+  Future<void> delete(String id) async {
+    try {
+      await _dio.delete('/api/properties/$id');
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   /// Uploads the actual picked photo's bytes for [propertyId] and returns
   /// the real image_url (serving those exact bytes back) so every screen
   /// — owner's own listing, buyer's browse/detail screens, home — shows

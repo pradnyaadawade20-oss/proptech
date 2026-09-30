@@ -40,6 +40,7 @@ class RouteNames {
   static const ownerDashboard = '/owner';
   static const addProperty = '/owner/add-property';
   static const myProperties = '/owner/properties';
+  static const editProperty = '/owner/edit-property';
 
   // Broker
   static const brokerDashboard = '/broker';

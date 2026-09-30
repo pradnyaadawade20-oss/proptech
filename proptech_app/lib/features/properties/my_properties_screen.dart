@@ -6,6 +6,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import 'property.dart';
+import 'property_service.dart';
 import 'property_store.dart';
 import 'verify_property_flow.dart';
 
@@ -61,6 +62,43 @@ class _PropertyManageCard extends StatelessWidget {
   final Property property;
   const _PropertyManageCard({required this.property});
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete property?'),
+        content: Text(
+          '"${property.title}" will be removed permanently, along with its photos, visits, favorites and agreements. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await PropertyService.instance.delete(property.id);
+      PropertyStore.instance.remove(property.id);
+      messenger.showSnackBar(const SnackBar(content: Text('Property deleted')));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not delete: ${e.toString().replaceFirst('Exception: ', '')}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -111,9 +149,9 @@ class _PropertyManageCard extends StatelessWidget {
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) {
                     if (value == 'edit') {
-                      // TODO: navigate to edit property screen
+                      context.push(RouteNames.editProperty, extra: property);
                     } else if (value == 'delete') {
-                      // TODO: delete property logic
+                      _confirmDelete(context);
                     }
                   },
                   itemBuilder: (context) => const [

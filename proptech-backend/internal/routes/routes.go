@@ -16,12 +16,7 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 		properties.GET("/dashboard-stats", h.GetDashboardStats)
 		properties.GET("/:id", h.GetPropertyByID)
 		properties.POST("", h.CreateProperty)
-		properties.PUT("/:id", h.UpdateProperty)
-		properties.PATCH("/:id/status", h.UpdateListingStatus)
-		properties.DELETE("/:id", h.DeleteProperty)
-		properties.POST("/:id/image", h.UploadPropertyImage)
 		properties.GET("/:id/image", h.ServePropertyImage)
-		properties.POST("/:id/media", h.UploadPropertyMedia)
 		properties.GET("/:id/media/:mediaId", h.ServePropertyMedia)
 		properties.GET("/:id/verification-photo", h.ServeVerificationPhoto)
 	}
@@ -29,6 +24,14 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 	propertiesAuthed := router.Group("/api/properties")
 	propertiesAuthed.Use(middleware.AuthRequired())
 	{
+		// Edit / delete / status: login required, and the handler also checks
+		// that the logged-in user is the property's owner.
+		propertiesAuthed.PUT("/:id", h.UpdateProperty)
+		propertiesAuthed.PATCH("/:id/status", h.UpdateListingStatus)
+		propertiesAuthed.DELETE("/:id", h.DeleteProperty)
+		propertiesAuthed.POST("/:id/image", h.UploadPropertyImage)
+		propertiesAuthed.POST("/:id/media", h.UploadPropertyMedia)
+		propertiesAuthed.DELETE("/:id/media/:mediaId", h.DeletePropertyMedia)
 		propertiesAuthed.POST("/:id/verify", h.VerifyProperty)
 	}
 }

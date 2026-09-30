@@ -67,6 +67,9 @@ func readUpload(fh *multipart.FileHeader) ([]byte, error) {
 // property's full current extras: additional_image_urls + video_tour_url.
 func (h *PropertyHandler) UploadPropertyMedia(c *gin.Context) {
 	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
 
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
 	form, err := c.MultipartForm()
@@ -160,4 +163,23 @@ func (h *PropertyHandler) ServePropertyMedia(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "public, max-age=86400")
 	http.ServeContent(c.Writer, c.Request, "", time.Time{}, bytes.NewReader(data))
+}
+
+// DeletePropertyMedia: DELETE /api/properties/:id/media/:mediaId
+// Removes one extra photo or the video tour. Owner only.
+func (h *PropertyHandler) DeletePropertyMedia(c *gin.Context) {
+	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
+	found, err := h.repo.DeleteMedia(c.Request.Context(), id, c.Param("mediaId"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "media deleted"})
 }

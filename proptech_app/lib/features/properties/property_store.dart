@@ -88,6 +88,12 @@ class PropertyStore {
     }
   }
 
+  /// Removes a deleted listing from the cache.
+  void remove(String id) {
+    all.removeWhere((p) => p.id == id);
+    notifyPropertiesChanged();
+  }
+
   /// Optimistic favorite toggle that is persisted on the backend; rolls back
   /// if the request fails. Returns true on success.
   Future<bool> toggleFavorite(String id) async {

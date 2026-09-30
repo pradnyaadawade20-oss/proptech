@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
@@ -29,6 +30,9 @@ func NewPropertyHandler(repo *repository.PropertyRepository) *PropertyHandler {
 // placeholder — that shows up everywhere (home, buyer listings, detail).
 func (h *PropertyHandler) UploadPropertyImage(c *gin.Context) {
 	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
 
 	file, header, err := c.Request.FormFile("image")
 	if err != nil {
@@ -48,7 +52,9 @@ func (h *PropertyHandler) UploadPropertyImage(c *gin.Context) {
 		contentType = "image/jpeg"
 	}
 
-	imageURL := fmt.Sprintf("%s/api/properties/%s/image", baseURL(c), id)
+	// ?v=<time> makes the URL change whenever the cover is replaced, so the
+	// app doesn't keep showing the old cached photo.
+	imageURL := fmt.Sprintf("%s/api/properties/%s/image?v=%d", baseURL(c), id, time.Now().Unix())
 
 	if err := h.repo.SaveImage(c.Request.Context(), id, data, contentType, imageURL); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -174,8 +180,31 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"property": property})
 }
 
+// requireOwner makes sure the logged-in user owns property `id`. On failure it
+// writes the error response itself and returns false.
+func (h *PropertyHandler) requireOwner(c *gin.Context, id string) bool {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return false
+	}
+	p, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
+		return false
+	}
+	if p.OwnerID == nil || *p.OwnerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only change your own properties"})
+		return false
+	}
+	return true
+}
+
 func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
 
 	var req models.UpdatePropertyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -198,6 +227,9 @@ func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 
 func (h *PropertyHandler) DeleteProperty(c *gin.Context) {
 	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -211,6 +243,9 @@ func (h *PropertyHandler) DeleteProperty(c *gin.Context) {
 // from My Properties (owner/broker), feeds the dashboard stat pills.
 func (h *PropertyHandler) UpdateListingStatus(c *gin.Context) {
 	id := c.Param("id")
+	if !h.requireOwner(c, id) {
+		return
+	}
 
 	var req models.UpdateListingStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

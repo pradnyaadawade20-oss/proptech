@@ -7,6 +7,7 @@ import '../../features/home/home_screen.dart';
 import '../../features/properties/property_detail_screen.dart';
 import '../../features/search/map_search_screen.dart';
 import '../../features/properties/owner_detail_screen.dart';
+import '../../features/properties/property.dart';
 import '../../features/properties/property_store.dart';
 import 'route_names.dart';
 import '../../features/auth/otp_screen.dart';
@@ -233,6 +234,15 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.addProperty,
 builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    ),
+    GoRoute(
+      path: RouteNames.editProperty,
+      builder: (context, state) {
+        final property = state.extra as Property?;
+        return property == null
+            ? const MyPropertiesScreen()
+            : AddPropertyScreen(editing: property);
+      },
+    ),
     GoRoute(
       path: RouteNames.myProperties,
       builder: (context, state) => const MyPropertiesScreen(),
