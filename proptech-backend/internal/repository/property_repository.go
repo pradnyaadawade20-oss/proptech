@@ -131,7 +131,7 @@ func (r *PropertyRepository) GetVerificationPhoto(ctx context.Context, propertyI
 	return data, contentType, nil
 }
 
-
+func (r *PropertyRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Property, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference
 		FROM properties
