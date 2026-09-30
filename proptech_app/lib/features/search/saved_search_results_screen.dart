@@ -4,7 +4,6 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
-import '../properties/property.dart';
 import '../properties/property_store.dart';
 import 'saved_search.dart';
 import 'saved_search_store.dart';

@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../app/router/route_names.dart';
 import '../../../app/theme/app_colors.dart';
 import 'auth_service.dart';
+import 'google_auth.dart';
 
 // ── Design tokens taken from the login mock-up ─────────────────────────────
 const _teal = Color(0xFF15558A); // matches AppColors.primary (navy blue)
@@ -37,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _loading = false;
+  bool _googleLoading = false;
 
   /// false = sign in (email + password), true = create account (adds name).
   bool _createMode = false;
@@ -145,6 +147,25 @@ class _LoginScreenState extends State<LoginScreen> {
         'skipAvailable': result.skipAvailable.toString(),
       },
     );
+  }
+
+  Future<void> _google() async {
+    if (_googleLoading || _loading) return;
+    if (!GoogleAuth.instance.configured) {
+      _snack('Google sign-in is not set up yet (Web client ID missing)');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _googleLoading = true);
+    final result = await GoogleAuth.instance.signIn();
+    if (!mounted) return;
+    setState(() => _googleLoading = false);
+    if (result == null) return; // picker closed
+    if (!result.success) {
+      _snack(result.errorMessage ?? 'Google sign-in failed');
+      return;
+    }
+    context.go(RouteNames.roleSelection);
   }
 
   @override
@@ -354,8 +375,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(height: 23 * s),
                         _GoogleButton(
                           s: s,
-                          onTap: () =>
-                              _snack('Google sign-in is coming soon'),
+                          loading: _googleLoading,
+                          onTap: _google,
                         ),
                         SizedBox(height: 45 * s),
                         Text(
@@ -458,7 +479,7 @@ class _Field extends StatelessWidget {
         color: highlighted ? _fieldActiveBg : _fieldIdleBg,
         borderRadius: BorderRadius.circular(22 * s),
         border: Border.all(
-          color: highlighted ? _teal.withOpacity(0.75) : _fieldIdleBorder,
+          color: highlighted ? _teal.withValues(alpha: 0.75) : _fieldIdleBorder,
           width: highlighted ? 1.3 : 1,
         ),
       ),
@@ -531,7 +552,7 @@ class _ContinueButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(r),
             boxShadow: [
               BoxShadow(
-                color: _teal.withOpacity(0.30),
+                color: _teal.withValues(alpha: 0.30),
                 blurRadius: 26 * s,
                 offset: Offset(0, 14 * s),
               ),
@@ -639,8 +660,10 @@ class _OrDivider extends StatelessWidget {
 // ── Continue with Google ───────────────────────────────────────────────────
 class _GoogleButton extends StatelessWidget {
   final double s;
+  final bool loading;
   final VoidCallback onTap;
-  const _GoogleButton({required this.s, required this.onTap});
+  const _GoogleButton(
+      {required this.s, required this.onTap, this.loading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -650,14 +673,23 @@ class _GoogleButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(r),
       child: InkWell(
         borderRadius: BorderRadius.circular(r),
-        onTap: onTap,
+        onTap: loading ? null : onTap,
         child: Container(
           height: math.max(69 * s, 42),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(r),
             border: Border.all(color: const Color(0xFFE5EAF0)),
           ),
-          child: Row(
+          child: loading
+              ? const Center(
+                  child: SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.2, color: _teal),
+                  ),
+                )
+              : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CustomPaint(

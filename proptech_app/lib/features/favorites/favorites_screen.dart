@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/property_card.dart';
-import '../properties/property.dart';
 import '../properties/property_store.dart';
 
 class FavoritesScreen extends StatefulWidget {

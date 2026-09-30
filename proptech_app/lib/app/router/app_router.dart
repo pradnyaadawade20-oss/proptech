@@ -7,7 +7,6 @@ import '../../features/home/home_screen.dart';
 import '../../features/properties/property_detail_screen.dart';
 import '../../features/search/map_search_screen.dart';
 import '../../features/properties/owner_detail_screen.dart';
-import '../../features/properties/property.dart';
 import '../../features/properties/property_store.dart';
 import 'route_names.dart';
 import '../../features/auth/otp_screen.dart';
