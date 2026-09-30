@@ -87,7 +87,51 @@ func (r *PropertyRepository) GetImage(ctx context.Context, id string) ([]byte, s
 	return data, ct, nil
 }
 
-func (r *PropertyRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Property, error) {
+// SaveVerification stores the in-app camera photo + GPS coords captured
+// for "Verify Now", and flips the property to verified. Called only after
+// the handler has confirmed the photo's location is close enough to the
+// listing's own address — this function trusts its caller.
+func (r *PropertyRepository) SaveVerification(ctx context.Context, propertyID string, data []byte, contentType string, lat, lng float64) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO property_verifications (property_id, photo_data, content_type, latitude, longitude, captured_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
+		ON CONFLICT (property_id) DO UPDATE
+		SET photo_data = EXCLUDED.photo_data, content_type = EXCLUDED.content_type,
+		    latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, captured_at = NOW()
+	`, propertyID, data, contentType, lat, lng)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `UPDATE properties SET is_verified = TRUE WHERE id = $1`, propertyID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// GetVerificationPhoto returns the raw bytes + content type of the photo
+// captured for "Verify Now" (nil, "", nil if the property was never verified).
+func (r *PropertyRepository) GetVerificationPhoto(ctx context.Context, propertyID string) ([]byte, string, error) {
+	var data []byte
+	var contentType string
+	err := r.db.QueryRow(ctx, `
+		SELECT photo_data, content_type FROM property_verifications WHERE property_id = $1
+	`, propertyID).Scan(&data, &contentType)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, contentType, nil
+}
+
+
 	rows, err := r.db.Query(ctx, `
 		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference
 		FROM properties

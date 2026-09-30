@@ -30,10 +30,10 @@ class VideoTourCard extends StatelessWidget {
     return GestureDetector(
       onTap: _openVideo,
       child: Container(
-        height: 170,
+        height: 180,
         width: double.infinity,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg - 4),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -47,14 +47,44 @@ class VideoTourCard extends StatelessWidget {
             ),
             Positioned.fill(
               child: DecoratedBox(
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.25)),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.12)),
               ),
             ),
             Center(
               child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                child: const Icon(Icons.play_arrow, color: AppColors.primary, size: 32),
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.play_arrow_rounded, color: AppColors.primary, size: 34),
+              ),
+            ),
+            Positioned(
+              left: 10,
+              bottom: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.videocam_outlined, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Text('Watch tour', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
             ),
           ],

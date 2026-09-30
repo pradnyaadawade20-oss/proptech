@@ -7,6 +7,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import 'property.dart';
 import 'property_store.dart';
+import 'verify_property_flow.dart';
 
 class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
@@ -72,51 +73,79 @@ class _PropertyManageCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           border: Border.all(color: AppColors.border),
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              child: Image.network(
-                property.imageUrl,
-                width: 72,
-                height: 72,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(property.title, style: AppTextStyles.h3.copyWith(fontSize: 15)),
-                  const SizedBox(height: 2),
-                  Text(property.location, style: AppTextStyles.bodySmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  child: Image.network(
+                    property.imageUrl,
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
                   ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                if (value == 'edit') {
-                  // TODO: navigate to edit property screen
-                } else if (value == 'delete') {
-                  // TODO: delete property logic
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'edit', child: Text('Edit')),
-                PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(property.title, style: AppTextStyles.h3.copyWith(fontSize: 15)),
+                      const SizedBox(height: 2),
+                      Text(property.location, style: AppTextStyles.bodySmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      // TODO: navigate to edit property screen
+                    } else if (value == 'delete') {
+                      // TODO: delete property logic
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
               ],
             ),
+            const SizedBox(height: AppSpacing.sm),
+            if (property.isVerified)
+              const Row(
+                children: [
+                  Icon(Icons.verified, size: 16, color: AppColors.success),
+                  SizedBox(width: 4),
+                  Text('Verified', style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => runVerifyNowFlow(context, property),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                  label: const Text('Verify Now'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

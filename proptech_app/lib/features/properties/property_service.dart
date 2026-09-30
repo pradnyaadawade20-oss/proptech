@@ -155,6 +155,25 @@ class PropertyService {
     }
   }
 
+  /// "Verify Now" — uploads a photo taken with the in-app camera plus the
+  /// GPS coordinates captured at that same moment. The backend stores
+  /// both and marks the property verified. Returns the verification
+  /// photo's URL on success.
+  Future<String> verifyProperty(String propertyId, XFile photo, {required double lat, required double lng}) async {
+    try {
+      final bytes = await photo.readAsBytes();
+      final formData = FormData.fromMap({
+        'photo': MultipartFile.fromBytes(bytes, filename: photo.name),
+        'lat': lat.toString(),
+        'lng': lng.toString(),
+      });
+      final response = await _dio.post('/api/properties/$propertyId/verify', data: formData);
+      return response.data['verification_photo_url'] as String;
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   /// Uploads the extra gallery photos and/or the walkthrough video for
   /// [propertyId] (the cover photo goes through [uploadImage]). Returns the
   /// property's full list of extra photo URLs and its video URL (or null).

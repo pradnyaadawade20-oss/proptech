@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
@@ -27,11 +26,11 @@ class DocumentVerificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: property.isVerified ? AppColors.primaryLight : AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,13 +39,13 @@ class DocumentVerificationCard extends StatelessWidget {
             children: [
               Icon(
                 property.isVerified ? Icons.verified : Icons.pending_outlined,
-                color: property.isVerified ? AppColors.verifiedBadge : AppColors.textSecondary,
-                size: 20,
+                color: property.isVerified ? AppColors.verifiedBadge : AppColors.warning,
+                size: 22,
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 property.isVerified ? 'Documents Verified' : 'Verification Pending',
-                style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -58,11 +57,17 @@ class DocumentVerificationCard extends StatelessWidget {
                 children: [
                   Icon(
                     doc.verified ? Icons.check_circle : Icons.radio_button_unchecked,
-                    size: 16,
+                    size: 18,
                     color: doc.verified ? AppColors.verifiedBadge : AppColors.textHint,
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  Text(doc.label, style: AppTextStyles.bodySmall),
+                  Text(
+                    doc.label,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: doc.verified ? AppColors.textPrimary : AppColors.textSecondary,
+                      fontWeight: doc.verified ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),

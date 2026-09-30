@@ -23,6 +23,13 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 		properties.GET("/:id/image", h.ServePropertyImage)
 		properties.POST("/:id/media", h.UploadPropertyMedia)
 		properties.GET("/:id/media/:mediaId", h.ServePropertyMedia)
+		properties.GET("/:id/verification-photo", h.ServeVerificationPhoto)
+	}
+
+	propertiesAuthed := router.Group("/api/properties")
+	propertiesAuthed.Use(middleware.AuthRequired())
+	{
+		propertiesAuthed.POST("/:id/verify", h.VerifyProperty)
 	}
 }
 

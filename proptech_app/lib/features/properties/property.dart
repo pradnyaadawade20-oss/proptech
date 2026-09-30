@@ -210,6 +210,7 @@ class Property {
     String? imageUrl,
     List<String>? additionalImageUrls,
     String? videoTourUrl,
+    bool? isVerified,
   }) {
     return Property(
       id: id,
@@ -220,7 +221,7 @@ class Property {
       bhk: bhk,
       furnishing: furnishing,
       location: location,
-      isVerified: isVerified,
+      isVerified: isVerified ?? this.isVerified,
       isFavorite: isFavorite ?? this.isFavorite,
       rating: rating,
       reviewCount: reviewCount,

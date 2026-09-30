@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
+	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
@@ -241,4 +243,93 @@ func (h *PropertyHandler) GetDashboardStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+// VerifyProperty: POST /api/properties/:id/verify (multipart/form-data)
+//
+//	photo — required, a photo taken with the in-app camera (not gallery)
+//	lat   — required, GPS latitude captured at the same moment
+//	lng   — required, GPS longitude captured at the same moment
+//
+// This is what earns the "Verified" badge: a real photo of the property
+// with GPS proof it was taken there, not a screenshot/downloaded/WhatsApp
+// image (those never carry usable location data). Only the property's
+// owner can verify it.
+func (h *PropertyHandler) VerifyProperty(c *gin.Context) {
+	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	property, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "property not found"})
+		return
+	}
+	if property.OwnerID == nil || *property.OwnerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the property's owner can verify it"})
+		return
+	}
+
+	lat, err := strconv.ParseFloat(c.PostForm("lat"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "lat is required and must be a number"})
+		return
+	}
+	lng, err := strconv.ParseFloat(c.PostForm("lng"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "lng is required and must be a number"})
+		return
+	}
+	if lat == 0 && lng == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not get a GPS location for this photo — make sure location is turned on and try again"})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("photo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a photo is required (field name: photo)"})
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(data) > maxImageBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("photo is larger than %d MB", maxImageBytes>>20)})
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+
+	if err := h.repo.SaveVerification(c.Request.Context(), id, data, contentType, lat, lng); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"is_verified":            true,
+		"verification_photo_url": fmt.Sprintf("%s/api/properties/%s/verification-photo", baseURL(c), id),
+	})
+}
+
+// ServeVerificationPhoto: GET /api/properties/:id/verification-photo
+func (h *PropertyHandler) ServeVerificationPhoto(c *gin.Context) {
+	data, contentType, err := h.repo.GetVerificationPhoto(c.Request.Context(), c.Param("id"))
+	if err != nil || len(data) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no verification photo for this property"})
+		return
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Data(http.StatusOK, contentType, data)
 }

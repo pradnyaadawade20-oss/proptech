@@ -280,7 +280,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: const BoxDecoration(
-                  color: AppColors.surface,
+                  color: AppColors.surfaceSoft,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(24),
                     topRight: Radius.circular(24),
@@ -350,9 +350,9 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     Row(
                       children: [
                         _InfoTag(icon: Icons.bed_outlined, label: property.bhk),
-                        const SizedBox(width: AppSpacing.md),
-                        _InfoTag(icon: Icons.bathtub_outlined, label: property.furnishing),
-                        const SizedBox(width: AppSpacing.md),
+                        const SizedBox(width: AppSpacing.sm),
+                        _InfoTag(icon: Icons.chair_outlined, label: property.furnishing),
+                        const SizedBox(width: AppSpacing.sm),
                         if (property.isVerified)
                           const _InfoTag(icon: Icons.verified_outlined, label: 'Verified'),
                       ],
@@ -362,10 +362,15 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
 
                     // About — owner's description.
                     if (property.description.isNotEmpty) ...[
-                      Text('About this property', style: AppTextStyles.h3),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(property.description, style: AppTextStyles.bodySmall),
-                      const SizedBox(height: AppSpacing.lg),
+                      _SectionCard(
+                        icon: Icons.info_outline,
+                        title: 'About this property',
+                        child: Text(
+                          property.description,
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary, height: 1.5),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
 
                     // Property Details — possession, age, floor, facing, area, etc.
@@ -383,128 +388,134 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                         property.maintenanceCharges > 0 ||
                         property.preferredTenants.isNotEmpty ||
                         property.isPriceNegotiable) ...[
-                      Text('Property Details', style: AppTextStyles.h3),
-                      const SizedBox(height: AppSpacing.sm),
-                      _PropertyDetailsGrid(property: property),
-                      const SizedBox(height: AppSpacing.lg),
+                      _SectionCard(
+                        icon: Icons.home_work_outlined,
+                        title: 'Property Details',
+                        child: _PropertyDetailsGrid(property: property),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
 
                     // Verification — RERA registration check + documents.
                     // Always shown; the card itself decides whether to
                     // display "Registered", "Not Registered", or "Not
                     // Applicable" (for plots) based on the listing's data.
-                    Text('Verification', style: AppTextStyles.h3),
-                    const SizedBox(height: AppSpacing.sm),
-                    DocumentVerificationCard(property: property),
-                    const SizedBox(height: AppSpacing.lg),
+                    _SectionCard(
+                      icon: Icons.verified_user_outlined,
+                      title: 'Verification',
+                      child: DocumentVerificationCard(property: property),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
 
                     // Price Trend — only worth a chart with 2+ data points.
                     if (property.priceHistory.length >= 2) ...[
-                      Text('Price Trend', style: AppTextStyles.h3),
-                      const SizedBox(height: AppSpacing.sm),
-                      _PriceTrendChart(property: property),
-                      const SizedBox(height: AppSpacing.lg),
+                      _SectionCard(
+                        icon: Icons.trending_up,
+                        title: 'Price Trend',
+                        child: _PriceTrendChart(property: property),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
 
                     // Amenities
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Amenities', style: AppTextStyles.h3),
-                        GestureDetector(
-                          onTap: () => _viewAllAmenities(property),
-                          child: Text(
-                            'View all',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.md,
-                      runSpacing: AppSpacing.md,
-                      children: property.amenities
-                          .map((a) => SizedBox(width: 70, child: _AmenityTile(type: a)))
-                          .toList(),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
+                    if (property.amenities.isNotEmpty) ...[
+                      _SectionCard(
+                        icon: Icons.auto_awesome_outlined,
+                        title: 'Amenities',
+                        onViewAll: () => _viewAllAmenities(property),
+                        child: LayoutBuilder(builder: (context, c) {
+                          final itemW = (c.maxWidth - 3 * AppSpacing.sm) / 4;
+                          return Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.md,
+                            children: property.amenities
+                                .take(8)
+                                .map((a) => SizedBox(width: itemW, child: _AmenityTile(type: a)))
+                                .toList(),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
 
                     // Nearby Landmarks — schools, hospitals, metro, etc.
                     if (property.nearbyLandmarks.isNotEmpty) ...[
-                      Text('Nearby Landmarks', style: AppTextStyles.h3),
-                      const SizedBox(height: AppSpacing.sm),
-                      _NearbyLandmarksSection(property: property),
-                      const SizedBox(height: AppSpacing.lg),
+                      _SectionCard(
+                        icon: Icons.place_outlined,
+                        title: 'Nearby Landmarks',
+                        child: _NearbyLandmarksSection(property: property),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                     ],
 
-                    // Gallery thumbnails — real photos, tap any to open the
-                    // fullscreen swipeable viewer at that exact image.
-                    Text('Gallery', style: AppTextStyles.h3),
-                    const SizedBox(height: AppSpacing.sm),
-                    Builder(builder: (context) {
-                      final images = property.galleryImages;
-                      // Show up to 4 thumbnail slots; if there are more photos
-                      // than that, the last slot becomes a "+N" overlay tile.
-                      const maxSlots = 4;
-                      final showOverflow = images.length > maxSlots;
-                      final visibleCount = showOverflow ? maxSlots - 1 : images.length;
-                      final remaining = images.length - visibleCount;
-                      return SizedBox(
-                        height: 70,
-                        child: Row(
-                          children: [
-                            for (int i = 0; i < visibleCount; i++) ...[
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => _openGallery(property, i),
-                                  child: _GalleryThumb(imageUrl: images[i]),
-                                ),
-                              ),
-                              if (i != visibleCount - 1 || showOverflow) const SizedBox(width: 8),
-                            ],
-                            if (showOverflow)
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => _openGallery(property, visibleCount),
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      _GalleryThumb(imageUrl: images[visibleCount]),
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          color: AppColors.textPrimary.withValues(alpha: 0.6),
-                                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          '+$remaining',
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
+                    // Gallery — tap any photo to open the fullscreen viewer.
+                    _SectionCard(
+                      icon: Icons.photo_library_outlined,
+                      title: 'Gallery',
+                      onViewAll: () => _openGallery(property, 0),
+                      child: Builder(builder: (context) {
+                        final images = property.galleryImages;
+                        // Up to 4 slots; if there are more photos, the last
+                        // slot becomes a "+N" overlay tile.
+                        const maxSlots = 4;
+                        final showOverflow = images.length > maxSlots;
+                        final visibleCount = showOverflow ? maxSlots - 1 : images.length;
+                        final remaining = images.length - visibleCount;
+                        return SizedBox(
+                          height: 76,
+                          child: Row(
+                            children: [
+                              for (int i = 0; i < visibleCount; i++) ...[
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _openGallery(property, i),
+                                    child: _GalleryThumb(imageUrl: images[i]),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: AppSpacing.xl),
+                                if (i != visibleCount - 1 || showOverflow) const SizedBox(width: AppSpacing.sm),
+                              ],
+                              if (showOverflow)
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _openGallery(property, visibleCount),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        _GalleryThumb(imageUrl: images[visibleCount]),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryDark.withValues(alpha: 0.6),
+                                            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '+$remaining',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
 
                     // Video Tour — only shown when the owner/dealer has
                     // uploaded a walkthrough video for this listing.
                     if (property.videoTourUrl != null) ...[
-                      Text('Video Tour', style: AppTextStyles.h3),
-                      const SizedBox(height: AppSpacing.sm),
-                      VideoTourCard(
-                        videoUrl: property.videoTourUrl!,
-                        thumbnailUrl: property.imageUrl,
+                      _SectionCard(
+                        icon: Icons.play_circle_fill_rounded,
+                        title: 'Video Tour',
+                        child: VideoTourCard(
+                          videoUrl: property.videoTourUrl!,
+                          thumbnailUrl: property.imageUrl,
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.md),
                     ],
 
                     // Floor Plan — only shown when the owner/dealer has
@@ -557,30 +568,54 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       const SizedBox(height: AppSpacing.xl),
                     ],
 
-                    // Buttons
+                    // Actions
                     Row(
                       children: [
                         Expanded(
-                          child: AppButton(
-                            label: 'Book a Visit',
-                            outlined: true,
+                          child: OutlinedButton.icon(
                             onPressed: () => _bookVisit(property),
+                            icon: const Icon(Icons.calendar_month_outlined, size: 20),
+                            label: const Text('Book a Visit'),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
-                          child: AppButton(
-                            label: 'Contact Owner',
+                          child: ElevatedButton.icon(
                             onPressed: () => _contactOwner(property),
+                            icon: const Icon(Icons.person_outline, size: 20),
+                            label: const Text('Contact Owner'),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    AppButton(
-                      label: 'Request Agreement',
-                      outlined: true,
-                      onPressed: () => _requestAgreement(property),
+                    Material(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        onTap: () => _requestAgreement(property),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  'Request Agreement',
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right, color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
 
@@ -750,12 +785,27 @@ class _InfoTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.textSecondary),
-        const SizedBox(width: 4),
-        Text(label, style: AppTextStyles.bodySmall),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -767,7 +817,7 @@ class _GalleryThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
@@ -852,18 +902,35 @@ class _AmenityTile extends StatelessWidget {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(10),
+          width: 56,
+          height: 56,
           decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.secondary, AppColors.primary],
+            ),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg - 4),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          child: Icon(_icon, size: 20, color: AppColors.primary),
+          child: Icon(_icon, size: 26, color: Colors.white),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           _label,
           textAlign: TextAlign.center,
-          style: AppTextStyles.caption,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -923,33 +990,43 @@ class _PropertyDetailsGrid extends StatelessWidget {
     if (items.isEmpty) return const SizedBox.shrink();
 
     return GridView.count(
+      padding: EdgeInsets.zero,
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: AppSpacing.sm,
       crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 2.6,
+      childAspectRatio: 2.3,
       children: items.map((item) {
         final (icon, label, value) = item;
         return Container(
-          padding: const EdgeInsets.all(AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.surfaceSoft,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: AppColors.primary),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                child: Icon(icon, size: 18, color: Colors.white),
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                     Text(
                       value,
-                      style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1126,6 +1203,87 @@ class _NearbyLandmarksSection extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// White rounded card with an icon + title header and an optional
+/// "View all >" link. Used for Amenities, Gallery and Video Tour.
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback? onViewAll;
+  final Widget child;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.child,
+    this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.14),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                child: Icon(icon, size: 18, color: Colors.white),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.h3.copyWith(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+                ),
+              ),
+              if (onViewAll != null)
+                InkWell(
+                  onTap: onViewAll,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      children: [
+                        Text(
+                          'View all',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontSize: 13,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, size: 18, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          child,
+        ],
+      ),
     );
   }
 }
