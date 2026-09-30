@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: proptech-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: proptech-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: proptech-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: proptech-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: proptech-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: proptech-db
+          property: database
+      - key: DB_SSLMODE
+        value: require
+      # TESTING ONLY: lets the app open the OTP screen + show "Skip" even when
+      # the email can't be sent (Render free blocks SMTP). Remove before real users.
+      # Web OAuth client ID used by the app (must match kGoogleWebClientId in Flutter)
+      - key: GOOGLE_CLIENT_ID
+        value: 544072846065-o5b43q1sd2jbk0hkea2sg408htpkfpc1.apps.googleusercontent.com
+      - key: DEV_SKIP_OTP
+        value: "true"
+
+databases:
+  - name: proptech-db
+    plan: free

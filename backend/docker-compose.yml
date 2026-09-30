@@ -1,0 +1,35 @@
+﻿version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: proptech_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: proptech_user
+      POSTGRES_PASSWORD: proptech_pass
+      POSTGRES_DB: proptech_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+  app:
+    build: .
+    container_name: proptech_app
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8091:8091"
+    environment:
+      PORT: 8091
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: proptech_user
+      DB_PASSWORD: proptech_pass
+      DB_NAME: proptech_db
+
+volumes:
+  postgres_data:
