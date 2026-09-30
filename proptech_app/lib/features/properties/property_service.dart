@@ -76,8 +76,31 @@ class PropertyService {
     required String location,
     required String category,
     required List<String> amenities,
+    double area = 0,
+    int bathrooms = 0,
+    int balconies = 0,
+    int floorNumber = 0,
+    int totalFloors = 0,
+    String city = '',
+    String locality = '',
+    String society = '',
+    String pincode = '',
+    double securityDeposit = 0,
+    double maintenanceCharges = 0,
+    List<String> preferredTenants = const [],
+    DateTime? availableFrom,
+    String description = '',
+    int? propertyAgeYears,
+    String facing = '',
+    String ownershipType = '',
+    bool isPriceNegotiable = false,
+    String contactPreference = 'both',
   }) async {
     try {
+      String? dateOnly(DateTime? d) => d == null
+          ? null
+          : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
       final response = await _dio.post('/api/properties', data: {
         'owner_id': ownerId,
         'title': title,
@@ -89,6 +112,25 @@ class PropertyService {
         'location': location,
         'category': category,
         'amenities': amenities,
+        'area': area,
+        'bathrooms': bathrooms,
+        'balconies': balconies,
+        'floor_number': floorNumber,
+        'total_floors': totalFloors,
+        'city': city,
+        'locality': locality,
+        'society': society,
+        'pincode': pincode,
+        'security_deposit': securityDeposit,
+        'maintenance_charges': maintenanceCharges,
+        'preferred_tenants': preferredTenants,
+        'available_from': dateOnly(availableFrom),
+        'description': description,
+        'property_age_years': propertyAgeYears,
+        'facing': facing,
+        'ownership_type': ownershipType,
+        'is_price_negotiable': isPriceNegotiable,
+        'contact_preference': contactPreference,
       });
       return Property.fromJson(response.data['property'] as Map<String, dynamic>);
     } on DioException catch (e) {

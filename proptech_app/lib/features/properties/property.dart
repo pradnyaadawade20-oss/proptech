@@ -30,6 +30,26 @@ class Property {
   final int totalFloors;
   final String facing; // 'North' | 'South' | 'East' | 'West' | 'North-East' etc.
 
+  // --- Listing detail fields (Post Property form) ---
+  final int bathrooms;
+  final int balconies;
+  final String city;
+  final String locality;
+  final String society; // society / building name
+  final String pincode;
+  /// Rent listings only (0 = not set).
+  final double securityDeposit;
+  final double maintenanceCharges;
+  /// Who the owner prefers for rent: 'Family' | 'Bachelors' | 'Company'.
+  final List<String> preferredTenants;
+  /// Date from which the property is vacant / available.
+  final DateTime? availableFrom;
+  final String description;
+  /// 'Freehold' | 'Leasehold' | 'Co-operative Society' | 'Power of Attorney' or ''.
+  final String ownershipType;
+  /// 'call' | 'chat' | 'both'
+  final String contactPreference;
+
   // --- Map search fields ---
   final double latitude;
   final double longitude;
@@ -93,6 +113,19 @@ class Property {
     this.floorNumber = 0,
     this.totalFloors = 0,
     this.facing = '',
+    this.bathrooms = 0,
+    this.balconies = 0,
+    this.city = '',
+    this.locality = '',
+    this.society = '',
+    this.pincode = '',
+    this.securityDeposit = 0,
+    this.maintenanceCharges = 0,
+    this.preferredTenants = const [],
+    this.availableFrom,
+    this.description = '',
+    this.ownershipType = '',
+    this.contactPreference = 'both',
     this.latitude = 0,
     this.longitude = 0,
     this.additionalImageUrls = const [],
@@ -145,6 +178,23 @@ class Property {
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
       // Optional fields — used automatically once the backend starts sending them.
       area: num_('area'),
+      floorNumber: int_('floor_number'),
+      totalFloors: int_('total_floors'),
+      facing: json['facing'] as String? ?? '',
+      ageOfPropertyYears: int_('property_age_years', -1),
+      bathrooms: int_('bathrooms'),
+      balconies: int_('balconies'),
+      city: json['city'] as String? ?? '',
+      locality: json['locality'] as String? ?? '',
+      society: json['society'] as String? ?? '',
+      pincode: json['pincode'] as String? ?? '',
+      securityDeposit: num_('security_deposit'),
+      maintenanceCharges: num_('maintenance_charges'),
+      preferredTenants: (json['preferred_tenants'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      availableFrom: DateTime.tryParse(json['available_from'] as String? ?? ''),
+      description: json['description'] as String? ?? '',
+      ownershipType: json['ownership_type'] as String? ?? '',
+      contactPreference: json['contact_preference'] as String? ?? 'both',
       latitude: num_('latitude'),
       longitude: num_('longitude'),
       additionalImageUrls: gallery,
@@ -182,6 +232,19 @@ class Property {
       floorNumber: floorNumber,
       totalFloors: totalFloors,
       facing: facing,
+      bathrooms: bathrooms,
+      balconies: balconies,
+      city: city,
+      locality: locality,
+      society: society,
+      pincode: pincode,
+      securityDeposit: securityDeposit,
+      maintenanceCharges: maintenanceCharges,
+      preferredTenants: preferredTenants,
+      availableFrom: availableFrom,
+      description: description,
+      ownershipType: ownershipType,
+      contactPreference: contactPreference,
       latitude: latitude,
       longitude: longitude,
       additionalImageUrls: additionalImageUrls ?? this.additionalImageUrls,

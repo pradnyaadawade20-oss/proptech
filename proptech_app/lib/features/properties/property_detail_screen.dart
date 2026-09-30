@@ -129,7 +129,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
   }
 
   void _viewAllAmenities(Property property) {
-    const allAmenities = ['wifi', 'parking', 'lift', 'power_backup', 'gym', 'pool'];
+    const allAmenities = [
+      'wifi', 'parking', 'lift', 'power_backup', 'gym', 'pool',
+      'security', 'water_supply', 'gas_pipeline', 'cctv', 'clubhouse', 'garden', 'play_area',
+    ];
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -357,12 +360,29 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     const Divider(height: AppSpacing.xl),
 
 
-                    // Property Details — possession, age, floor, facing, area.
+                    // About — owner's description.
+                    if (property.description.isNotEmpty) ...[
+                      Text('About this property', style: AppTextStyles.h3),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(property.description, style: AppTextStyles.bodySmall),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+
+                    // Property Details — possession, age, floor, facing, area, etc.
                     if (property.possessionStatus.isNotEmpty ||
                         property.ageOfPropertyYears >= 0 ||
                         property.totalFloors > 0 ||
                         property.facing.isNotEmpty ||
-                        property.area > 0) ...[
+                        property.area > 0 ||
+                        property.bathrooms > 0 ||
+                        property.balconies > 0 ||
+                        property.society.isNotEmpty ||
+                        property.ownershipType.isNotEmpty ||
+                        property.availableFrom != null ||
+                        property.securityDeposit > 0 ||
+                        property.maintenanceCharges > 0 ||
+                        property.preferredTenants.isNotEmpty ||
+                        property.isPriceNegotiable) ...[
                       Text('Property Details', style: AppTextStyles.h3),
                       const SizedBox(height: AppSpacing.sm),
                       _PropertyDetailsGrid(property: property),
@@ -404,9 +424,11 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
+                    Wrap(
+                      spacing: AppSpacing.md,
+                      runSpacing: AppSpacing.md,
                       children: property.amenities
-                          .map((a) => Expanded(child: _AmenityTile(type: a)))
+                          .map((a) => SizedBox(width: 70, child: _AmenityTile(type: a)))
                           .toList(),
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -773,6 +795,20 @@ class _AmenityTile extends StatelessWidget {
         return Icons.fitness_center_outlined;
       case 'pool':
         return Icons.pool_outlined;
+      case 'security':
+        return Icons.security_outlined;
+      case 'water_supply':
+        return Icons.water_drop_outlined;
+      case 'gas_pipeline':
+        return Icons.local_fire_department_outlined;
+      case 'cctv':
+        return Icons.videocam_outlined;
+      case 'clubhouse':
+        return Icons.deck_outlined;
+      case 'garden':
+        return Icons.park_outlined;
+      case 'play_area':
+        return Icons.child_care_outlined;
       default:
         return Icons.check_circle_outline;
     }
@@ -792,6 +828,20 @@ class _AmenityTile extends StatelessWidget {
         return 'Gym';
       case 'pool':
         return 'Pool';
+      case 'security':
+        return 'Security';
+      case 'water_supply':
+        return '24x7 Water';
+      case 'gas_pipeline':
+        return 'Gas Pipeline';
+      case 'cctv':
+        return 'CCTV';
+      case 'clubhouse':
+        return 'Clubhouse';
+      case 'garden':
+        return 'Garden';
+      case 'play_area':
+        return 'Play Area';
       default:
         return type;
     }
@@ -847,10 +897,27 @@ class _PropertyDetailsGrid extends StatelessWidget {
         (
           Icons.stairs_outlined,
           'Floor',
-          '${property.floorNumber} of ${property.totalFloors}',
+          '${property.floorNumber == 0 ? 'Ground' : property.floorNumber} of ${property.totalFloors}',
         ),
       if (property.facing.isNotEmpty) (Icons.explore_outlined, 'Facing', property.facing),
       if (property.area > 0) (Icons.square_foot_outlined, 'Area', '${property.area.toStringAsFixed(0)} sqft'),
+      if (property.bathrooms > 0) (Icons.bathtub_outlined, 'Bathrooms', '${property.bathrooms}'),
+      if (property.balconies > 0) (Icons.balcony_outlined, 'Balconies', '${property.balconies}'),
+      if (property.society.isNotEmpty) (Icons.apartment_outlined, 'Society', property.society),
+      if (property.ownershipType.isNotEmpty) (Icons.gavel_outlined, 'Ownership', property.ownershipType),
+      if (property.availableFrom != null)
+        (
+          Icons.event_outlined,
+          'Available From',
+          '${property.availableFrom!.day}/${property.availableFrom!.month}/${property.availableFrom!.year}',
+        ),
+      if (property.securityDeposit > 0)
+        (Icons.savings_outlined, 'Security Deposit', '₹${property.securityDeposit.toStringAsFixed(0)}'),
+      if (property.maintenanceCharges > 0)
+        (Icons.build_outlined, 'Maintenance', '₹${property.maintenanceCharges.toStringAsFixed(0)}/month'),
+      if (property.preferredTenants.isNotEmpty)
+        (Icons.groups_outlined, 'Preferred Tenants', property.preferredTenants.join(', ')),
+      if (property.isPriceNegotiable) (Icons.handshake_outlined, 'Price', 'Negotiable'),
     ];
 
     if (items.isEmpty) return const SizedBox.shrink();

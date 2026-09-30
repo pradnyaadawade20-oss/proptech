@@ -137,6 +137,10 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if _, err := req.ParsedAvailableFrom(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	property, err := h.repo.Create(c.Request.Context(), req)
 	if err != nil {
@@ -152,6 +156,10 @@ func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 
 	var req models.UpdatePropertyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if _, err := req.ParsedAvailableFrom(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

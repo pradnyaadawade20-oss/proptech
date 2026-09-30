@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:go_router/go_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
@@ -26,13 +27,41 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   final _titleController = TextEditingController();
   final _priceController = TextEditingController();
-  final _locationController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _floorController = TextEditingController();
+  final _totalFloorsController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _localityController = TextEditingController();
+  final _societyController = TextEditingController();
+  final _pincodeController = TextEditingController();
+  final _depositController = TextEditingController();
+  final _maintenanceController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   String _category = 'Residential';
   String _bhk = '1 BHK';
   String _furnishing = 'Unfurnished';
   String _priceUnit = '/month';
   final Set<String> _selectedAmenities = {'wifi', 'parking'};
+
+  int _bathrooms = 1;
+  int _balconies = 0;
+  String _facing = '';
+  String _ownership = '';
+  String _contactPref = 'both';
+  bool _negotiable = false;
+  DateTime? _availableFrom;
+  final Set<String> _preferredTenants = {};
+
+  final List<String> _facingOptions = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West'];
+  final List<String> _ownershipOptions = ['Freehold', 'Leasehold', 'Co-operative Society', 'Power of Attorney'];
+  final List<String> _tenantOptions = ['Family', 'Bachelors', 'Company'];
+  final Map<String, String> _contactOptions = const {'call': 'Call', 'chat': 'Chat', 'both': 'Call & Chat'};
+
+  bool get _isRent => _priceUnit == '/month';
+  bool get _isPlot => _category == 'Plot/Land';
+  bool get _isResidential => _category == 'Residential';
 
   final List<String> _categoryOptions = ['Residential', 'Commercial', 'Plot/Land'];
   final List<String> _bhkOptions = ['1 BHK', '2 BHK', '3 BHK', 'PG'];
@@ -46,6 +75,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     {'key': 'power_backup', 'label': 'Power Backup', 'icon': Icons.power_outlined},
     {'key': 'gym', 'label': 'Gym', 'icon': Icons.fitness_center_outlined},
     {'key': 'pool', 'label': 'Pool', 'icon': Icons.pool_outlined},
+    {'key': 'security', 'label': 'Security', 'icon': Icons.security_outlined},
+    {'key': 'water_supply', 'label': '24x7 Water', 'icon': Icons.water_drop_outlined},
+    {'key': 'gas_pipeline', 'label': 'Gas Pipeline', 'icon': Icons.local_fire_department_outlined},
+    {'key': 'cctv', 'label': 'CCTV', 'icon': Icons.videocam_outlined},
+    {'key': 'clubhouse', 'label': 'Clubhouse', 'icon': Icons.deck_outlined},
+    {'key': 'garden', 'label': 'Garden', 'icon': Icons.park_outlined},
+    {'key': 'play_area', 'label': 'Play Area', 'icon': Icons.child_care_outlined},
   ];
 
   final List<String> _stepTitles = ['Basic Details', 'Location & Price', 'Amenities', 'Photos'];
@@ -62,7 +98,17 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     _pageController.dispose();
     _titleController.dispose();
     _priceController.dispose();
-    _locationController.dispose();
+    _areaController.dispose();
+    _floorController.dispose();
+    _totalFloorsController.dispose();
+    _ageController.dispose();
+    _cityController.dispose();
+    _localityController.dispose();
+    _societyController.dispose();
+    _pincodeController.dispose();
+    _depositController.dispose();
+    _maintenanceController.dispose();
+    _descriptionController.dispose();
     _floorPlanUrlController.dispose();
     super.dispose();
   }
@@ -76,13 +122,34 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           _showError('Please enter a property title');
           return false;
         }
-        return true;
-      case 1:
-        if (_locationController.text.trim().isEmpty) {
-          _showError('Please enter the location');
+        if (_toDouble(_areaController) <= 0) {
+          _showError('Please enter the area in sq ft');
           return false;
         }
-        if (_priceController.text.trim().isEmpty) {
+        if (!_isPlot) {
+          final floor = _toInt(_floorController);
+          final total = _toInt(_totalFloorsController);
+          if (total > 0 && floor > total) {
+            _showError('Floor number cannot be more than total floors');
+            return false;
+          }
+        }
+        return true;
+      case 1:
+        if (_cityController.text.trim().isEmpty) {
+          _showError('Please enter the city');
+          return false;
+        }
+        if (_localityController.text.trim().isEmpty) {
+          _showError('Please enter the locality / area');
+          return false;
+        }
+        final pin = _pincodeController.text.trim();
+        if (pin.isNotEmpty && pin.length != 6) {
+          _showError('Pincode must be 6 digits');
+          return false;
+        }
+        if (_toDouble(_priceController) <= 0) {
           _showError('Please enter the price');
           return false;
         }
@@ -141,6 +208,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
     setState(() => _submitting = true);
     try {
+      final city = _cityController.text.trim();
+      final locality = _localityController.text.trim();
       var created = await PropertyService.instance.create(
         ownerId: ownerId,
         title: _titleController.text.trim(),
@@ -149,9 +218,29 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         priceUnit: _priceUnit,
         bhk: _bhk,
         furnishing: _furnishing,
-        location: _locationController.text.trim(),
+        // "locality, city" — the app reads the city as the last comma part.
+        location: '$locality, $city',
         category: _category,
         amenities: _selectedAmenities.toList(),
+        area: _toDouble(_areaController),
+        bathrooms: _isResidential ? _bathrooms : 0,
+        balconies: _isResidential ? _balconies : 0,
+        floorNumber: _isPlot ? 0 : _toInt(_floorController),
+        totalFloors: _isPlot ? 0 : _toInt(_totalFloorsController),
+        city: city,
+        locality: locality,
+        society: _societyController.text.trim(),
+        pincode: _pincodeController.text.trim(),
+        securityDeposit: _isRent ? _toDouble(_depositController) : 0,
+        maintenanceCharges: _toDouble(_maintenanceController),
+        preferredTenants: _isRent ? _preferredTenants.toList() : const [],
+        availableFrom: _availableFrom,
+        description: _descriptionController.text.trim(),
+        propertyAgeYears: (_isPlot || _ageController.text.trim().isEmpty) ? null : _toInt(_ageController),
+        facing: _facing,
+        ownershipType: _ownership,
+        isPriceNegotiable: _negotiable,
+        contactPreference: _contactPref,
       );
 
       // The first photo is the cover — it shows up everywhere (My
@@ -360,20 +449,81 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             );
           }).toList(),
         ),
-        if (_category == 'Commercial') ...[
+        const SizedBox(height: AppSpacing.lg),
+
+        TextFormField(
+          controller: _areaController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          decoration: InputDecoration(
+            labelText: _isPlot ? 'Plot Area (sq ft)' : 'Area (sq ft)',
+            prefixIcon: const Icon(Icons.square_foot_outlined),
+          ),
+        ),
+
+        if (_isResidential) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _counterRow('Bathrooms', _bathrooms, (v) => setState(() => _bathrooms = v), min: 1, max: 10),
+          _counterRow('Balconies', _balconies, (v) => setState(() => _balconies = v), min: 0, max: 10),
+        ],
+
+        if (!_isPlot) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _floorController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(labelText: 'Floor No.', hintText: '0 = Ground'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: TextFormField(
+                  controller: _totalFloorsController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(labelText: 'Total Floors'),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            'Tip: mention carpet area in sq.ft in the title (e.g. "1200 sq.ft Office Space")',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          TextFormField(
+            controller: _ageController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Property Age in years (optional)',
+              hintText: '0 = new construction',
+            ),
           ),
         ],
-        if (_category == 'Plot/Land') ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Tip: mention plot area in sq.ft in the title (e.g. "1200 sq.ft NA Plot")',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        const SizedBox(height: AppSpacing.lg),
+
+        Text('Facing (optional)', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.sm),
+        _singleChoiceChips(_facingOptions, _facing, (v) => setState(() => _facing = v)),
+        const SizedBox(height: AppSpacing.lg),
+
+        Text('Ownership (optional)', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.sm),
+        _singleChoiceChips(_ownershipOptions, _ownership, (v) => setState(() => _ownership = v)),
+        const SizedBox(height: AppSpacing.lg),
+
+        TextFormField(
+          controller: _descriptionController,
+          maxLines: 4,
+          maxLength: 1000,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Description (optional)',
+            hintText: 'Tell buyers/tenants what makes this place special',
+            alignLabelWithHint: true,
           ),
-        ],
+        ),
       ],
     );
   }
@@ -383,11 +533,43 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       heading: 'Where is it & what\'s the price?',
       children: [
         TextFormField(
-          controller: _locationController,
+          controller: _cityController,
+          textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
-            labelText: 'Location',
-            hintText: 'e.g. Powai, Mumbai',
+            labelText: 'City',
+            hintText: 'e.g. Mumbai',
+            prefixIcon: Icon(Icons.location_city_outlined),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextFormField(
+          controller: _localityController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Locality / Area',
+            hintText: 'e.g. Powai',
             prefixIcon: Icon(Icons.location_on_outlined),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextFormField(
+          controller: _societyController,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Society / Building name (optional)',
+            prefixIcon: Icon(Icons.apartment_outlined),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextFormField(
+          controller: _pincodeController,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Pincode (optional)',
+            counterText: '',
+            prefixIcon: Icon(Icons.pin_drop_outlined),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -417,6 +599,88 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 onChanged: (value) => setState(() => _priceUnit = value!),
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Price is negotiable'),
+          value: _negotiable,
+          activeThumbColor: AppColors.primary,
+          onChanged: (v) => setState(() => _negotiable = v),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        if (_isRent) ...[
+          TextFormField(
+            controller: _depositController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Security Deposit (₹)',
+              prefixIcon: Icon(Icons.currency_rupee),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        TextFormField(
+          controller: _maintenanceController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: _isRent ? 'Maintenance (₹/month, if extra)' : 'Maintenance (₹/month, optional)',
+            prefixIcon: const Icon(Icons.currency_rupee),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        if (_isRent) ...[
+          Text('Preferred Tenants', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: _tenantOptions.map((option) {
+              final isSelected = _preferredTenants.contains(option);
+              return FilterChip(
+                label: Text(option),
+                selected: isSelected,
+                onSelected: (v) => setState(() {
+                  if (v) {
+                    _preferredTenants.add(option);
+                  } else {
+                    _preferredTenants.remove(option);
+                  }
+                }),
+                selectedColor: AppColors.primary,
+                checkmarkColor: Colors.white,
+                labelStyle: AppTextStyles.bodySmall.copyWith(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+
+        Text(_isRent ? 'Available From' : 'Available / Possession From',
+            style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickAvailableFrom,
+                icon: const Icon(Icons.event_outlined, size: 18),
+                label: Text(_availableFrom == null ? 'Select date' : _formatDate(_availableFrom!)),
+              ),
+            ),
+            if (_availableFrom != null)
+              IconButton(
+                onPressed: () => setState(() => _availableFrom = null),
+                icon: const Icon(Icons.close, color: AppColors.error),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -470,6 +734,26 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   }
                 });
               },
+              selectedColor: AppColors.primary,
+              labelStyle: AppTextStyles.bodySmall.copyWith(
+                color: isSelected ? Colors.white : AppColors.textPrimary,
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+
+        Text('How should buyers/tenants contact you?', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: _contactOptions.entries.map((e) {
+            final isSelected = _contactPref == e.key;
+            return ChoiceChip(
+              label: Text(e.value),
+              selected: isSelected,
+              onSelected: (_) => setState(() => _contactPref = e.key),
               selectedColor: AppColors.primary,
               labelStyle: AppTextStyles.bodySmall.copyWith(
                 color: isSelected ? Colors.white : AppColors.textPrimary,
@@ -768,5 +1052,60 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       _pickedVideo = video;
       _pickedVideoBytes = bytes;
     });
+  }
+
+
+  int _toInt(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
+  double _toDouble(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _pickAvailableFrom() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _availableFrom ?? now,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 3, now.month, now.day),
+    );
+    if (picked != null) setState(() => _availableFrom = picked);
+  }
+
+  /// Single-select chips; tapping the selected chip again clears it.
+  Widget _singleChoiceChips(List<String> options, String selected, ValueChanged<String> onChanged) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: options.map((option) {
+        final isSelected = selected == option;
+        return ChoiceChip(
+          label: Text(option),
+          selected: isSelected,
+          onSelected: (_) => onChanged(isSelected ? '' : option),
+          selectedColor: AppColors.primary,
+          labelStyle: AppTextStyles.bodySmall.copyWith(
+            color: isSelected ? Colors.white : AppColors.textPrimary,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _counterRow(String label, int value, ValueChanged<int> onChanged, {int min = 0, int max = 10}) {
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: AppTextStyles.h3.copyWith(fontSize: 15))),
+        IconButton(
+          onPressed: value > min ? () => onChanged(value - 1) : null,
+          icon: const Icon(Icons.remove_circle_outline),
+        ),
+        SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.center, style: AppTextStyles.bodySmall)),
+        IconButton(
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+          icon: const Icon(Icons.add_circle_outline),
+        ),
+      ],
+    );
   }
 }
