@@ -9,7 +9,6 @@ import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
-import '../auth/role_switcher_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -190,11 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Switch role',
-            onPressed: () => showRoleSwitcherSheet(context),
-          ),
+          
           IconButton(
             icon: const Icon(Icons.favorite_border),
             onPressed: () => context.push(RouteNames.favorites),
@@ -289,8 +284,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: AppSpacing.sm),
 
           // Quick-action icons row — plain background, outlined circles
+
+          // Quick-action icons row — plain background, light-blue filled circles
+          const SizedBox(height: AppSpacing.sm),
           SizedBox(
-            height: 78,
+            height: 92,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -305,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
 
           // Search bar with filter icon
           Container(
@@ -1121,27 +1119,30 @@ class _HeroIconItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 68,
+        width: 76,
         margin: const EdgeInsets.symmetric(horizontal: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: AppColors.primaryLight,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.border, width: 1.2),
               ),
-              child: Icon(icon, color: AppColors.primary, size: 18),
+              child: Icon(icon, color: AppColors.primary, size: 26),
             ),
             const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w600),
+            SizedBox(
+              width: 76,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
           ],
         ),

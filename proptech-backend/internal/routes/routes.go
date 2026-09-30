@@ -3,6 +3,8 @@ package routes
 import (
 	"proptech-backend/internal/handlers"
 
+	"proptech-backend/internal/middleware"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,6 +39,7 @@ func RegisterAuthRoutes(router *gin.Engine, h *handlers.AuthHandler) {
 
 func RegisterFavoriteRoutes(router *gin.Engine, h *handlers.FavoriteHandler) {
 	favorites := router.Group("/api/favorites")
+	favorites.Use(middleware.AuthRequired())
 	{
 		favorites.GET("", h.GetFavorites)
 		favorites.POST("", h.AddFavorite)
@@ -46,6 +49,7 @@ func RegisterFavoriteRoutes(router *gin.Engine, h *handlers.FavoriteHandler) {
 
 func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 	visits := router.Group("/api/visits")
+	visits.Use(middleware.AuthRequired())
 	{
 		visits.GET("", h.GetVisits)
 		visits.POST("", h.CreateVisit)
@@ -74,6 +78,7 @@ func RegisterProfileRoutes(router *gin.Engine, h *handlers.ProfileHandler) {
 
 func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 	agreements := router.Group("/api/agreements")
+	agreements.Use(middleware.AuthRequired())
 	{
 		agreements.GET("", h.GetAgreements)
 		agreements.GET("/:id", h.GetAgreementByID)

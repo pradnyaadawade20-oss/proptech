@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/splash_screen.dart';
 import '../../features/auth/onboarding_screen.dart';
 import '../../features/auth/login_screen.dart';
-import '../../features/auth/role_selection_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/properties/property_detail_screen.dart';
 import '../../features/search/map_search_screen.dart';
@@ -17,6 +16,7 @@ import '../../features/broker/broker_dashboard_screen.dart';
 import '../../features/visits/visits_screen.dart';
 import '../../features/properties/my_properties_screen.dart';
 import '../../features/properties/add_property_screen.dart';
+import '../../features/properties/post_role_gate.dart';
 import '../../features/chat/chat_list_screen.dart';
 import '../../features/chat/chat_detail_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -61,10 +61,6 @@ final GoRouter appRouter = GoRouter(
           skipAvailable: extra['skipAvailable'] == 'true',
         );
       },
-    ),
-    GoRoute(
-      path: RouteNames.roleSelection,
-      builder: (context, state) => const RoleSelectionScreen(),
     ),
 
     // Bottom nav tabs
@@ -232,8 +228,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RouteNames.addProperty,
-      builder: (context, state) => const AddPropertyScreen(),
-    ),
+builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    ),
     GoRoute(
       path: RouteNames.myProperties,
       builder: (context, state) => const MyPropertiesScreen(),

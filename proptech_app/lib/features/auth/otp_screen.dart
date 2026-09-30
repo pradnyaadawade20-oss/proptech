@@ -135,7 +135,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _loading = false);
 
     if (result.success) {
-      context.go(RouteNames.roleSelection);
+      context.go(RouteNames.home);
     } else {
       setState(() => _errorText = result.errorMessage);
     }
@@ -154,7 +154,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _loading = false);
 
     if (result.success) {
-      context.go(RouteNames.roleSelection);
+     context.go(RouteNames.home);
     } else {
       setState(() => _errorText = result.errorMessage);
     }

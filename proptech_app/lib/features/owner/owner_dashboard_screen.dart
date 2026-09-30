@@ -4,7 +4,6 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
-import '../auth/role_switcher_sheet.dart';
 import 'dashboard_service.dart';
 import 'owner_stats.dart';
 
@@ -36,11 +35,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
       appBar: AppBar(
         title: const Text('Owner Dashboard'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Switch role',
-            onPressed: () => showRoleSwitcherSheet(context),
-          ),
+          
           IconButton(
             icon: const Icon(Icons.person_outline),
             onPressed: () => context.push(RouteNames.profileStandalone),

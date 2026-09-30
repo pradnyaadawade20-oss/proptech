@@ -3,6 +3,8 @@ import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../favorites/favorite_service.dart';
 import '../properties/property_store.dart';
+import '../../core/session/user_session.dart';
+
 class AuthResult {
   final bool success;
   final String? errorMessage;
@@ -104,8 +106,51 @@ class AuthService {
     await TokenStore.instance.saveToken(token);
     await TokenStore.instance.saveUserId(user['id'] as String);
     await PropertyStore.instance.load();
+
+    final roles = <UserRole>{
+      for (final r in (user['roles'] as List? ?? const []))
+        _roleFromServer(r.toString()),
+    };
+    if (roles.isEmpty) roles.add(UserRole.buyerTenant);
+    final active = _roleFromServer((user['active_role'] ?? '').toString());
+    UserSession.instance.setInitialRoles(
+      roles,
+      startWith: roles.contains(active) ? active : roles.first,
+    );
+
+    FavoriteService.instance.syncFavoriteFlags();
   }
 
+  UserRole _roleFromServer(String role) {
+    switch (role) {
+      case 'owner':
+        return UserRole.owner;
+      case 'broker':
+        return UserRole.broker;
+      default:
+        return UserRole.buyerTenant;
+    }
+  }
+
+  String _roleToServer(UserRole role) {
+    switch (role) {
+      case UserRole.owner:
+        return 'owner';
+      case UserRole.broker:
+        return 'broker';
+      case UserRole.buyerTenant:
+        return 'buyer_tenant';
+    }
+  }
+
+  Future<void> saveRole(UserRole role) async {
+    try {
+      final id = await TokenStore.instance.getUserId();
+      if (id == null) return;
+      await _dio.patch('/api/auth/users/$id/role',
+          data: {'role': _roleToServer(role)});
+    } on DioException catch (_) {}
+  }
   String _extractError(DioException e) {
     final data = e.response?.data;
     if (data is Map && data['error'] != null) return data['error'].toString();

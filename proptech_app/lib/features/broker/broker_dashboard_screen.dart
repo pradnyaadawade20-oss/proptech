@@ -4,7 +4,6 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
-import '../auth/role_switcher_sheet.dart';
 import '../owner/dashboard_service.dart';
 import '../owner/owner_stats.dart';
 import '../profile/profile_service.dart';
@@ -57,11 +56,6 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
           ],
         ),
         actions: [
-          _RoundIconButton(
-            icon: Icons.swap_horiz,
-            tooltip: 'Switch role',
-            onPressed: () => showRoleSwitcherSheet(context),
-          ),
           const SizedBox(width: AppSpacing.sm),
           _RoundIconButton(
             icon: Icons.notifications_none,

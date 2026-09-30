@@ -6,7 +6,6 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/session/user_session.dart';
 import '../auth/auth_service.dart';
-import '../auth/role_switcher_sheet.dart';
 import '../chat/chat_avatar.dart';
 import 'profile_service.dart';
 
@@ -122,16 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           _buildHeader(),
           const SizedBox(height: AppSpacing.lg),
-          ValueListenableBuilder<UserRole?>(
-            valueListenable: UserSession.instance.currentRole,
-            builder: (context, current, _) {
-              return _ProfileMenuTile(
-                icon: Icons.swap_horiz,
-                title: current != null ? 'Switch role — currently ${current.label}' : 'Choose your role',
-                onTap: () => showRoleSwitcherSheet(context),
-              );
-            },
-          ),
+      
           _ProfileMenuTile(
             icon: Icons.home_work_outlined,
             title: 'My Properties',

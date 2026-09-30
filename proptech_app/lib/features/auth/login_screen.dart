@@ -10,13 +10,13 @@ import '../../../app/theme/app_colors.dart';
 import 'auth_service.dart';
 
 // ── Design tokens taken from the login mock-up ─────────────────────────────
-const _teal = Color(0xFF0F5C4D);
-const _tealGlow = Color(0xFF17705C);
-const _ink = Color(0xFF16302C);
-const _muted = Color(0xFF6B7573);
-const _fieldActiveBg = Color(0xFFEEF5F1);
-const _fieldIdleBg = Color(0xFFF1F0EB);
-const _fieldIdleBorder = Color(0xFFE6E4DB);
+const _teal = Color(0xFF15558A); // matches AppColors.primary (navy blue)
+const _tealGlow = Color(0xFF2B6FA3); // matches AppColors.secondary
+const _ink = Color(0xFF17202A); // matches AppColors.textPrimary
+const _muted = Color(0xFF667085); // matches AppColors.textSecondary
+const _fieldActiveBg = Color(0xFFEAF2FA); // matches AppColors.primaryLight
+const _fieldIdleBg = Color(0xFFF1F6FC); // matches AppColors.surfaceSoft
+const _fieldIdleBorder = Color(0xFFE5EAF0); // matches AppColors.border
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -615,7 +615,7 @@ class _OrDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const line = Expanded(
-      child: Divider(height: 1, thickness: 1, color: Color(0xFFE2E0D8)),
+      child: Divider(height: 1, thickness: 1, color: Color(0xFFE5EAF0)),
     );
     return Row(
       children: [
@@ -646,7 +646,7 @@ class _GoogleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = 22 * s;
     return Material(
-      color: const Color(0xFFFCFBF8),
+      color: const Color(0xFFFFFFFF),
       borderRadius: BorderRadius.circular(r),
       child: InkWell(
         borderRadius: BorderRadius.circular(r),
@@ -655,7 +655,7 @@ class _GoogleButton extends StatelessWidget {
           height: math.max(69 * s, 42),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(r),
-            border: Border.all(color: const Color(0xFFE6E4DB)),
+            border: Border.all(color: const Color(0xFFE5EAF0)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -767,7 +767,7 @@ class _Footer extends StatelessWidget {
                     imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                     child: Opacity(
                       opacity: 0.35,
-                      child: img(tint: const Color(0xFF0F5C4D)),
+                      child: img(tint: const Color(0xFF15558A)),
                     ),
                   ),
                 ),
