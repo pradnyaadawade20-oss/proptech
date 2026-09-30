@@ -14,6 +14,7 @@ class RouteNames {
 
   static const scheduleVisit = '/property/:id/visit';
   static const myVisits = '/visits';
+  static const notifications = '/notifications';
 
   static const chatList = '/chats';
   static const chatDetail = '/chats/:id';

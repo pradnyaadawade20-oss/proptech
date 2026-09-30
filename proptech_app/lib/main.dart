@@ -40,5 +40,6 @@ Future<void> _initPush() async {
         .timeout(const Duration(seconds: 15));
   } catch (e) {
     debugPrint('Push notifications disabled: $e');
+    PushNotificationService.instance.completeLaunchRoute();
   }
 }

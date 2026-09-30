@@ -6,6 +6,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
+import '../notifications/notification_bell.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
@@ -194,14 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.favorite_border),
             onPressed: () => context.push(RouteNames.favorites),
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('No new notifications')),
-              );
-            },
-          ),
+          const NotificationBell(),
         ],
       ),
       body: RefreshIndicator(
