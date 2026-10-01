@@ -131,6 +131,7 @@ final GoRouter appRouter = GoRouter(
           'commercial': 'Commercial',
           'plot': 'Plot / Land',
           'pg': 'PG',
+                    'farmhouse': 'Farmhouse',
           'furnished': 'Furnished Homes',
           'semifurnished': 'Semifurnished Homes',
           'unfurnished': 'Unfurnished Homes',

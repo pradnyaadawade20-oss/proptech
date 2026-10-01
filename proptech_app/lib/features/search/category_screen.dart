@@ -39,8 +39,13 @@ class _CategoryScreenState extends State<CategoryScreen> with PropertyStoreListe
             .where((p) => p.category == 'Residential' && p.priceUnit != '/month')
             .toList();
         break;
-      case 'pg':
-        results = PropertyStore.instance.all.where((p) => p.bhk == 'PG').toList();
+            case 'pg':
+        results = PropertyStore.instance.all
+            .where((p) => p.category == 'PG/Co-living' || p.bhk == 'PG')
+            .toList();
+        break;
+      case 'farmhouse':
+        results = PropertyStore.instance.all.where((p) => p.category == 'Farmhouse').toList();
         break;
       case 'commercial':
         results = PropertyStore.instance.all.where((p) => p.category == 'Commercial').toList();

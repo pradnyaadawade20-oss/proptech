@@ -69,8 +69,25 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   bool get _isPlot => _category == 'Plot/Land';
   bool get _isResidential => _category == 'Residential';
 
-  final List<String> _categoryOptions = ['Residential', 'Commercial', 'Plot/Land'];
-  final List<String> _bhkOptions = ['1 BHK', '2 BHK', '3 BHK', 'PG'];
+  final List<String> _categoryOptions = ['Residential', 'Commercial', 'Plot/Land', 'PG/Co-living', 'Farmhouse'];
+    final List<String> _pgTypeOptions = ['Boys PG', 'Girls PG', 'Co-living', 'Single Room'];
+  final List<String> _farmhouseTypeOptions = ['Farmhouse', 'Weekend Villa', 'Farm Land with House'];
+
+  List<String> _typeOptionsFor(String category) {
+    switch (category) {
+      case 'Commercial':
+        return _commercialTypeOptions;
+      case 'Plot/Land':
+        return _plotTypeOptions;
+      case 'PG/Co-living':
+        return _pgTypeOptions;
+      case 'Farmhouse':
+        return _farmhouseTypeOptions;
+      default:
+        return _bhkOptions;
+    }
+  }
+    final List<String> _bhkOptions = ['1 BHK', '2 BHK', '3 BHK', 'PG'];
   final List<String> _commercialTypeOptions = ['Office Space', 'Shop', 'Warehouse', 'Showroom'];
   final List<String> _plotTypeOptions = ['Residential Plot', 'NA Plot', 'Agricultural Land', 'Farm House Land'];
   final List<String> _furnishingOptions = ['Unfurnished', 'Semi Furnished', 'Fully Furnished'];
@@ -585,16 +602,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             return ChoiceChip(
               label: Text(option),
               selected: isSelected,
-              onSelected: (_) => setState(() {
+                            onSelected: (_) => setState(() {
                 _category = option;
-                // Reset type default when switching category
-                if (option == 'Commercial') {
-                  _bhk = _commercialTypeOptions.first;
-                } else if (option == 'Plot/Land') {
-                  _bhk = _plotTypeOptions.first;
-                } else {
-                  _bhk = _bhkOptions.first;
-                }
+                _bhk = _typeOptionsFor(option).first;
               }),
               selectedColor: AppColors.primary,
               labelStyle: AppTextStyles.bodySmall.copyWith(
@@ -610,11 +620,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
-          children: (_category == 'Commercial'
-                  ? _commercialTypeOptions
-                  : _category == 'Plot/Land'
-                      ? _plotTypeOptions
-                      : _bhkOptions)
+                  children: _typeOptionsFor(_category)
               .map((option) {
             final isSelected = _bhk == option;
             return ChoiceChip(
