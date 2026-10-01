@@ -9,6 +9,7 @@ import 'property.dart';
 import 'property_service.dart';
 import 'property_store.dart';
 import 'verify_property_flow.dart';
+import '../../core/utils/price_format.dart';
 
 class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
@@ -136,7 +137,7 @@ class _PropertyManageCard extends StatelessWidget {
                       Text(property.location, style: AppTextStyles.bodySmall),
                       const SizedBox(height: 4),
                       Text(
-                        '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                        formatPrice(property.price, property.priceUnit),
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600,

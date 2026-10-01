@@ -8,13 +8,13 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/gallery_viewer_screen.dart';
 import '../../core/widgets/video_tour_player.dart';
-import '../../core/widgets/document_verification_card.dart';
 import '../../core/api/token_store.dart';
 import '../profile/profile_service.dart';
 import '../visits/visit_service.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
+import '../../core/utils/price_format.dart';
 
 class PropertyDetailScreen extends StatefulWidget {
   final String propertyId;
@@ -80,6 +80,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     if (time == null || !mounted) return;
     final scheduledAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     final messenger = ScaffoldMessenger.of(context);
+    if (!scheduledAt.isAfter(DateTime.now())) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Please pick a time in the future.')),
+      );
+      return;
+    }
     try {
       await VisitService.instance.create(propertyId: property.id, scheduledAt: scheduledAt);
       messenger.showSnackBar(
@@ -300,7 +306,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                              formatPrice(property.price, property.priceUnit),
                               style: AppTextStyles.price.copyWith(fontSize: 20),
                             ),
                             if (property.isPriceNegotiable) ...[
@@ -395,17 +401,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       ),
                       const SizedBox(height: AppSpacing.md),
                     ],
-
-                    // Verification — RERA registration check + documents.
-                    // Always shown; the card itself decides whether to
-                    // display "Registered", "Not Registered", or "Not
-                    // Applicable" (for plots) based on the listing's data.
-                    _SectionCard(
-                      icon: Icons.verified_user_outlined,
-                      title: 'Verification',
-                      child: DocumentVerificationCard(property: property),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
 
                     // Price Trend — only worth a chart with 2+ data points.
                     if (property.priceHistory.length >= 2) ...[
@@ -669,16 +664,7 @@ class _SimilarPropertyCard extends StatelessWidget {
   const _SimilarPropertyCard({required this.property, required this.onTap});
 
   String _formatPrice(Property p) {
-    final v = p.price;
-    String formatted;
-    if (v >= 10000000) {
-      formatted = '₹${(v / 10000000).toStringAsFixed(1)}Cr';
-    } else if (v >= 100000) {
-      formatted = '₹${(v / 100000).toStringAsFixed(1)}L';
-    } else {
-      formatted = '₹${v.toStringAsFixed(0)}';
-    }
-    return '$formatted${p.priceUnit}';
+    return formatPrice(p.price, p.priceUnit);
   }
 
   @override

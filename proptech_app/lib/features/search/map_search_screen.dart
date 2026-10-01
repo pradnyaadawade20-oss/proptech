@@ -12,6 +12,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
+import '../../core/utils/price_format.dart';
 
 /// Shows all (or a pre-filtered list of) properties as pins on a real
 /// street map of India. Uses OpenStreetMap tiles via flutter_map — free,
@@ -203,16 +204,7 @@ class _MapSearchScreenState extends State<MapSearchScreen> with TickerProviderSt
   // --- Formatting & markers ---
 
   String _formatPrice(Property p) {
-    final v = p.price;
-    String formatted;
-    if (v >= 10000000) {
-      formatted = '₹${(v / 10000000).toStringAsFixed(1)}Cr';
-    } else if (v >= 100000) {
-      formatted = '₹${(v / 100000).toStringAsFixed(1)}L';
-    } else {
-      formatted = '₹${v.toStringAsFixed(0)}';
-    }
-    return '$formatted${p.priceUnit}';
+    return formatPrice(p.price, p.priceUnit);
   }
 
   List<Marker> _buildMarkers() {

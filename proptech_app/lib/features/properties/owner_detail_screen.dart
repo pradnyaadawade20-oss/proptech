@@ -10,6 +10,7 @@ import '../chat/chat_avatar.dart';
 import '../profile/profile_service.dart';
 import 'property_service.dart';
 import 'property.dart';
+import '../../core/utils/price_format.dart';
 
 class OwnerDetailScreen extends StatefulWidget {
   final Property property;
@@ -143,7 +144,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
                       Text(property.title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                       Text(property.location, style: AppTextStyles.caption),
                       Text(
-                        '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                        formatPrice(property.price, property.priceUnit),
                         style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
                       ),
                     ],

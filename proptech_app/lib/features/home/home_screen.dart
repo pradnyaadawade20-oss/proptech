@@ -10,6 +10,7 @@ import '../notifications/notification_bell.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
+import '../../core/utils/price_format.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -84,16 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isFurnished(Property p) => p.furnishing == 'Furnished' || p.furnishing == 'Fully Furnished';
 
   String _priceText(Property p) {
-    final v = p.price;
-    final String s;
-    if (v >= 10000000) {
-      s = '₹${(v / 10000000).toStringAsFixed(2)} Cr';
-    } else if (v >= 100000) {
-      s = '₹${(v / 100000).toStringAsFixed(2)} L';
-    } else {
-      s = '₹${v.toStringAsFixed(0)}';
-    }
-    return p.priceUnit.isEmpty ? s : '$s ${p.priceUnit}';
+    return formatPrice(p.price, p.priceUnit.isEmpty ? '' : ' ${p.priceUnit}');
   }
 
   String _timeAgo(DateTime? t) {
@@ -842,16 +834,7 @@ class _RecentlyViewedCard extends StatelessWidget {
   const _RecentlyViewedCard({required this.property, required this.onTap});
 
   String _formatPrice(Property p) {
-    final v = p.price;
-    String formatted;
-    if (v >= 10000000) {
-      formatted = '₹${(v / 10000000).toStringAsFixed(1)}Cr';
-    } else if (v >= 100000) {
-      formatted = '₹${(v / 100000).toStringAsFixed(1)}L';
-    } else {
-      formatted = '₹${v.toStringAsFixed(0)}';
-    }
-    return '$formatted${p.priceUnit}';
+    return formatPrice(p.price, p.priceUnit);
   }
 
   @override

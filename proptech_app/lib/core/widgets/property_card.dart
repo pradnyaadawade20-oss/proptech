@@ -4,6 +4,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/properties/property.dart';
+import '../utils/price_format.dart';
 class PropertyCard extends StatelessWidget {
   final Property property;
   final VoidCallback onTap;
@@ -93,7 +94,7 @@ class PropertyCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                    formatPrice(property.price, property.priceUnit),
                     style: AppTextStyles.price,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

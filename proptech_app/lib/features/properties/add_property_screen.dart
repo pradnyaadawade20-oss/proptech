@@ -12,6 +12,7 @@ import 'property.dart';
 import 'property_store.dart';
 import 'property_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:geolocator/geolocator.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   /// When set, the form edits this existing listing (pre-filled, no photos
@@ -95,8 +96,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   int _pickedVideoBytes = 0;
   static const int _maxPhotos = 10;
   static const int _maxVideoMb = 50;
-  XFile? _pickedFloorPlan;
-  final _floorPlanUrlController = TextEditingController();
 
   // --- Edit mode: photos & video ---
   static const int _maxExtraPhotos = 15;
@@ -168,7 +167,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     _depositController.dispose();
     _maintenanceController.dispose();
     _descriptionController.dispose();
-    _floorPlanUrlController.dispose();
     super.dispose();
   }
 
@@ -181,7 +179,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           _showError('Please enter a property title');
           return false;
         }
-        if (_toDouble(_areaController) <= 0) {
+        if (_parseArea(_areaController.text) <= 0) {
           _showError('Please enter the area in sq ft');
           return false;
         }
@@ -208,7 +206,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           _showError('Pincode must be 6 digits');
           return false;
         }
-        if (_toDouble(_priceController) <= 0) {
+        if (_parseAmount(_priceController.text) <= 0) {
           _showError('Please enter the price');
           return false;
         }
@@ -235,7 +233,41 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+      // Photos & video step (new listings only): remind the owner to keep
+      // location ON so the admin can confirm the place is real.
+      if (_isLastStep && !_isEdit) _showLocationNotice();
     }
+  }
+
+  Future<void> _showLocationNotice() async {
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 36),
+        title: const Text('Keep your location ON'),
+        content: const Text(
+          'Please keep your phone\'s location turned ON while you add photos and video.\n\n'
+          'The location of your photos is used by our admin team to check that the property '
+          'is real and at the address you entered. Listings without location can\'t be verified.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              try {
+                await Geolocator.openLocationSettings();
+              } catch (_) {}
+            },
+            child: const Text('Open location settings'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK, got it'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _back() {
@@ -264,14 +296,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         id: p.id,
         title: _titleController.text.trim(),
         imageUrl: p.imageUrl,
-        price: double.tryParse(_priceController.text.trim()) ?? 0,
+        price: _parseAmount(_priceController.text),
         priceUnit: _priceUnit,
         bhk: _bhk,
         furnishing: _furnishing,
         location: '$locality, $city',
         category: _category,
         amenities: _selectedAmenities.toList(),
-        area: _toDouble(_areaController),
+        area: _parseArea(_areaController.text),
         bathrooms: _isResidential ? _bathrooms : 0,
         balconies: _isResidential ? _balconies : 0,
         floorNumber: _isPlot ? 0 : _toInt(_floorController),
@@ -358,7 +390,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ownerId: ownerId,
         title: _titleController.text.trim(),
         imageUrl: '', // set for real right after upload below
-        price: double.tryParse(_priceController.text.trim()) ?? 0,
+        price: _parseAmount(_priceController.text),
         priceUnit: _priceUnit,
         bhk: _bhk,
         furnishing: _furnishing,
@@ -366,7 +398,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         location: '$locality, $city',
         category: _category,
         amenities: _selectedAmenities.toList(),
-        area: _toDouble(_areaController),
+        area: _parseArea(_areaController.text),
         bathrooms: _isResidential ? _bathrooms : 0,
         balconies: _isResidential ? _balconies : 0,
         floorNumber: _isPlot ? 0 : _toInt(_floorController),
@@ -598,10 +630,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
         TextFormField(
           controller: _areaController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          keyboardType: TextInputType.text,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9a-zA-Z. ]'))],
           decoration: InputDecoration(
             labelText: _isPlot ? 'Plot Area (sq ft)' : 'Area (sq ft)',
+            hintText: 'e.g. 650 or 650 sqft',
             prefixIcon: const Icon(Icons.square_foot_outlined),
           ),
         ),
@@ -725,10 +758,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               flex: 2,
               child: TextFormField(
                 controller: _priceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                keyboardType: TextInputType.text,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9a-zA-Z., ]'))],
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
                   labelText: 'Price (₹)',
-                  prefixIcon: Icon(Icons.currency_rupee),
+                  hintText: 'e.g. 50 lk, 1.5 cr, 25000',
+                  helperText: _priceHelper(),
+                  prefixIcon: const Icon(Icons.currency_rupee),
                 ),
               ),
             ),
@@ -1223,101 +1260,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               label: const Text('Add Video'),
             ),
           ),
-        const SizedBox(height: AppSpacing.xl),
-
-        // Floor plan — optional, shown as its own section on the detail
-        // screen once uploaded (same pick-from-gallery / paste-URL pattern
-        // as the cover photo above).
-        Text('Floor Plan (optional)', style: AppTextStyles.h3.copyWith(fontSize: 15)),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Helps buyers/tenants understand the layout at a glance.',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: _pickedFloorPlan != null
-                ? (kIsWeb
-                    ? Image.network(_pickedFloorPlan!.path, fit: BoxFit.cover)
-                    : Image.file(File(_pickedFloorPlan!.path), fit: BoxFit.cover))
-                : _floorPlanUrlController.text.trim().isEmpty
-                    ? Container(
-                        color: AppColors.surfaceSoft,
-                        child: const Center(
-                          child: Icon(Icons.architecture_outlined, size: 40, color: AppColors.textHint),
-                        ),
-                      )
-                    : Image.network(
-                        _floorPlanUrlController.text.trim(),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.surfaceSoft,
-                          child: const Center(
-                            child: Icon(Icons.broken_image_outlined, size: 40, color: AppColors.textHint),
-                          ),
-                        ),
-                      ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _pickFloorPlanFromGallery,
-                icon: const Icon(Icons.upload_file_outlined, size: 18),
-                label: const Text('Upload Floor Plan'),
-              ),
-            ),
-            if (_pickedFloorPlan != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                onPressed: () => setState(() => _pickedFloorPlan = null),
-                icon: const Icon(Icons.close, color: AppColors.error),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        Row(
-          children: [
-            const Expanded(child: Divider(color: AppColors.border)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              child: Text('OR', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-            ),
-            const Expanded(child: Divider(color: AppColors.border)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        TextFormField(
-          controller: _floorPlanUrlController,
-          decoration: const InputDecoration(
-            labelText: 'Floor Plan URL (optional)',
-            hintText: 'Paste a floor plan image link',
-            prefixIcon: Icon(Icons.link),
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
       ],
     );
-  }
-
-  Future<void> _pickFloorPlanFromGallery() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (image != null) {
-      setState(() {
-        _pickedFloorPlan = image;
-        _floorPlanUrlController.clear();
-      });
-    }
   }
 
   Widget _photoThumb(XFile file) => kIsWeb
@@ -1404,6 +1348,68 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     });
   }
 
+
+  /// Parses amounts like "50 lk", "1.5 cr", "2 crore", "25k", "5000000".
+  /// Returns 0 when it can't be understood.
+  double _parseAmount(String input) {
+    final t = input.toLowerCase().replaceAll(RegExp(r'[,₹\s]'), '');
+    final m = RegExp(r'^([0-9]*\.?[0-9]+)([a-z]*)$').firstMatch(t);
+    if (m == null) return 0;
+    final value = double.tryParse(m.group(1)!) ?? 0;
+    switch (m.group(2)) {
+      case '':
+        return value;
+      case 'cr':
+      case 'crore':
+      case 'crores':
+        return value * 10000000;
+      case 'l':
+      case 'lk':
+      case 'lac':
+      case 'lacs':
+      case 'lakh':
+      case 'lakhs':
+        return value * 100000;
+      case 'k':
+      case 'thousand':
+        return value * 1000;
+      default:
+        return 0;
+    }
+  }
+
+  /// Area can be typed as "650" or "650 sqft" — only the number is used.
+  double _parseArea(String input) {
+    final m = RegExp(r'[0-9]+(\.[0-9]+)?').firstMatch(input);
+    return m == null ? 0 : double.tryParse(m.group(0)!) ?? 0;
+  }
+
+  /// Live preview under the price field, e.g. "= ₹50,00,000 (50 Lakh)".
+  String? _priceHelper() {
+    final v = _parseAmount(_priceController.text);
+    if (v <= 0) return null;
+    final digits = v.round().toString();
+    var grouped = digits;
+    if (digits.length > 3) {
+      final last3 = digits.substring(digits.length - 3);
+      var rest = digits.substring(0, digits.length - 3);
+      final parts = <String>[];
+      while (rest.length > 2) {
+        parts.insert(0, rest.substring(rest.length - 2));
+        rest = rest.substring(0, rest.length - 2);
+      }
+      if (rest.isNotEmpty) parts.insert(0, rest);
+      grouped = '${parts.join(',')},$last3';
+    }
+    String words = '';
+    String trim(double x) => x == x.roundToDouble() ? x.toStringAsFixed(0) : x.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+    if (v >= 10000000) {
+      words = ' (${trim(v / 10000000)} Crore)';
+    } else if (v >= 100000) {
+      words = ' (${trim(v / 100000)} Lakh)';
+    }
+    return '= ₹$grouped$words';
+  }
 
   int _toInt(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
   double _toDouble(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;

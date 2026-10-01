@@ -23,16 +23,27 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _next() async {
     // App was killed and the user tapped a push -> open that screen directly.
     String? route;
-    if (await TokenStore.instance.isLoggedIn()) {
-      route = await PushNotificationService.instance.launchRoute
-          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+    try {
+      if (await TokenStore.instance.isLoggedIn()) {
+        route = await PushNotificationService.instance.launchRoute
+            .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      }
+    } catch (e) {
+      // Whatever goes wrong here (secure storage, push), never get stuck on
+      // the splash screen — just fall through to onboarding.
+      debugPrint('Splash startup check failed: $e');
     }
     if (!mounted) return;
-    if (route != null) {
-      PushNotificationService.instance.openRoute(route);
-    } else {
-      context.go(RouteNames.onboarding);
+    try {
+      if (route != null) {
+        await PushNotificationService.instance.openRoute(route);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Splash openRoute failed: $e');
     }
+    if (!mounted) return;
+    context.go(RouteNames.onboarding);
   }
 
   @override

@@ -9,6 +9,7 @@ import '../properties/property_store.dart';
 import 'property_filters.dart';
 import 'advanced_filter_sheet.dart';
 import 'map_search_screen.dart';
+import '../../core/utils/price_format.dart';
 
 class CategoryScreen extends StatefulWidget {
   final String title;
@@ -367,7 +368,7 @@ class _BuyCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹${property.price.toStringAsFixed(0)}',
+                    formatPrice(property.price),
                     style: AppTextStyles.price,
                   ),
                   const SizedBox(height: 2),
@@ -440,7 +441,7 @@ class _RentCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('₹${property.price.toStringAsFixed(0)}/mo', style: AppTextStyles.price),
+                  Text(formatPrice(property.price, '/mo'), style: AppTextStyles.price),
                   const SizedBox(height: 2),
                   Text(property.title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                   Text(property.location, style: AppTextStyles.caption),
@@ -512,7 +513,7 @@ class _PGCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹${property.price.toStringAsFixed(0)}/mo',
+                    formatPrice(property.price, '/mo'),
                     style: AppTextStyles.price,
                   ),
                   const SizedBox(height: 2),
@@ -604,7 +605,7 @@ class _CommercialCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹${property.price.toStringAsFixed(0)}${property.priceUnit}',
+                    formatPrice(property.price, property.priceUnit),
                     style: AppTextStyles.price,
                   ),
                   const SizedBox(height: 2),
@@ -684,7 +685,7 @@ class _PlotCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹${property.price.toStringAsFixed(0)}',
+                    formatPrice(property.price),
                     style: AppTextStyles.price,
                   ),
                   const SizedBox(height: 2),
