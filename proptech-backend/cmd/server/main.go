@@ -110,6 +110,8 @@ func main() {
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
+	adminHandler := handlers.NewAdminHandler(dbPool)
+	routes.RegisterAdminRoutes(router, adminHandler)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
