@@ -7,6 +7,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
+import '../../core/session/user_session.dart';
 import '../../core/widgets/app_button.dart';
 import 'property.dart';
 import 'property_store.dart';
@@ -387,6 +388,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       final city = _cityController.text.trim();
       final locality = _localityController.text.trim();
       var created = await PropertyService.instance.create(
+        postedBy: UserSession.instance.currentRole.value == UserRole.broker ? 'broker' : 'owner',
         ownerId: ownerId,
         title: _titleController.text.trim(),
         imageUrl: '', // set for real right after upload below

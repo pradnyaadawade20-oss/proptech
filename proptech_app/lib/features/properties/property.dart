@@ -49,6 +49,8 @@ class Property {
   final String ownershipType;
   /// 'call' | 'chat' | 'both'
   final String contactPreference;
+  /// 'owner' | 'broker' — who posted the listing (search filter).
+  final String postedBy;
 
   // --- Map search fields ---
   final double latitude;
@@ -126,6 +128,7 @@ class Property {
     this.description = '',
     this.ownershipType = '',
     this.contactPreference = 'both',
+    this.postedBy = 'owner',
     this.latitude = 0,
     this.longitude = 0,
     this.additionalImageUrls = const [],
@@ -195,6 +198,7 @@ class Property {
       description: json['description'] as String? ?? '',
       ownershipType: json['ownership_type'] as String? ?? '',
       contactPreference: json['contact_preference'] as String? ?? 'both',
+      postedBy: json['posted_by'] == 'broker' ? 'broker' : 'owner',
       latitude: num_('latitude'),
       longitude: num_('longitude'),
       additionalImageUrls: gallery,
@@ -246,6 +250,7 @@ class Property {
       description: description,
       ownershipType: ownershipType,
       contactPreference: contactPreference,
+      postedBy: postedBy,
       latitude: latitude,
       longitude: longitude,
       additionalImageUrls: additionalImageUrls ?? this.additionalImageUrls,
@@ -276,25 +281,33 @@ List<Property> get dummyProperties => PropertyStore.instance.all;
 /// Shared so search screen and saved-search alert checks stay in sync.
 bool propertyMatchesType(Property p, String? type) {
   if (type == null) return true;
+  final title = p.title.toLowerCase();
   switch (type) {
     case 'Apartment':
       return p.category == 'Residential' &&
           p.bhk != 'PG' &&
           p.bhk != '4 BHK' &&
           p.bhk != '5 BHK' &&
-          !p.title.toLowerCase().contains('bungalow') &&
-          !p.title.toLowerCase().contains('villa') &&
-          !p.title.toLowerCase().contains('house');
+          !title.contains('bungalow') &&
+          !title.contains('villa') &&
+          !title.contains('house');
     case 'Villa':
       return p.bhk == '4 BHK' ||
           p.bhk == '5 BHK' ||
-          p.title.toLowerCase().contains('bungalow') ||
-          p.title.toLowerCase().contains('villa');
+          title.contains('bungalow') ||
+          title.contains('villa');
     case 'PG':
       return p.bhk == 'PG';
     case 'House':
-      return p.category == 'Residential' &&
-          (p.title.toLowerCase().contains('house') || p.title.toLowerCase().contains('bungalow'));
+      return p.category == 'Residential' && (title.contains('house') || title.contains('bungalow'));
+    case 'Plot':
+      return p.category == 'Plot/Land';
+    // Commercial types are saved in `bhk` by the Post Property form.
+    case 'Office Space':
+    case 'Shop':
+    case 'Warehouse':
+    case 'Showroom':
+      return p.category == 'Commercial' && p.bhk == type;
     case 'Office':
       return p.category == 'Commercial';
     default:

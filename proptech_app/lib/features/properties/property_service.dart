@@ -95,6 +95,7 @@ class PropertyService {
     String ownershipType = '',
     bool isPriceNegotiable = false,
     String contactPreference = 'both',
+    String postedBy = 'owner',
   }) async {
     try {
       String? dateOnly(DateTime? d) => d == null
@@ -131,6 +132,7 @@ class PropertyService {
         'ownership_type': ownershipType,
         'is_price_negotiable': isPriceNegotiable,
         'contact_preference': contactPreference,
+        'posted_by': postedBy,
       });
       return Property.fromJson(response.data['property'] as Map<String, dynamic>);
     } on DioException catch (e) {

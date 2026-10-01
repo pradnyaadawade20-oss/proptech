@@ -43,6 +43,7 @@ type Property struct {
 	OwnershipType      string     `json:"ownership_type"`
 	IsPriceNegotiable  bool       `json:"is_price_negotiable"`
 	ContactPreference  string     `json:"contact_preference"` // call | chat | both
+	PostedBy           string     `json:"posted_by"`           // owner | broker
 
 	// Filled by PropertyRepository.AttachMedia (not columns on properties).
 	AdditionalImageURLs []string `json:"additional_image_urls"`
@@ -132,8 +133,17 @@ type CreatePropertyRequest struct {
 	Location   string   `json:"location" binding:"required"`
 	Category   string   `json:"category"`
 	Amenities  []string `json:"amenities"`
+	PostedBy   string   `json:"posted_by"` // owner | broker (create only)
 
 	PropertyDetailsInput
+}
+
+// PostedByOrDefault falls back to "owner" when empty/invalid.
+func (r CreatePropertyRequest) PostedByOrDefault() string {
+	if r.PostedBy == "broker" {
+		return "broker"
+	}
+	return "owner"
 }
 
 type UpdatePropertyRequest struct {
