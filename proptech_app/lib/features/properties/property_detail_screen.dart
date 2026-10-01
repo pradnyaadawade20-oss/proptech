@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -61,6 +62,15 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
         imageUrls: property.galleryImages,
         initialIndex: initialIndex,
       ),
+    );
+  }
+
+  void _shareProperty(Property property) {
+    final price = formatPrice(property.price, property.priceUnit);
+    final link = 'https://proptech-ozo0.onrender.com/p/${property.id}';
+    Share.share(
+      '${property.title}\n$price • ${property.location}\n\n$link',
+      subject: property.title,
     );
   }
 
@@ -254,10 +264,19 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                           icon: Icons.arrow_back,
                           onTap: () => context.pop(),
                         ),
-                        _RoundIconButton(
-                          icon: property.isFavorite ? Icons.favorite : Icons.favorite_border,
-                          iconColor: property.isFavorite ? Colors.red : AppColors.textPrimary,
-                          onTap: () => _toggleFavorite(property),
+                        Row(
+                          children: [
+                            _RoundIconButton(
+                              icon: Icons.share_outlined,
+                              onTap: () => _shareProperty(property),
+                            ),
+                            const SizedBox(width: 8),
+                            _RoundIconButton(
+                              icon: property.isFavorite ? Icons.favorite : Icons.favorite_border,
+                              iconColor: property.isFavorite ? Colors.red : AppColors.textPrimary,
+                              onTap: () => _toggleFavorite(property),
+                            ),
+                          ],
                         ),
                       ],
                     ),

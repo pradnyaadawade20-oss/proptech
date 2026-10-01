@@ -8,6 +8,7 @@ import (
 )
 
 func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
+	router.GET("/p/:id", h.SharePage)
 	properties := router.Group("/api/properties")
 	{
 		properties.GET("", h.GetAllProperties)
