@@ -74,6 +74,40 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     );
   }
 
+    void _showVerifiedInfo() {
+    Widget row(String text) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.check_circle, size: 18, color: Color(0xFF0F9D58)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(text)),
+            ],
+          ),
+        );
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.verified, color: Color(0xFF0F9D58), size: 36),
+        title: const Text('Verified listing'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            row('Live photo taken at the property'),
+            row('Phone location captured with the photo'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
+
   void _toggleFavorite(Property property) {
     PropertyStore.instance.toggleFavorite(property.id);
   }
@@ -282,6 +316,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     ),
                   ),
                 ),
+                if (property.isVerified)
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 64,
+                    left: AppSpacing.md,
+                    child: _VerifiedBadge(onTap: _showVerifiedInfo),
+                  ),
               ],
             ),
 
@@ -907,8 +947,8 @@ class _AmenityTile extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
@@ -924,9 +964,9 @@ class _AmenityTile extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(_icon, size: 26, color: Colors.white),
+          child: Icon(_icon, size: 22, color: Colors.white),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           _label,
           textAlign: TextAlign.center,
@@ -1001,7 +1041,7 @@ class _PropertyDetailsGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: AppSpacing.sm,
       crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 2.3,
+      childAspectRatio: 3.0,
       children: items.map((item) {
         final (icon, label, value) = item;
         return Container(
@@ -1013,10 +1053,10 @@ class _PropertyDetailsGrid extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width:28,
+                height: 28,
                 decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                child: Icon(icon, size: 18, color: Colors.white),
+                child: Icon(icon, size: 15, color: Colors.white),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -1028,7 +1068,7 @@ class _PropertyDetailsGrid extends StatelessWidget {
                     Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                     Text(
                       value,
-                      style: AppTextStyles.bodyMedium.copyWith(
+                      style: AppTextStyles.bodySmall.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                       ),
@@ -1250,10 +1290,10 @@ class _SectionCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 28,
+                height: 28,
                 decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                child: Icon(icon, size: 18, color: Colors.white),
+                child: Icon(icon, size: 15, color: Colors.white),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -1288,6 +1328,37 @@ class _SectionCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           child,
         ],
+      ),
+    );
+  }
+}
+class _VerifiedBadge extends StatelessWidget {
+  final VoidCallback onTap;
+  const _VerifiedBadge({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F9D58),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.verified, size: 16, color: Colors.white),
+            SizedBox(width: 4),
+            Text(
+              'Verified',
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(width: 4),
+            Icon(Icons.info, size: 14, color: Colors.white70),
+          ],
+        ),
       ),
     );
   }
