@@ -1,9 +1,8 @@
 package handlers
 
 import (
-	"crypto/subtle"
+	"errors"
 	"net/http"
-	"os"
 	"strings"
 
 	"proptech-backend/internal/middleware"
@@ -11,7 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// Compared against when the email is unknown, so response time does not
+// reveal whether an admin email exists.
+var dummyHash = "$2a$12$7ta9WZgT1l.m6xMVnxfDO.VFl8faItUc7EG.x9n/AlTYcXUxK.6b6"
 
 type AdminHandler struct {
 	db *pgxpool.Pool
@@ -20,7 +24,7 @@ type AdminHandler struct {
 func NewAdminHandler(db *pgxpool.Pool) *AdminHandler { return &AdminHandler{db: db} }
 
 // Login: POST /api/admin/login {email, password}
-// Credentials come from ADMIN_EMAIL / ADMIN_PASSWORD in .env (no DB changes).
+// Checks the admins table (bcrypt hash), see migrations/016_admin_accounts.sql.
 func (h *AdminHandler) Login(c *gin.Context) {
 	var req struct {
 		Email    string `json:"email"`
@@ -30,25 +34,30 @@ func (h *AdminHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
 		return
 	}
-	wantEmail := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_EMAIL")))
-	wantPass := os.Getenv("ADMIN_PASSWORD")
-	if wantEmail == "" || wantPass == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "admin login is not configured: set ADMIN_EMAIL and ADMIN_PASSWORD"})
-		return
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	hash := dummyHash
+	err := h.db.QueryRow(c.Request.Context(),
+		`SELECT password_hash FROM admins WHERE email = $1`, email).Scan(&hash)
+	found := err == nil
+	if !found {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check admin account"})
+			return
+		}
+		hash = dummyHash
 	}
-	gotEmail := strings.ToLower(strings.TrimSpace(req.Email))
-	okEmail := subtle.ConstantTimeCompare([]byte(gotEmail), []byte(wantEmail)) == 1
-	okPass := subtle.ConstantTimeCompare([]byte(req.Password), []byte(wantPass)) == 1
-	if !okEmail || !okPass {
+	passOK := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) == nil
+	if !found || !passOK {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "wrong email or password"})
 		return
 	}
-	token, err := middleware.GenerateToken(middleware.AdminUserID, wantEmail, "admin")
+	token, err := middleware.GenerateToken(middleware.AdminUserID, email, "admin")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create token"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token, "email": wantEmail})
+	c.JSON(http.StatusOK, gin.H{"token": token, "email": email})
 }
 
 func (h *AdminHandler) list(c *gin.Context, sql string, args ...any) {
