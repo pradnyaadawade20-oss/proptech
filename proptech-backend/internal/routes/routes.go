@@ -2,7 +2,6 @@ package routes
 
 import (
 	"proptech-backend/internal/handlers"
-
 	"proptech-backend/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +12,7 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 	{
 		properties.GET("", h.GetAllProperties)
 		properties.GET("/my", h.GetMyProperties)
-		properties.GET("/dashboard-stats", h.GetDashboardStats)
 		properties.GET("/:id", h.GetPropertyByID)
-		properties.POST("", h.CreateProperty)
 		properties.GET("/:id/image", h.ServePropertyImage)
 		properties.GET("/:id/media/:mediaId", h.ServePropertyMedia)
 		properties.GET("/:id/verification-photo", h.ServeVerificationPhoto)
@@ -24,8 +21,8 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 	propertiesAuthed := router.Group("/api/properties")
 	propertiesAuthed.Use(middleware.AuthRequired())
 	{
-		// Edit / delete / status: login required, and the handler also checks
-		// that the logged-in user is the property's owner.
+		propertiesAuthed.POST("", h.CreateProperty)
+		propertiesAuthed.GET("/dashboard-stats", h.GetDashboardStats)
 		propertiesAuthed.PUT("/:id", h.UpdateProperty)
 		propertiesAuthed.PATCH("/:id/status", h.UpdateListingStatus)
 		propertiesAuthed.DELETE("/:id", h.DeleteProperty)
@@ -41,9 +38,9 @@ func RegisterAuthRoutes(router *gin.Engine, h *handlers.AuthHandler) {
 	{
 		auth.POST("/send-otp", h.SendOTP)
 		auth.POST("/verify-otp", h.VerifyOTP)
-		auth.POST("/skip-otp", h.SkipOTP) // only works when DEV_SKIP_OTP=true
+		auth.POST("/skip-otp", h.SkipOTP)
 		auth.POST("/google", h.GoogleLogin)
-		auth.PATCH("/users/:id/role", h.SwitchRole)
+		auth.PATCH("/users/:id/role", middleware.AuthRequired(), h.SwitchRole)
 	}
 }
 
@@ -70,6 +67,7 @@ func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 
 func RegisterMessageRoutes(router *gin.Engine, h *handlers.MessageHandler) {
 	messages := router.Group("/api/messages")
+	messages.Use(middleware.AuthRequired())
 	{
 		messages.GET("/conversations", h.GetConversations)
 		messages.GET("/thread", h.GetThread)
@@ -80,6 +78,7 @@ func RegisterMessageRoutes(router *gin.Engine, h *handlers.MessageHandler) {
 
 func RegisterProfileRoutes(router *gin.Engine, h *handlers.ProfileHandler) {
 	profile := router.Group("/api/profile")
+	profile.Use(middleware.AuthRequired())
 	{
 		profile.GET("/:id", h.GetProfile)
 		profile.PUT("/:id", h.UpdateProfile)
@@ -101,16 +100,19 @@ func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 
 func RegisterBrokerRoutes(router *gin.Engine, h *handlers.BrokerHandler) {
 	broker := router.Group("/api/broker")
+	broker.Use(middleware.AuthRequired())
 	{
 		broker.GET("/:id/subscription", h.GetSubscription)
 	}
 }
 
 func RegisterNotificationRoutes(router *gin.Engine, h *handlers.NotificationHandler) {
+	// Jaan-boojh kar POST /api/notifications nahi hai — warna koi bhi kisi
+	// ko bhi fake notification/push bhej sakta tha. Server khud banata hai.
 	notifications := router.Group("/api/notifications")
+	notifications.Use(middleware.AuthRequired())
 	{
 		notifications.GET("", h.GetNotifications)
-		notifications.POST("", h.CreateNotification)
 		notifications.PATCH("/:id/read", h.MarkRead)
 		notifications.POST("/read-all", h.MarkAllRead)
 		notifications.DELETE("/:id", h.DeleteNotification)
@@ -119,6 +121,7 @@ func RegisterNotificationRoutes(router *gin.Engine, h *handlers.NotificationHand
 
 func RegisterDeviceTokenRoutes(router *gin.Engine, h *handlers.DeviceTokenHandler) {
 	deviceTokens := router.Group("/api/device-tokens")
+	deviceTokens.Use(middleware.AuthRequired())
 	{
 		deviceTokens.POST("", h.RegisterToken)
 		deviceTokens.DELETE("", h.UnregisterToken)

@@ -2,11 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"proptech-backend/internal/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrNotificationNotFound: no such notification for this user.
+var ErrNotificationNotFound = errors.New("notification not found")
 
 type NotificationRepository struct {
 	db *pgxpool.Pool
@@ -69,11 +73,14 @@ func (r *NotificationRepository) Create(ctx context.Context, req models.CreateNo
 	return r.GetByID(ctx, id)
 }
 
-// MarkRead marks a single notification as read.
-func (r *NotificationRepository) MarkRead(ctx context.Context, id string) (*models.Notification, error) {
-	_, err := r.db.Exec(ctx, `UPDATE notifications SET is_read = TRUE WHERE id = $1`, id)
+// MarkRead marks a single notification as read — only if it belongs to userID.
+func (r *NotificationRepository) MarkRead(ctx context.Context, id, userID string) (*models.Notification, error) {
+	tag, err := r.db.Exec(ctx, `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotificationNotFound
 	}
 	return r.GetByID(ctx, id)
 }
@@ -84,7 +91,14 @@ func (r *NotificationRepository) MarkAllRead(ctx context.Context, userID string)
 	return err
 }
 
-func (r *NotificationRepository) Delete(ctx context.Context, id string) error {
-	_, err := r.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
-	return err
+// Delete removes a notification — only if it belongs to userID.
+func (r *NotificationRepository) Delete(ctx context.Context, id, userID string) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotificationNotFound
+	}
+	return nil
 }

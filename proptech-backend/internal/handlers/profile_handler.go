@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/repository"
 
@@ -17,7 +18,6 @@ func NewProfileHandler(repo *repository.UserRepository) *ProfileHandler {
 	return &ProfileHandler{repo: repo}
 }
 
-// GetProfile: GET /api/profile/:id
 func (h *ProfileHandler) GetProfile(c *gin.Context) {
 	id := c.Param("id")
 
@@ -34,9 +34,18 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
-// UpdateProfile: PUT /api/profile/:id
+// Sirf apni hi profile edit kar sakte ho.
 func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id := c.Param("id")
+	if id != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only edit your own profile"})
+		return
+	}
 
 	var req models.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

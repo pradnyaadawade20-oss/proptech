@@ -8,6 +8,7 @@ import '../../core/session/user_session.dart';
 import '../auth/auth_service.dart';
 import '../chat/chat_avatar.dart';
 import 'profile_service.dart';
+import '../notifications/push_notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -53,12 +54,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (updated != null && mounted) setState(() => _profile = updated);
   }
-
-  Future<void> _logout() async {
-    await AuthService.instance.logout();
-    UserSession.instance.reset();
-    if (mounted) context.go(RouteNames.login);
+Future<void> _logout() async {
+  // Push token ko JWT clear karne se PEHLE unregister karo (endpoint ko auth chahiye).
+  // Warna logout ke baad bhi is phone par purane user ki notifications aati rahengi.
+  try {
+    await PushNotificationService.instance
+        .unregisterCurrentToken()
+        .timeout(const Duration(seconds: 5));
+  } catch (_) {
+    // Logout ko kabhi network/FCM error par mat rokho.
   }
+  await AuthService.instance.logout();
+  UserSession.instance.reset();
+  if (mounted) context.go(RouteNames.login);
+}
 
   Widget _buildHeader() {
     if (_loading) {

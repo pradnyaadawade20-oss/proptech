@@ -9,6 +9,7 @@ import (
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/mail"
+	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/migrate"
 	"proptech-backend/internal/notify"
 	"proptech-backend/internal/push"
@@ -23,6 +24,7 @@ func main() {
 	config.LoadDotEnv()
 
 	cfg := config.LoadConfig()
+	middleware.MustInit()
 	log.Println("Email OTP:", cfg.EmailTransport())
 	if cfg.DevSkipOTP {
 		log.Println("WARNING: DEV_SKIP_OTP=true — OTP verification can be skipped. Turn this off before real users sign up.")

@@ -25,9 +25,6 @@ func NewPropertyHandler(repo *repository.PropertyRepository) *PropertyHandler {
 }
 
 // UploadPropertyImage: POST /api/properties/:id/image (multipart/form-data, field "image")
-// Stores the actual uploaded photo bytes and points image_url at
-// ServePropertyImage, so it's the exact photo the owner picked — not a
-// placeholder — that shows up everywhere (home, buyer listings, detail).
 func (h *PropertyHandler) UploadPropertyImage(c *gin.Context) {
 	id := c.Param("id")
 	if !h.requireOwner(c, id) {
@@ -52,8 +49,6 @@ func (h *PropertyHandler) UploadPropertyImage(c *gin.Context) {
 		contentType = "image/jpeg"
 	}
 
-	// ?v=<time> makes the URL change whenever the cover is replaced, so the
-	// app doesn't keep showing the old cached photo.
 	imageURL := fmt.Sprintf("%s/api/properties/%s/image?v=%d", baseURL(c), id, time.Now().Unix())
 
 	if err := h.repo.SaveImage(c.Request.Context(), id, data, contentType, imageURL); err != nil {
@@ -65,9 +60,6 @@ func (h *PropertyHandler) UploadPropertyImage(c *gin.Context) {
 }
 
 // ServePropertyImage: GET /api/properties/:id/image
-// Serves the raw bytes uploaded via UploadPropertyImage, so buyers,
-// the home screen, and every other screen that renders image_url see
-// the owner's actual photo.
 func (h *PropertyHandler) ServePropertyImage(c *gin.Context) {
 	id := c.Param("id")
 
@@ -80,10 +72,7 @@ func (h *PropertyHandler) ServePropertyImage(c *gin.Context) {
 	c.Data(http.StatusOK, contentType, data)
 }
 
-// baseURL builds this server's own public URL from the incoming request,
-// so image_url works both locally and once deployed (e.g. on Render)
-// without hardcoding a host. Render's proxy terminates TLS and forwards
-// the original scheme via X-Forwarded-Proto.
+// baseURL builds this server's own public URL from the incoming request.
 func baseURL(c *gin.Context) string {
 	scheme := c.Request.Header.Get("X-Forwarded-Proto")
 	if scheme == "" {
@@ -123,8 +112,9 @@ func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 
-// GetMyProperties returns all properties belonging to the logged-in owner.
-// Expects owner_id as a query param for now (until auth middleware sets it on the context).
+// GetMyProperties returns all properties belonging to the given owner.
+// Still public (used to view any owner's listed properties, e.g. from the
+// Owner Details screen), so owner_id stays a query param here.
 func (h *PropertyHandler) GetMyProperties(c *gin.Context) {
 	ownerID := c.Query("owner_id")
 	if ownerID == "" {
@@ -140,12 +130,23 @@ func (h *PropertyHandler) GetMyProperties(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"properties": properties})
 }
 
+// CreateProperty: POST /api/properties (login required)
 func (h *PropertyHandler) CreateProperty(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req models.CreatePropertyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// The owner is ALWAYS the logged-in user; an owner_id in the body is
+	// ignored, so nobody can create listings in someone else's name.
+	req.OwnerID = userID
+
 	if _, err := req.ParsedAvailableFrom(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -163,7 +164,6 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 		notify.SendRoute(ownerID, "property", "Property listed",
 			fmt.Sprintf("Your property \"%s\" is now live.", property.Title), propRoute)
 
-		// Tell everyone else about the new listing (set NOTIFY_NEW_LISTINGS=false to turn off).
 		if os.Getenv("NOTIFY_NEW_LISTINGS") != "false" {
 			title, location := property.Title, property.Location
 			go func() {
@@ -180,8 +180,7 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"property": property})
 }
 
-// requireOwner makes sure the logged-in user owns property `id`. On failure it
-// writes the error response itself and returns false.
+// requireOwner makes sure the logged-in user owns property `id`.
 func (h *PropertyHandler) requireOwner(c *gin.Context, id string) bool {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -239,8 +238,6 @@ func (h *PropertyHandler) DeleteProperty(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Property deleted"})
 }
 
-// UpdateListingStatus marks a property Available, Rented, or Sold — used
-// from My Properties (owner/broker), feeds the dashboard stat pills.
 func (h *PropertyHandler) UpdateListingStatus(c *gin.Context) {
 	id := c.Param("id")
 	if !h.requireOwner(c, id) {
@@ -262,13 +259,13 @@ func (h *PropertyHandler) UpdateListingStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 
-// GetDashboardStats backs OwnerDashboardScreen / BrokerDashboardScreen's
-// "My Properties" card, Active Leads, and Visits This Week.
-// Expects owner_id as a query param for now (until auth middleware sets it on the context).
+// GetDashboardStats backs OwnerDashboardScreen / BrokerDashboardScreen.
+// Stats are always for the logged-in user — an owner_id query param is no
+// longer accepted, so nobody can read someone else's dashboard numbers.
 func (h *PropertyHandler) GetDashboardStats(c *gin.Context) {
-	ownerID := c.Query("owner_id")
-	if ownerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "owner_id is required"})
+	ownerID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
@@ -282,15 +279,6 @@ func (h *PropertyHandler) GetDashboardStats(c *gin.Context) {
 }
 
 // VerifyProperty: POST /api/properties/:id/verify (multipart/form-data)
-//
-//	photo — required, a photo taken with the in-app camera (not gallery)
-//	lat   — required, GPS latitude captured at the same moment
-//	lng   — required, GPS longitude captured at the same moment
-//
-// This is what earns the "Verified" badge: a real photo of the property
-// with GPS proof it was taken there, not a screenshot/downloaded/WhatsApp
-// image (those never carry usable location data). Only the property's
-// owner can verify it.
 func (h *PropertyHandler) VerifyProperty(c *gin.Context) {
 	id := c.Param("id")
 

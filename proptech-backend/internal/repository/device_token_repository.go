@@ -3,8 +3,9 @@ package repository
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"proptech-backend/internal/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DeviceTokenRepository struct {
@@ -49,8 +50,8 @@ func (r *DeviceTokenRepository) GetTokensForUser(ctx context.Context, userID str
 }
 
 // Delete removes a token, e.g. on logout so this device stops receiving pushes.
-func (r *DeviceTokenRepository) Delete(ctx context.Context, token string) error {
-	_, err := r.db.Exec(ctx, `DELETE FROM device_tokens WHERE token = $1`, token)
+func (r *DeviceTokenRepository) DeleteForUser(ctx context.Context, token, userID string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM device_tokens WHERE token = $1 AND user_id = $2`, token, userID)
 	return err
 }
 

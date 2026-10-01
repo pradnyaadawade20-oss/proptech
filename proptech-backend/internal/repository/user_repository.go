@@ -132,7 +132,7 @@ func (r *UserRepository) SwitchRole(ctx context.Context, id string, role string)
 func (r *UserRepository) UpdateProfile(ctx context.Context, id string, req models.UpdateProfileRequest) (*models.User, error) {
 	return scanUser(r.db.QueryRow(ctx, `
 		UPDATE users
-		SET name = $1, email = NULLIF($2, ''), avatar_url = NULLIF($3, '')
-		WHERE id = $4
-		RETURNING `+userColumns, req.Name, normalizeEmail(req.Email), req.AvatarURL, id))
+		SET name = $1, avatar_url = NULLIF($2, '')
+		WHERE id = $3
+		RETURNING `+userColumns, req.Name, req.AvatarURL, id))
 }

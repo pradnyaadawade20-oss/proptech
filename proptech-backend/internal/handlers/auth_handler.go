@@ -342,8 +342,16 @@ func (h *AuthHandler) completeLogin(c *gin.Context, email string, rec *repositor
 // (existing or new) from the bottom sheet and this becomes their active
 // "mode" without a fresh login.
 func (h *AuthHandler) SwitchRole(c *gin.Context) {
+	authUserID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	userID := c.Param("id")
-
+	if userID != authUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only change your own role"})
+		return
+	}
 	var req models.SwitchRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

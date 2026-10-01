@@ -2,39 +2,58 @@ package middleware
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte(getSecretFromEnv())
+var (
+	jwtSecret []byte
+	jwtOnce   sync.Once
+)
 
-func getSecretFromEnv() string {
-	if s := os.Getenv("JWT_SECRET"); s != "" {
-		return s
-	}
-	return "proptech-secret-key-change-in-production"
+// secret reads JWT_SECRET lazily (after .env is loaded in main()).
+// No hardcoded fallback — old code had "proptech-secret-key-change-in-production"
+// as default, so anyone could forge tokens with that known string.
+func secret() []byte {
+	jwtOnce.Do(func() {
+		s := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+		if len(s) < 32 {
+			log.Fatal("JWT_SECRET is missing or too short. Set it to a random string of at least 32 characters (openssl rand -hex 32).")
+		}
+		jwtSecret = []byte(s)
+	})
+	return jwtSecret
 }
+
+// MustInit fails fast at startup if JWT_SECRET isn't configured.
+func MustInit() { secret() }
 
 func GenerateToken(userID, email, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,
 		"role":    role,
+		"iat":     time.Now().Unix(),
 		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(secret())
 }
 
 func ParseToken(tokenString string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
+	token, err := jwt.Parse(
+		tokenString,
+		func(t *jwt.Token) (interface{}, error) { return secret(), nil },
+		jwt.WithValidMethods([]string{"HS256"}),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil {
 		return nil, err
 	}
