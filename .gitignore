@@ -12,3 +12,4 @@ proptech-backend/server
 .idea/
 .vscode/
 .DS_Store
+*.zip
