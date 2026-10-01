@@ -37,6 +37,6 @@ func (h *PropertyHandler) SharePage(c *gin.Context) {
 </head><body style="font-family:sans-serif;max-width:480px;margin:24px auto;padding:0 16px">
 <img src="%s" style="width:100%%;border-radius:12px" alt="">
 <h2>%s</h2><p>%s</p>
-<p>Poori detail dekhne ke liye PropTech app kholo.</p>
+<p>Open the PropTech app to see full details.</p>
 </body></html>`, title, title, desc, img, img, title, desc)
 }
