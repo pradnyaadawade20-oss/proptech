@@ -7,11 +7,13 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../../core/services/place_autocomplete_service.dart';
+import '../../core/services/location_service.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import 'saved_search.dart';
 import 'saved_search_store.dart';
 import 'saved_searches_screen.dart';
+import 'nearby_search.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? initialQuery;
@@ -35,6 +37,16 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
   bool _isSearchingPlace = false;
   Timer? _placeDebounce;
 
+  // --- "Use my current location" / nearby search ---
+  bool _isLocating = false;
+  bool _nearbyMode = false;
+  double? _myLat;
+  double? _myLng;
+  String _myCity = '';
+  String _myLocality = '';
+  String _nearbyLabel = '';
+  double _radiusKm = 10;
+
   final List<String> _recentSearches = ['Powai, Mumbai', 'Andheri West', 'Bandra East'];
 
   List<String> get _allLocations {
@@ -53,6 +65,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
   void _selectLocation(String location) {
     _controller.text = location;
     setState(() {
+      _nearbyMode = false;
       _query = location;
       _showSuggestions = false;
       _placeMatches = [];
@@ -66,6 +79,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
 
   void _onQueryChanged(String value) {
     setState(() {
+      _nearbyMode = false;
       _query = value;
       _showSuggestions = value.isNotEmpty;
     });
@@ -124,6 +138,25 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
   }
 
   List<Property> get _filteredProperties {
+    if (_nearbyMode && _myLat != null && _myLng != null) {
+      // Type + budget filters first, then keep only what's around the user
+      // (already ordered nearest-first; 'default' sort keeps that order).
+      final base = filterProperties(
+        PropertyStore.instance.all,
+        type: _selectedType,
+        budgetStart: _budget.start,
+        budgetEnd: _budget.end,
+      );
+      final nearby = nearbyProperties(
+        base,
+        lat: _myLat!,
+        lng: _myLng!,
+        radiusKm: _radiusKm,
+        city: _myCity,
+        locality: _myLocality,
+      );
+      return sortProperties(nearby, _sortOption);
+    }
     final results = filterProperties(
       PropertyStore.instance.all,
       query: _query,
@@ -132,6 +165,94 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
       budgetEnd: _budget.end,
     );
     return sortProperties(results, _sortOption);
+  }
+
+  /// Search-bar location icon: GPS -> address -> show properties nearby.
+  Future<void> _useCurrentLocation() async {
+    if (_isLocating) return;
+    _searchFocusNode.unfocus();
+    setState(() => _isLocating = true);
+
+    final res = await LocationService.instance.getCurrent();
+    if (!mounted) return;
+    if (!res.ok) {
+      setState(() => _isLocating = false);
+      _showLocationError(res.failure!);
+      return;
+    }
+
+    // Human-readable place name for the search box (e.g. "Powai, Mumbai").
+    final addr = await PlaceAutocompleteService.instance.reverse(res.lat!, res.lng!);
+    if (!mounted) return;
+
+    final label = [addr?.locality ?? '', addr?.city ?? ''].where((e) => e.isNotEmpty).join(', ');
+    setState(() {
+      _isLocating = false;
+      _nearbyMode = true;
+      _myLat = res.lat;
+      _myLng = res.lng;
+      _myCity = addr?.city ?? '';
+      _myLocality = addr?.locality ?? '';
+      _nearbyLabel = label.isEmpty ? 'your location' : label;
+      _controller.text = label.isEmpty ? 'Current location' : label;
+      _query = '';
+      _showSuggestions = false;
+      _placeMatches = [];
+      _showResults = true;
+    });
+  }
+
+  void _showLocationError(LocationFailure failure) {
+    String message;
+    bool canOpenSettings = false;
+    switch (failure) {
+      case LocationFailure.serviceDisabled:
+        message = 'Location is turned off. Please enable GPS.';
+        canOpenSettings = true;
+      case LocationFailure.denied:
+        message = 'Location permission is needed to find properties near you.';
+      case LocationFailure.deniedForever:
+        message = 'Location permission is blocked. Enable it from app settings.';
+        canOpenSettings = true;
+      case LocationFailure.timeout:
+        message = 'Could not get your location. Please try again outdoors.';
+      case LocationFailure.unknown:
+        message = 'Could not fetch your location.';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: canOpenSettings
+            ? SnackBarAction(
+                label: 'Settings',
+                onPressed: () => LocationService.instance.openSettingsFor(failure),
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildRadiusChips() {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        children: [
+          for (final km in const [2.0, 5.0, 10.0, 25.0, 50.0])
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: ChoiceChip(
+                label: Text('${km.toInt()} km'),
+                selected: _radiusKm == km,
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(color: _radiusKm == km ? Colors.white : AppColors.textPrimary),
+                onSelected: (_) => setState(() => _radiusKm = km),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveCurrentSearch() async {
@@ -257,11 +378,6 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.map_outlined),
-            tooltip: 'Map View',
-            onPressed: () => context.push('/map-search'),
-          ),
         ],
       ),
       body: _showResults ? _buildResultsView(results) : _buildFiltersView(),
@@ -302,12 +418,27 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                 GestureDetector(
                   onTap: () => setState(() {
                     _controller.clear();
+                    _nearbyMode = false;
                     _query = '';
                     _showSuggestions = false;
                     _placeMatches = [];
                   }),
                   child: const Icon(Icons.close, size: 18, color: AppColors.textHint),
                 ),
+              // "Use my current location" — same spot as 99acres' target icon.
+              Tooltip(
+                message: 'Use my current location',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _isLocating ? null : _useCurrentLocation,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: _isLocating
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.my_location, size: 22, color: AppColors.primary),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -504,7 +635,16 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${results.length} Properties Found', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+              Flexible(
+                child: Text(
+                  _nearbyMode
+                      ? '${results.length} near $_nearbyLabel'
+                      : '${results.length} Properties Found',
+                  style: AppTextStyles.h3.copyWith(fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               Row(
                 children: [
                   TextButton.icon(
@@ -522,22 +662,48 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
             ],
           ),
         ),
+        if (_nearbyMode) _buildRadiusChips(),
         const Divider(height: 1),
         Expanded(
           child: results.isEmpty
-              ? const Center(child: Text('No properties found'))
+              ? Center(
+                  child: Text(_nearbyMode
+                      ? 'No properties within ${_radiusKm.toInt()} km.\nTry a bigger radius.'
+                      : 'No properties found', textAlign: TextAlign.center))
               : ListView.separated(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   itemCount: results.length,
                   separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, index) {
                     final property = results[index];
-                    return PropertyCard(
+                    final km = (_nearbyMode && _myLat != null && _myLng != null)
+                        ? distanceKmTo(property, _myLat!, _myLng!)
+                        : null;
+                    final card = PropertyCard(
                       property: property,
                       onTap: () => context.push('/property/${property.id}'),
                       onFavoriteTap: () {
                         PropertyStore.instance.toggleFavorite(property.id);
                       },
+                    );
+                    if (km == null) return card;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.near_me, size: 14, color: AppColors.primary),
+                              const SizedBox(width: 4),
+                              Text(formatDistance(km),
+                                  style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        card,
+                      ],
                     );
                   },
                 ),

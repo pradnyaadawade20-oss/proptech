@@ -45,4 +45,32 @@ class PlaceAutocompleteService {
       return [];
     }
   }
+
+  /// lat/lng -> readable locality / city / pincode (Nominatim reverse
+  /// geocoding). Returns null if the lookup fails.
+  Future<({String city, String locality, String pincode})?> reverse(double lat, double lng) async {
+    try {
+      final response = await _dio.get(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {'lat': lat, 'lon': lng, 'format': 'json', 'addressdetails': 1, 'zoom': 16},
+        options: Options(headers: {'User-Agent': 'proptech_app'}),
+      );
+      final a = (response.data['address'] ?? <String, dynamic>{}) as Map<String, dynamic>;
+      String pick(List<String> keys) {
+        for (final k in keys) {
+          final v = a[k];
+          if (v is String && v.isNotEmpty) return v;
+        }
+        return '';
+      }
+
+      return (
+        city: pick(['city', 'town', 'municipality', 'county', 'state_district']),
+        locality: pick(['suburb', 'neighbourhood', 'quarter', 'city_district', 'village']),
+        pincode: pick(['postcode']),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }
