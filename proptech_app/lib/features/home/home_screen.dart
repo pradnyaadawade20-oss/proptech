@@ -380,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Category chips
           SizedBox(
-            height: 40,
+            height: 40,     
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 8),
                 _PopularChip(label: 'PG', onTap: () => context.push('/category/pg')),
                 const SizedBox(width: 8),
-                                _PopularChip(label: 'Farmhouse', onTap: () => context.push('/category/farmhouse')),
+                _PopularChip(label: 'Farmhouse', onTap: () => context.push('/category/farmhouse')),
                 _PopularChip(label: 'Rooms', onTap: () => context.push('/category/rooms')),
                 const SizedBox(width: 8),
                 _PopularChip(label: 'Villa', onTap: () => context.push('/category/villa')),

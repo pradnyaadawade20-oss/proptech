@@ -195,6 +195,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               ),
                             ),
                             isThreeLine: true,
+                                                        trailing: n.isRead
+                                ? null
+                                : Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
                             onTap: () => _onTap(n),
                           ),
                         );
