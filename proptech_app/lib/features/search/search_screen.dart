@@ -165,9 +165,49 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     return locations;
   }
 
+  /// Locations of OUR listings that match what the user typed (place name,
+  /// city, locality, title or BHK, e.g. "2 bhk"), best matches first.
   List<String> get _locationSuggestions {
-    if (_query.isEmpty) return [];
-    return _allLocations.where((loc) => loc.toLowerCase().contains(_query.toLowerCase())).toList();
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    final starts = <String>[];
+    final others = <String>[];
+    final seen = <String>{};
+    for (final p in PropertyStore.instance.all) {
+      final loc = p.location.trim();
+      if (loc.isEmpty || seen.contains(loc.toLowerCase())) continue;
+      final locLower = loc.toLowerCase();
+      final matchesPlace = locLower.contains(q) ||
+          p.locality.toLowerCase().contains(q) ||
+          p.city.toLowerCase().contains(q);
+      final matchesListing = p.title.toLowerCase().contains(q) || p.bhk.toLowerCase().contains(q);
+      if (!matchesPlace && !matchesListing) continue;
+      seen.add(locLower);
+      (locLower.startsWith(q) ? starts : others).add(loc);
+    }
+    starts.sort();
+    others.sort();
+    return [...starts, ...others].take(8).toList();
+  }
+
+  /// Online place suggestions can be from anywhere in India. Keep only the
+  /// ones near our listings (within 60 km of a listing, or in a city where
+  /// we have listings).
+  List<PlaceSuggestion> _nearListings(List<PlaceSuggestion> places) {
+    final all = PropertyStore.instance.all;
+    final anchors = all.where((p) => p.hasMapPosition).toList();
+    final cities = citiesByListings(all).map((c) => c.toLowerCase()).toList();
+    if (anchors.isEmpty && cities.isEmpty) return places;
+
+    bool isNear(PlaceSuggestion s) {
+      for (final p in anchors) {
+        if (haversineKm(s.lat, s.lng, p.latitude, p.longitude) <= 60) return true;
+      }
+      final name = s.displayName.toLowerCase();
+      return cities.any(name.contains);
+    }
+
+    return places.where(isNear).toList();
   }
 
   /// Runs the search for [text] (sets the box, saves it to recents, shows results).
@@ -200,7 +240,12 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     _placeDebounce = Timer(const Duration(milliseconds: 500), () async {
       if (!mounted) return;
       setState(() => _isSearchingPlace = true);
-      final results = await PlaceAutocompleteService.instance.search(value);
+      var results = _nearListings(await PlaceAutocompleteService.instance.search(value));
+      // Nothing close by? Retry inside the city where we have the most listings.
+      final city = _activeCity;
+      if (results.isEmpty && city != null) {
+        results = _nearListings(await PlaceAutocompleteService.instance.search('$value, $city'));
+      }
       if (!mounted) return;
       setState(() {
         _placeMatches = results;
