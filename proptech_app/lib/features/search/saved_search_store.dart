@@ -66,13 +66,7 @@ class SavedSearchStore {
 
   /// All properties currently matching a saved search's criteria.
   List<Property> matchingProperties(SavedSearch search) {
-    return filterProperties(
-      PropertyStore.instance.all,
-      query: search.query,
-      type: search.type,
-      budgetStart: search.budgetStart,
-      budgetEnd: search.budgetEnd,
-    );
+    return search.criteria.apply(PropertyStore.instance.all);
   }
 
   /// Properties matching a saved search that the user hasn't seen yet —

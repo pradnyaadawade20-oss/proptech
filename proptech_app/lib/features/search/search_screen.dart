@@ -1,35 +1,43 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
-import '../../core/widgets/property_card.dart';
-import '../../core/services/place_autocomplete_service.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/place_autocomplete_service.dart';
+import '../../core/widgets/property_card.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
+import 'locality_utils.dart';
+import 'nearby_search.dart';
+import 'recent_search_store.dart';
 import 'saved_search.dart';
 import 'saved_search_store.dart';
 import 'saved_searches_screen.dart';
-import 'nearby_search.dart';
+import 'search_criteria.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? initialQuery;
   const SearchScreen({super.key, this.initialQuery});
 
   @override
-  
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+
+  // Buy / Rent / Commercial tab + every filter (type, budget, BHK, ...).
+  bool _commercialRent = false;
+  SearchCriteria _criteria = SearchCriteria.forMode(ListingMode.buy);
   String _query = '';
-  String? _selectedType;
-  RangeValues _budget = const RangeValues(0, 35000000);
+
+  /// City picked for "Popular localities". null = the city with most listings.
+  String? _city;
+
   bool _showResults = false;
   bool _showSuggestions = false;
   String _sortOption = 'default'; // default, newest, price_low, price_high, rating, area_large
@@ -47,33 +55,134 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
   String _nearbyLabel = '';
   double _radiusKm = 10;
 
-  final List<String> _recentSearches = ['Powai, Mumbai', 'Andheri West', 'Bandra East'];
+  ListingMode get _mode => _criteria.mode ?? ListingMode.buy;
+
+  @override
+  void initState() {
+    super.initState();
+    SavedSearchStore.instance.load();
+    RecentSearchStore.instance.load();
+    final initial = widget.initialQuery?.trim() ?? '';
+    if (initial.isNotEmpty) {
+      _controller.text = initial;
+      _query = initial;
+      _showResults = true;
+      RecentSearchStore.instance.add(initial);
+    }
+  }
+
+  @override
+  void dispose() {
+    _placeDebounce?.cancel();
+    _controller.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  // ───────────────────────── mode tabs & criteria ─────────────────────────
+
+  /// New criteria for [mode]: budget and property type are tab-specific so
+  /// they reset; the other filters carry over.
+  SearchCriteria _carry(ListingMode mode, bool commercialRent) {
+    final base = SearchCriteria.forMode(mode, commercialRent: commercialRent);
+    final keepType = _criteria.type != null && mode.propertyTypes.contains(_criteria.type);
+    return base.copyWith(
+      type: keepType ? _criteria.type : null,
+      bhk: mode == ListingMode.commercial ? <String>{} : _criteria.bhk,
+      furnishing: _criteria.furnishing,
+      postedBy: _criteria.postedBy,
+      amenities: _criteria.amenities,
+      verifiedOnly: _criteria.verifiedOnly,
+    );
+  }
+
+  void _setMode(ListingMode mode) {
+    if (mode == _mode) return;
+    setState(() => _criteria = _carry(mode, _commercialRent));
+  }
+
+  void _setCommercialRent(bool rent) {
+    if (rent == _commercialRent) return;
+    setState(() {
+      _commercialRent = rent;
+      _criteria = _carry(ListingMode.commercial, rent);
+    });
+  }
+
+  void _resetFilters() {
+    setState(() => _criteria = SearchCriteria.forMode(_mode, commercialRent: _commercialRent));
+  }
+
+  Set<String> _toggled(Set<String> set, String value) {
+    final next = Set<String>.of(set);
+    if (!next.remove(value)) next.add(value);
+    return next;
+  }
+
+  // ───────────────────────── results ─────────────────────────
+
+  List<Property> get _filteredProperties {
+    final all = PropertyStore.instance.all;
+    if (_nearbyMode && _myLat != null && _myLng != null) {
+      final matched = _criteria.copyWith(query: '').apply(all);
+      final nearby = nearbyProperties(
+        matched,
+        lat: _myLat!,
+        lng: _myLng!,
+        radiusKm: _radiusKm,
+        city: _myCity,
+        locality: _myLocality,
+      );
+      return sortProperties(nearby, _sortOption);
+    }
+    return sortProperties(_criteria.copyWith(query: _query).apply(all), _sortOption);
+  }
+
+  // ───────────────────────── locations ─────────────────────────
+
+  /// Listings of the current tab (falls back to everything while the tab is
+  /// still empty so the chips never disappear on a small dataset).
+  List<Property> get _modeProperties {
+    final all = PropertyStore.instance.all;
+    final inMode = SearchCriteria.forMode(_mode, commercialRent: _commercialRent).apply(all);
+    return inMode.isNotEmpty ? inMode : List<Property>.of(all);
+  }
+
+  String? get _activeCity {
+    final cities = citiesByListings(_modeProperties);
+    final picked = _city?.toLowerCase();
+    if (picked != null) {
+      for (final c in cities) {
+        if (c.toLowerCase() == picked) return c;
+      }
+    }
+    return cities.isEmpty ? null : cities.first;
+  }
 
   List<String> get _allLocations {
-    final locations = PropertyStore.instance.all.map((p) => p.location).toSet().toList();
+    final locations = PropertyStore.instance.all.map((p) => p.location).where((l) => l.trim().isNotEmpty).toSet().toList();
     locations.sort();
     return locations;
   }
 
   List<String> get _locationSuggestions {
     if (_query.isEmpty) return [];
-    return _allLocations
-        .where((loc) => loc.toLowerCase().contains(_query.toLowerCase()))
-        .toList();
+    return _allLocations.where((loc) => loc.toLowerCase().contains(_query.toLowerCase())).toList();
   }
 
-  void _selectLocation(String location) {
-    _controller.text = location;
+  /// Runs the search for [text] (sets the box, saves it to recents, shows results).
+  void _commitSearch(String text) {
+    final q = text.trim();
+    _controller.text = q;
+    _placeDebounce?.cancel();
     setState(() {
       _nearbyMode = false;
-      _query = location;
+      _query = q;
       _showSuggestions = false;
       _placeMatches = [];
-      if (!_recentSearches.contains(location)) {
-        _recentSearches.insert(0, location);
-        if (_recentSearches.length > 5) _recentSearches.removeLast();
-      }
+      _showResults = true;
     });
+    if (q.isNotEmpty) RecentSearchStore.instance.add(q);
     _searchFocusNode.unfocus();
   }
 
@@ -89,6 +198,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
       return;
     }
     _placeDebounce = Timer(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
       setState(() => _isSearchingPlace = true);
       final results = await PlaceAutocompleteService.instance.search(value);
       if (!mounted) return;
@@ -99,72 +209,37 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     });
   }
 
-  @override
-  void dispose() {
-    _placeDebounce?.cancel();
-    _controller.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    SavedSearchStore.instance.load();
-    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
-      _controller.text = widget.initialQuery!;
-      _query = widget.initialQuery!;
-      _showResults = true;
-      if (!_recentSearches.contains(widget.initialQuery)) {
-        _recentSearches.insert(0, widget.initialQuery!);
-        if (_recentSearches.length > 5) _recentSearches.removeLast();
-      }
-    }
-  }
-
-  final List<Map<String, dynamic>> _propertyTypes = const [
-    {'label': 'Apartment', 'icon': Icons.apartment_outlined},
-    {'label': 'Villa', 'icon': Icons.villa_outlined},
-    {'label': 'PG', 'icon': Icons.meeting_room_outlined},
-    {'label': 'House', 'icon': Icons.house_outlined},
-    {'label': 'Office', 'icon': Icons.business_outlined},
-  ];
-
-  String _formatPrice(double value) {
-    if (value >= 10000000) return '₹${(value / 10000000).toStringAsFixed(value % 10000000 == 0 ? 0 : 1)}Cr';
-    if (value >= 100000) return '₹${(value / 100000).toStringAsFixed(value % 100000 == 0 ? 0 : 1)}L';
-    if (value >= 1000) return '₹${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
-    return '₹${value.toInt()}';
-  }
-
-  List<Property> get _filteredProperties {
-    if (_nearbyMode && _myLat != null && _myLng != null) {
-      // Type + budget filters first, then keep only what's around the user
-      // (already ordered nearest-first; 'default' sort keeps that order).
-      final base = filterProperties(
-        PropertyStore.instance.all,
-        type: _selectedType,
-        budgetStart: _budget.start,
-        budgetEnd: _budget.end,
-      );
-      final nearby = nearbyProperties(
-        base,
-        lat: _myLat!,
-        lng: _myLng!,
-        radiusKm: _radiusKm,
-        city: _myCity,
-        locality: _myLocality,
-      );
-      return sortProperties(nearby, _sortOption);
-    }
-    final results = filterProperties(
-      PropertyStore.instance.all,
-      query: _query,
-      type: _selectedType,
-      budgetStart: _budget.start,
-      budgetEnd: _budget.end,
+  Future<void> _pickCity() async {
+    final cities = citiesByListings(_modeProperties);
+    if (cities.isEmpty) return;
+    final active = _activeCity;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.6),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Text('Select city', style: AppTextStyles.h3),
+              ),
+              for (final c in cities)
+                ListTile(
+                  title: Text(c),
+                  trailing: c == active ? const Icon(Icons.check, color: AppColors.primary) : null,
+                  onTap: () => Navigator.pop(sheetContext, c),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
-    return sortProperties(results, _sortOption);
+    if (picked != null && mounted) setState(() => _city = picked);
   }
 
   /// Search-bar location icon: GPS -> address -> show properties nearby.
@@ -181,7 +256,6 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
       return;
     }
 
-    // Human-readable place name for the search box (e.g. "Powai, Mumbai").
     final addr = await PlaceAutocompleteService.instance.reverse(res.lat!, res.lng!);
     if (!mounted) return;
 
@@ -199,6 +273,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
       _showSuggestions = false;
       _placeMatches = [];
       _showResults = true;
+      if (_myCity.isNotEmpty) _city = _myCity;
     });
   }
 
@@ -232,33 +307,11 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     );
   }
 
-  Widget _buildRadiusChips() {
-    return SizedBox(
-      height: 44,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        children: [
-          for (final km in const [2.0, 5.0, 10.0, 25.0, 50.0])
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: ChoiceChip(
-                label: Text('${km.toInt()} km'),
-                selected: _radiusKm == km,
-                selectedColor: AppColors.primary,
-                labelStyle: TextStyle(color: _radiusKm == km ? Colors.white : AppColors.textPrimary),
-                onSelected: (_) => setState(() => _radiusKm = km),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  // ───────────────────────── save / sort ─────────────────────────
 
   Future<void> _saveCurrentSearch() async {
-    final nameController = TextEditingController(
-      text: _query.trim().isNotEmpty ? _query.trim() : (_selectedType ?? 'My Search'),
-    );
+    final fallback = [_mode.label, if (_criteria.type != null) _criteria.type!].join(' · ');
+    final nameController = TextEditingController(text: _query.trim().isNotEmpty ? _query.trim() : fallback);
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -282,10 +335,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     final search = SavedSearch(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
-      query: _query,
-      type: _selectedType,
-      budgetStart: _budget.start,
-      budgetEnd: _budget.end,
+      criteria: _criteria.copyWith(query: _query),
       createdAt: DateTime.now(),
     );
     await SavedSearchStore.instance.add(search);
@@ -336,9 +386,11 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     );
   }
 
+  // ───────────────────────── build ─────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final results = _filteredProperties;
+    final results = _showResults ? _filteredProperties : const <Property>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -380,225 +432,462 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
           ),
         ],
       ),
-      body: _showResults ? _buildResultsView(results) : _buildFiltersView(),
+      body: Column(
+        children: [
+          _buildModeTabs(),
+          Expanded(child: _showResults ? _buildResultsView(results) : _buildFiltersView()),
+        ],
+      ),
     );
   }
 
-  Widget _buildFiltersView() {
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        // Search input
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.search, color: AppColors.textHint),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _searchFocusNode,
-                  decoration: const InputDecoration(
-                    hintText: 'Powai, Mumbai',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+  /// 99acres-style Buy / Rent / Commercial tabs.
+  Widget _buildModeTabs() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          for (final m in ListingMode.values)
+            Expanded(
+              child: InkWell(
+                onTap: () => _setMode(m),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: m == _mode ? AppColors.primary : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
                   ),
-                  onChanged: _onQueryChanged,
-                  onTap: () => setState(() => _showSuggestions = _query.isNotEmpty),
-                ),
-              ),
-              if (_controller.text.isNotEmpty)
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _controller.clear();
-                    _nearbyMode = false;
-                    _query = '';
-                    _showSuggestions = false;
-                    _placeMatches = [];
-                  }),
-                  child: const Icon(Icons.close, size: 18, color: AppColors.textHint),
-                ),
-              // "Use my current location" — same spot as 99acres' target icon.
-              Tooltip(
-                message: 'Use my current location',
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: _isLocating ? null : _useCurrentLocation,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: _isLocating
-                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.my_location, size: 22, color: AppColors.primary),
+                  child: Text(
+                    m.label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: m == _mode ? FontWeight.w700 : FontWeight.w500,
+                      color: m == _mode ? AppColors.primary : AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-
-        // Location suggestions dropdown — app's own listings first, then
-        // live place autocomplete (Google-Places-style, via OSM Nominatim).
-        if (_showSuggestions)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: AppColors.border),
             ),
-            constraints: const BoxConstraints(maxHeight: 280),
-            child: (_locationSuggestions.isEmpty && _placeMatches.isEmpty && !_isSearchingPlace)
-                ? Padding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Text(
-                      _query.trim().length < 3 ? 'Keep typing to search places...' : 'No matching location',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+        ],
+      ),
+    );
+  }
+
+  // ───────────────────────── small widgets ─────────────────────────
+
+  Widget _chip(String label, bool selected, VoidCallback onTap, {IconData? icon}) {
+    return FilterChip(
+      label: Text(label),
+      avatar: icon == null ? null : Icon(icon, size: 16, color: selected ? Colors.white : AppColors.textSecondary),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: AppColors.primary,
+      backgroundColor: AppColors.surfaceSoft,
+      side: BorderSide.none,
+      labelStyle: TextStyle(
+        fontSize: 13,
+        color: selected ? Colors.white : AppColors.textPrimary,
+      ),
+      onSelected: (_) => onTap(),
+    );
+  }
+
+  Widget _section(String title, Widget child) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTextStyles.h3.copyWith(fontSize: 15)),
+          const SizedBox(height: AppSpacing.sm),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _wrapChips(List<Widget> chips) => Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: chips);
+
+  Widget _buildSearchBox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: AppColors.textHint),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              focusNode: _searchFocusNode,
+              textInputAction: TextInputAction.search,
+              decoration: const InputDecoration(
+                hintText: 'Search locality, project or city',
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
+              ),
+              onChanged: _onQueryChanged,
+              onSubmitted: _commitSearch,
+              onTap: () => setState(() => _showSuggestions = _query.isNotEmpty),
+            ),
+          ),
+          if (_controller.text.isNotEmpty)
+            GestureDetector(
+              onTap: () => setState(() {
+                _controller.clear();
+                _nearbyMode = false;
+                _query = '';
+                _showSuggestions = false;
+                _placeMatches = [];
+              }),
+              child: const Icon(Icons.close, size: 18, color: AppColors.textHint),
+            ),
+          Tooltip(
+            message: 'Use my current location',
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _isLocating ? null : _useCurrentLocation,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: _isLocating
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.my_location, size: 22, color: AppColors.primary),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestions() {
+    final listings = _locationSuggestions;
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
+      constraints: const BoxConstraints(maxHeight: 280),
+      child: (listings.isEmpty && _placeMatches.isEmpty && !_isSearchingPlace)
+          ? Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                _query.trim().length < 3 ? 'Keep typing to search places...' : 'No matching location',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+            )
+          : ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              children: [
+                if (listings.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+                    child: Text('In Our Listings', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                  for (final loc in listings)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.home_work_outlined, size: 18, color: AppColors.primary),
+                      title: Text(loc, style: AppTextStyles.bodySmall),
+                      onTap: () => _commitSearch(loc),
+                    ),
+                ],
+                if (_isSearchingPlace)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    child: Center(
+                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                     ),
                   )
-                : ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    children: [
-                      if (_locationSuggestions.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-                          child: Text('In Our Listings', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
-                        ),
-                        for (final loc in _locationSuggestions)
-                          ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.home_work_outlined, size: 18, color: AppColors.primary),
-                            title: Text(loc, style: AppTextStyles.bodySmall),
-                            onTap: () => _selectLocation(loc),
-                          ),
-                      ],
-                      if (_isSearchingPlace)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                          child: Center(
-                            child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                        )
-                      else if (_placeMatches.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-                          child: Text('Places', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
-                        ),
-                        for (final place in _placeMatches)
-                          ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.place_outlined, size: 18, color: AppColors.textSecondary),
-                            title: Text(place.displayName, style: AppTextStyles.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
-                            onTap: () => _selectLocation(place.displayName),
-                          ),
-                      ],
-                    ],
+                else if (_placeMatches.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+                    child: Text('Places', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
                   ),
-          ),
-        const SizedBox(height: AppSpacing.lg),
+                  for (final place in _placeMatches)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.place_outlined, size: 18, color: AppColors.textSecondary),
+                      title: Text(place.displayName,
+                          style: AppTextStyles.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      // Listings store "Locality, City", so search by the
+                      // place's own name (first part), not the long OSM address.
+                      onTap: () => _commitSearch(place.displayName.split(',').first),
+                    ),
+                ],
+              ],
+            ),
+    );
+  }
 
-        // Recent searches
-        Text('Recent Searches', style: AppTextStyles.h3.copyWith(fontSize: 15)),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: _recentSearches.map((s) {
-            return GestureDetector(
-              onTap: () => _selectLocation(s),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSoft,
+  /// Commercial tab: for sale / for rent.
+  Widget _buildCommercialToggle() {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Row(
+        children: [
+          _chip('For Sale', !_commercialRent, () => _setCommercialRent(false)),
+          const SizedBox(width: AppSpacing.sm),
+          _chip('For Rent', _commercialRent, () => _setCommercialRent(true)),
+        ],
+      ),
+    );
+  }
+
+  /// Popular localities of the selected city (chips), driven by real listings.
+  Widget _buildPopularLocalities() {
+    final city = _activeCity;
+    final localities = popularLocalities(_modeProperties, city: city, limit: 10);
+    if (localities.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Popular Localities', style: AppTextStyles.h3.copyWith(fontSize: 15)),
+              ),
+              if (city != null)
+                InkWell(
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: Text(s, style: AppTextStyles.bodySmall),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-
-        // EMI Calculator quick-access
-        const _EmiCalculatorCard(),
-        const SizedBox(height: AppSpacing.lg),
-
-        // Property type
-        Text('Property Type', style: AppTextStyles.h3.copyWith(fontSize: 15)),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: _propertyTypes.map((type) {
-            final isSelected = _selectedType == type['label'];
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  _selectedType = isSelected ? null : type['label'] as String;
-                }),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.surfaceSoft,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                      ),
-                      child: Icon(
-                        type['icon'] as IconData,
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
-                        size: 20,
-                      ),
+                  onTap: _pickCity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_city, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 4),
+                        Text(city,
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                        const Icon(Icons.arrow_drop_down, size: 20, color: AppColors.primary),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      type['label'] as String,
-                      style: AppTextStyles.caption,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  ),
                 ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _wrapChips([
+            for (final loc in localities)
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16, color: AppColors.primary),
+                label: Text(loc),
+                backgroundColor: AppColors.surfaceSoft,
+                side: BorderSide.none,
+                labelStyle: AppTextStyles.bodySmall,
+                onPressed: () => _commitSearch(loc),
               ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+          ]),
+        ],
+      ),
+    );
+  }
 
-        // Budget range
-        Text('Budget Range', style: AppTextStyles.h3.copyWith(fontSize: 15)),
-        const SizedBox(height: AppSpacing.sm),
+  /// Saved on the device (RecentSearchStore), survives an app restart.
+  Widget _buildRecentSearches() {
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: RecentSearchStore.instance.searches,
+      builder: (context, recents, _) {
+        if (recents.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text('Recent Searches', style: AppTextStyles.h3.copyWith(fontSize: 15))),
+                  TextButton(
+                    onPressed: RecentSearchStore.instance.clear,
+                    style: TextButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _wrapChips([
+                for (final s in recents)
+                  InputChip(
+                    avatar: const Icon(Icons.history, size: 16, color: AppColors.textSecondary),
+                    label: Text(s),
+                    backgroundColor: AppColors.surfaceSoft,
+                    side: BorderSide.none,
+                    labelStyle: AppTextStyles.bodySmall,
+                    onPressed: () => _commitSearch(s),
+                    onDeleted: () => RecentSearchStore.instance.remove(s),
+                    deleteIconColor: AppColors.textHint,
+                  ),
+              ]),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBudget() {
+    final c = _criteria;
+    final max = c.budgetMax;
+    final start = c.budgetStart.clamp(0.0, max).toDouble();
+    final end = c.budgetEnd.clamp(0.0, max).toDouble();
+    final suffix = c.isRent ? '/mo' : '';
+    final endLabel = SearchCriteria.formatPrice(end) + (c.budgetOpenEnded ? '+' : '') + suffix;
+    return Column(
+      children: [
         RangeSlider(
-          values: _budget,
+          values: RangeValues(start, end),
           min: 0,
-          max: 35000000,
-          divisions: 35,
+          max: max,
+          divisions: c.isRent ? 40 : 35,
           activeColor: AppColors.primary,
           inactiveColor: AppColors.surfaceSoft,
           labels: RangeLabels(
-            _formatPrice(_budget.start),
-            _formatPrice(_budget.end),
+            SearchCriteria.formatPrice(start) + suffix,
+            endLabel,
           ),
-          onChanged: (values) => setState(() => _budget = values),
+          onChanged: (v) => setState(() => _criteria = _criteria.copyWith(budgetStart: v.start, budgetEnd: v.end)),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_formatPrice(_budget.start), style: AppTextStyles.bodySmall),
-            Text(_budget.end >= 35000000 ? '${_formatPrice(_budget.end)}+' : _formatPrice(_budget.end), style: AppTextStyles.bodySmall),
+            Text(SearchCriteria.formatPrice(start) + suffix, style: AppTextStyles.bodySmall),
+            Text(endLabel, style: AppTextStyles.bodySmall),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltersView() {
+    final c = _criteria;
+    final isPlot = c.type == 'Plot';
+    final showBhk = _mode != ListingMode.commercial && !isPlot;
+    final filterCount = c.activeFilterCount;
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: [
+        _buildSearchBox(),
+        if (_showSuggestions) _buildSuggestions(),
+        if (_mode == ListingMode.commercial) _buildCommercialToggle(),
+        _buildPopularLocalities(),
+        _buildRecentSearches(),
+        const SizedBox(height: AppSpacing.lg),
+
+        // EMI Calculator quick-access (buying only)
+        if (!c.isRent) ...[
+          const _EmiCalculatorCard(),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                filterCount > 0 ? 'Filters ($filterCount)' : 'Filters',
+                style: AppTextStyles.h3,
+              ),
+            ),
+            if (filterCount > 0) TextButton(onPressed: _resetFilters, child: const Text('Reset all')),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _section(
+          'Property Type',
+          _wrapChips([
+            for (final t in _mode.propertyTypes)
+              _chip(
+                t,
+                c.type == t,
+                () => setState(() => _criteria = c.type == t ? c.copyWith(clearType: true) : c.copyWith(type: t)),
+              ),
+          ]),
+        ),
+
+        _section(c.isRent ? 'Budget (per month)' : 'Budget', _buildBudget()),
+
+        if (showBhk)
+          _section(
+            'BHK Type',
+            _wrapChips([
+              for (final b in searchBhkOptions)
+                _chip(b, c.bhk.contains(b), () => setState(() => _criteria = c.copyWith(bhk: _toggled(c.bhk, b)))),
+            ]),
+          ),
+
+        if (!isPlot)
+          _section(
+            'Furnishing',
+            _wrapChips([
+              for (final f in searchFurnishingOptions)
+                _chip(f, c.furnishing.contains(f),
+                    () => setState(() => _criteria = c.copyWith(furnishing: _toggled(c.furnishing, f)))),
+            ]),
+          ),
+
+        _section(
+          'Posted By',
+          _wrapChips([
+            for (final e in searchPostedByOptions.entries)
+              _chip(e.value, c.postedBy.contains(e.key),
+                  () => setState(() => _criteria = c.copyWith(postedBy: _toggled(c.postedBy, e.key)))),
+          ]),
+        ),
+
+        _section(
+          'Amenities',
+          _wrapChips([
+            for (final a in searchAmenityOptions)
+              _chip(a.label, c.amenities.contains(a.key),
+                  () => setState(() => _criteria = c.copyWith(amenities: _toggled(c.amenities, a.key))),
+                  icon: a.icon),
+          ]),
+        ),
+
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSoft,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: SwitchListTile(
+            value: c.verifiedOnly,
+            activeThumbColor: AppColors.primary,
+            secondary: const Icon(Icons.verified_outlined, color: AppColors.verifiedBadge),
+            title: Text('Verified properties only', style: AppTextStyles.bodyMedium),
+            onChanged: (v) => setState(() => _criteria = c.copyWith(verifiedOnly: v)),
+          ),
         ),
         const SizedBox(height: AppSpacing.xl),
 
-        // Show results button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () => setState(() => _showResults = true),
+            onPressed: () => _nearbyMode ? setState(() => _showResults = true) : _commitSearch(_controller.text),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -627,7 +916,31 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     );
   }
 
+  Widget _buildRadiusChips() {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        children: [
+          for (final km in const [2.0, 5.0, 10.0, 25.0, 50.0])
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: ChoiceChip(
+                label: Text('${km.toInt()} km'),
+                selected: _radiusKm == km,
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(color: _radiusKm == km ? Colors.white : AppColors.textPrimary),
+                onSelected: (_) => setState(() => _radiusKm = km),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildResultsView(List<Property> results) {
+    final filterCount = _criteria.activeFilterCount;
     return Column(
       children: [
         Padding(
@@ -637,9 +950,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
             children: [
               Flexible(
                 child: Text(
-                  _nearbyMode
-                      ? '${results.length} near $_nearbyLabel'
-                      : '${results.length} Properties Found',
+                  _nearbyMode ? '${results.length} near $_nearbyLabel' : '${results.length} Properties Found',
                   style: AppTextStyles.h3.copyWith(fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -654,7 +965,11 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                   ),
                   TextButton.icon(
                     onPressed: () => setState(() => _showResults = false),
-                    icon: const Icon(Icons.tune, size: 16),
+                    icon: Badge(
+                      isLabelVisible: filterCount > 0,
+                      label: Text('$filterCount'),
+                      child: const Icon(Icons.tune, size: 16),
+                    ),
                     label: const Text('Filter'),
                   ),
                 ],
@@ -667,9 +982,13 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
         Expanded(
           child: results.isEmpty
               ? Center(
-                  child: Text(_nearbyMode
-                      ? 'No properties within ${_radiusKm.toInt()} km.\nTry a bigger radius.'
-                      : 'No properties found', textAlign: TextAlign.center))
+                  child: Text(
+                    _nearbyMode
+                        ? 'No properties within ${_radiusKm.toInt()} km.\nTry a bigger radius.'
+                        : 'No properties found',
+                    textAlign: TextAlign.center,
+                  ),
+                )
               : ListView.separated(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   itemCount: results.length,
@@ -682,9 +1001,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                     final card = PropertyCard(
                       property: property,
                       onTap: () => context.push('/property/${property.id}'),
-                      onFavoriteTap: () {
-                        PropertyStore.instance.toggleFavorite(property.id);
-                      },
+                      onFavoriteTap: () => PropertyStore.instance.toggleFavorite(property.id),
                     );
                     if (km == null) return card;
                     return Column(
@@ -697,8 +1014,8 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                               const Icon(Icons.near_me, size: 14, color: AppColors.primary),
                               const SizedBox(width: 4),
                               Text(formatDistance(km),
-                                  style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                  style: AppTextStyles.caption
+                                      .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -712,6 +1029,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     );
   }
 }
+
 /// Quick-access card that opens the EMI Calculator.
 class _EmiCalculatorCard extends StatelessWidget {
   const _EmiCalculatorCard();
