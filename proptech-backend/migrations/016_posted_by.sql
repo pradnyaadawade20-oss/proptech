@@ -1,0 +1,2 @@
+ALTER TABLE properties
+    ADD COLUMN IF NOT EXISTS posted_by VARCHAR(20) NOT NULL DEFAULT 'owner';
