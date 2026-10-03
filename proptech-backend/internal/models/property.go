@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import (
 	"fmt"
@@ -43,22 +43,42 @@ type Property struct {
 	OwnershipType      string     `json:"ownership_type"`
 	IsPriceNegotiable  bool       `json:"is_price_negotiable"`
 	ContactPreference  string     `json:"contact_preference"` // call | chat | both
-	PostedBy           string     `json:"posted_by"`           // owner | broker
+	PostedBy           string     `json:"posted_by"`          // owner | broker
+	Latitude           float64    `json:"latitude"`           // 0,0 = not set
+	Longitude          float64    `json:"longitude"`
 
 	// Filled by PropertyRepository.AttachMedia (not columns on properties).
 	AdditionalImageURLs []string `json:"additional_image_urls"`
 	VideoTourURL        *string  `json:"video_tour_url,omitempty"`
 }
 
+// PropertyFilter drives GET /api/properties (server-side search).
 type PropertyFilter struct {
-	Location      string
-	MinPrice      *float64
-	MaxPrice      *float64
-	BHK           string
-	Furnishing    string
+	Query         string // free text: title / location / city / locality / society
+	Location      string // legacy: matches location, city or locality
+	City          string
+	Locality      string
+	BHK           []string
+	Furnishing    []string
 	Category      string
 	ListingStatus string
-	Sort          string // "price_asc" | "price_desc" | "rating" | "" (newest first)
+	PostedBy      string // owner | broker
+
+	MinPrice, MaxPrice *float64
+	MinArea, MaxArea   *float64
+	MinBathrooms       *int
+	VerifiedOnly       bool
+	Amenities          []string
+
+	// Near-me search (Lat+Lng, optional RadiusKm) and map viewport box.
+	Lat, Lng, RadiusKm             *float64
+	MinLat, MaxLat, MinLng, MaxLng *float64
+
+	// price_asc|price_low | price_desc|price_high | rating | area_large | distance | newest ("")
+	Sort string
+
+	Page  int // 1-based
+	Limit int // 0 = no paging (return all)
 }
 
 // PropertyDetailsInput holds the optional listing-detail fields shared by
@@ -83,6 +103,16 @@ type PropertyDetailsInput struct {
 	OwnershipType      string   `json:"ownership_type"`
 	IsPriceNegotiable  bool     `json:"is_price_negotiable"`
 	ContactPreference  string   `json:"contact_preference"`
+	Latitude           float64  `json:"latitude"` // 0,0 = not provided
+	Longitude          float64  `json:"longitude"`
+}
+
+// ValidateGeo rejects impossible coordinates.
+func (d PropertyDetailsInput) ValidateGeo() error {
+	if d.Latitude < -90 || d.Latitude > 90 || d.Longitude < -180 || d.Longitude > 180 {
+		return fmt.Errorf("latitude must be -90..90 and longitude -180..180")
+	}
+	return nil
 }
 
 // ParsedAvailableFrom turns the "YYYY-MM-DD" string into a date (nil if empty).

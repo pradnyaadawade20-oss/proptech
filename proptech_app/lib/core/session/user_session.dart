@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../api/token_store.dart';
 
 /// The roles a person can operate as inside the app. A single account
 /// can hold more than one — e.g. someone who owns a flat (Owner) but is
@@ -46,6 +47,7 @@ class UserSession {
   void setInitialRoles(Set<UserRole> roles, {UserRole? startWith}) {
     activeRoles.value = roles;
     currentRole.value = startWith ?? (roles.isNotEmpty ? roles.first : null);
+    _persist();
   }
 
   /// Adds a role the user didn't originally sign up with (e.g. a Tenant
@@ -53,6 +55,7 @@ class UserSession {
   /// of their session/login state.
   void addRole(UserRole role) {
     activeRoles.value = {...activeRoles.value, role};
+    _persist();
   }
 
   void switchTo(UserRole role) {
@@ -60,6 +63,35 @@ class UserSession {
       addRole(role);
     }
     currentRole.value = role;
+    _persist();
+  }
+
+  /// Saves roles so they survive an app restart (login is kept on device).
+  Future<void> _persist() async {
+    try {
+      await TokenStore.instance.saveRoles(
+        activeRoles.value.map((r) => r.name).join(','),
+        currentRole.value?.name ?? '',
+      );
+    } catch (_) {}
+  }
+
+  /// Restores roles after a cold start when the user is still logged in.
+  Future<void> restore() async {
+    try {
+      final saved = (await TokenStore.instance.getRoles()) ?? '';
+      final roles = <UserRole>{
+        for (final n in saved.split(',').where((e) => e.isNotEmpty))
+          UserRole.values.firstWhere((r) => r.name == n, orElse: () => UserRole.buyerTenant),
+      };
+      if (roles.isEmpty) return;
+      final activeName = await TokenStore.instance.getActiveRole();
+      final active = UserRole.values.where((r) => r.name == activeName);
+      activeRoles.value = roles;
+      currentRole.value = active.isNotEmpty && roles.contains(active.first)
+          ? active.first
+          : roles.first;
+    } catch (_) {}
   }
 
   void reset() {

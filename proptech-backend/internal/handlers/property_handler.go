@@ -89,14 +89,44 @@ func baseURL(c *gin.Context) string {
 	return fmt.Sprintf("%s://%s", scheme, host)
 }
 
+// GetAllProperties: GET /api/properties
+//
+// Server-side search. Every query param is optional (see parsePropertyFilter);
+// with no params it still returns every property, so older app builds keep
+// working. Send ?page=1&limit=20 to get paginated results.
 func (h *PropertyHandler) GetAllProperties(c *gin.Context) {
-	properties, err := h.repo.GetAll(c.Request.Context())
+	filter, err := parsePropertyFilter(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	properties, total, err := h.repo.Search(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	h.repo.AttachMedia(c.Request.Context(), properties, baseURL(c))
-	c.JSON(http.StatusOK, gin.H{"properties": properties})
+
+	page, limit, hasMore := 1, total, false
+	if filter.Limit > 0 {
+		limit = filter.Limit
+		if limit > 100 {
+			limit = 100
+		}
+		page = filter.Page
+		if page < 1 {
+			page = 1
+		}
+		hasMore = page*limit < total
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"properties": properties,
+		"total":      total,
+		"page":       page,
+		"limit":      limit,
+		"has_more":   hasMore,
+	})
 }
 
 func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
@@ -148,6 +178,10 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 	req.OwnerID = userID
 
 	if _, err := req.ParsedAvailableFrom(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := req.ValidateGeo(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -211,6 +245,10 @@ func (h *PropertyHandler) UpdateProperty(c *gin.Context) {
 		return
 	}
 	if _, err := req.ParsedAvailableFrom(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := req.ValidateGeo(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

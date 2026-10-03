@@ -143,6 +143,13 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               _ActionTile(
+                icon: Icons.people_alt_outlined,
+                title: 'Leads',
+                subtitle: 'See who enquired about your properties',
+                onTap: () => context.push(RouteNames.leads),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _ActionTile(
                 icon: Icons.event_available_outlined,
                 title: 'Visit Requests',
                 subtitle: 'Accept, reject or reschedule visits',

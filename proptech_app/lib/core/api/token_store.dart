@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Wraps flutter_secure_storage for the few pieces of session data we
 /// need to persist across app restarts: the JWT, and the logged-in
@@ -10,10 +11,17 @@ class TokenStore {
   TokenStore._();
   static final TokenStore instance = TokenStore._();
 
-  final _storage = const FlutterSecureStorage();
+  // resetOnError: if stored data can't be decrypted (e.g. restored after a
+  // reinstall) it is wiped instead of throwing -> user just logs in again.
+  final _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(resetOnError: true),
+  );
 
   static const _tokenKey = 'auth_token';
   static const _userIdKey = 'auth_user_id';
+  static const _rolesKey = 'auth_roles';
+  static const _activeRoleKey = 'auth_active_role';
+  static const _installedFlag = 'proptech_installed_once';
 
   Future<void> saveToken(String token) => _storage.write(key: _tokenKey, value: token);
   Future<String?> getToken() => _storage.read(key: _tokenKey);
@@ -41,8 +49,31 @@ class TokenStore {
     }
   }
 
+  Future<void> saveRoles(String roles, String activeRole) async {
+    await _storage.write(key: _rolesKey, value: roles);
+    await _storage.write(key: _activeRoleKey, value: activeRole);
+  }
+
+  Future<String?> getRoles() => _storage.read(key: _rolesKey);
+  Future<String?> getActiveRole() => _storage.read(key: _activeRoleKey);
+
+  /// Call once at startup. SharedPreferences is wiped when the app is
+  /// uninstalled, but Keychain (iOS) / restored backups can keep the old
+  /// session. So: flag missing => fresh install => drop any leftover login.
+  Future<void> clearIfFreshInstall() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_installedFlag) != true) {
+        await clear();
+        await prefs.setBool(_installedFlag, true);
+      }
+    } catch (_) {}
+  }
+
   Future<void> clear() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userIdKey);
+    await _storage.delete(key: _rolesKey);
+    await _storage.delete(key: _activeRoleKey);
   }
 }

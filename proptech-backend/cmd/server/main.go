@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"log"
@@ -69,6 +69,10 @@ func main() {
 	visitRepo := repository.NewVisitRepository(dbPool)
 	visitHandler := handlers.NewVisitHandler(visitRepo, propertyRepo)
 
+	leadRepo := repository.NewLeadRepository(dbPool)
+	leadHandler := handlers.NewLeadHandler(leadRepo, propertyRepo, userRepo)
+	visitHandler.WithLeads(leadRepo) // booking a visit also creates a lead
+
 	messageRepo := repository.NewMessageRepository(dbPool)
 	messageHandler := handlers.NewMessageHandler(messageRepo)
 
@@ -106,6 +110,7 @@ func main() {
 	routes.RegisterAuthRoutes(router, authHandler)
 	routes.RegisterFavoriteRoutes(router, favoriteHandler)
 	routes.RegisterVisitRoutes(router, visitHandler)
+	routes.RegisterLeadRoutes(router, leadHandler)
 	routes.RegisterMessageRoutes(router, messageHandler)
 	routes.RegisterProfileRoutes(router, profileHandler)
 	routes.RegisterAgreementRoutes(router, agreementHandler)

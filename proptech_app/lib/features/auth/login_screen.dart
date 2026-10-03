@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -10,7 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import 'auth_service.dart';
 import 'google_auth.dart';
 
-// ── Design tokens taken from the login mock-up ─────────────────────────────
+// â”€â”€ Design tokens taken from the login mock-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const _teal = Color(0xFF15558A); // matches AppColors.primary (navy blue)
 const _tealGlow = Color(0xFF2B6FA3); // matches AppColors.secondary
 const _ink = Color(0xFF17202A); // matches AppColors.textPrimary
@@ -165,7 +165,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _snack(result.errorMessage ?? 'Google sign-in failed');
       return;
     }
-context.go(RouteNames.home);  }
+    context.go(RouteNames.home);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -436,7 +437,7 @@ const double _footerAspect = 386 / 900;
 /// Font size scaled from the mock-up, kept readable on small phones.
 double _t(double s, double px) => math.max(px * s * 1.18, 11.5);
 
-// ── Input field with floating label ────────────────────────────────────────
+// â”€â”€ Input field with floating label â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _Field extends StatelessWidget {
   final double s;
   final String label;
@@ -531,7 +532,7 @@ class _Field extends StatelessWidget {
   }
 }
 
-// ── Continue button with glow and sparkle ticks ────────────────────────────
+// â”€â”€ Continue button with glow and sparkle ticks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _ContinueButton extends StatelessWidget {
   final double s;
   final bool loading;
@@ -627,7 +628,7 @@ class _SparklePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── OR divider ─────────────────────────────────────────────────────────────
+// â”€â”€ OR divider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _OrDivider extends StatelessWidget {
   final double s;
   const _OrDivider({required this.s});
@@ -656,7 +657,7 @@ class _OrDivider extends StatelessWidget {
   }
 }
 
-// ── Continue with Google ───────────────────────────────────────────────────
+// â”€â”€ Continue with Google â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _GoogleButton extends StatelessWidget {
   final double s;
   final bool loading;
@@ -750,7 +751,7 @@ class _GoogleGPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── Bottom illustration (full width, soft 3D depth) ────────────────────────
+// â”€â”€ Bottom illustration (full width, soft 3D depth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _Footer extends StatelessWidget {
   final double s;
   final double factor;

@@ -14,6 +14,7 @@ import '../../features/auth/otp_screen.dart';
 import '../../features/owner/owner_dashboard_screen.dart';
 import '../../features/broker/broker_dashboard_screen.dart';
 import '../../features/visits/visits_screen.dart';
+import '../../features/leads/leads_screen.dart';
 import '../../features/properties/my_properties_screen.dart';
 import '../../features/properties/add_property_screen.dart';
 import '../../features/properties/post_role_gate.dart';
@@ -89,7 +90,10 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: RouteNames.search,
-              builder: (context, state) => SearchScreen(initialQuery: state.extra as String?),
+              builder: (context, state) => SearchScreen(
+                initialQuery: state.extra as String?,
+                startNearby: state.uri.queryParameters['nearby'] == '1',
+              ),
             ),
           ],
         ),
@@ -178,6 +182,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.myVisits,
       builder: (context, state) => const VisitsScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.leads,
+      builder: (context, state) => const LeadsScreen(),
     ),
     GoRoute(
       path: RouteNames.notifications,

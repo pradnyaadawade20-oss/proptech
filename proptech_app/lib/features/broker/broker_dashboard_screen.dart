@@ -312,8 +312,14 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
                 onTap: () => context.push(RouteNames.myVisits),
               ),
               _ActionGridTile(
+                icon: Icons.people_alt_outlined,
+                title: 'Leads',
+                subtitle: 'See who enquired about your listings',
+                onTap: () => context.push(RouteNames.leads),
+              ),
+              _ActionGridTile(
                 icon: Icons.chat_bubble_outline,
-                title: 'Leads / Chats',
+                title: 'Chats',
                 subtitle: 'Talk to interested buyers/tenants',
                 onTap: () => context.push(RouteNames.chatListStandalone),
               ),
@@ -448,7 +454,7 @@ class _RoundIconButton extends StatelessWidget {
   final String? tooltip;
   final int? badgeCount;
 
-  const _RoundIconButton({required this.icon, required this.onPressed, this.tooltip, this.badgeCount});
+  const _RoundIconButton({required this.icon, required this.onPressed, this.badgeCount}) : tooltip = null;
 
   @override
   Widget build(BuildContext context) {

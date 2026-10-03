@@ -30,6 +30,82 @@ class PropertyService {
     }
   }
 
+
+  /// Server-side search with pagination (GET /api/properties?...).
+  /// Every argument is optional. [sort]: newest | price_low | price_high |
+  /// rating | area_large | distance (distance needs [lat]+[lng]).
+  /// Pass [lat]/[lng]/[radiusKm] for "near me", or the four bounds for the
+  /// visible map area.
+  Future<PropertyPage> search({
+    String? query,
+    String? city,
+    String? locality,
+    String? category,
+    String? postedBy,
+    String? status,
+    List<String>? bhk,
+    List<String>? furnishing,
+    List<String>? amenities,
+    double? minPrice,
+    double? maxPrice,
+    double? minArea,
+    double? maxArea,
+    int? minBathrooms,
+    bool verifiedOnly = false,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    double? minLat,
+    double? maxLat,
+    double? minLng,
+    double? maxLng,
+    String? sort,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final params = <String, dynamic>{
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (locality != null && locality.isNotEmpty) 'locality': locality,
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (postedBy != null && postedBy.isNotEmpty) 'posted_by': postedBy,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (bhk != null && bhk.isNotEmpty) 'bhk': bhk.join(','),
+      if (furnishing != null && furnishing.isNotEmpty) 'furnishing': furnishing.join(','),
+      if (amenities != null && amenities.isNotEmpty) 'amenities': amenities.join(','),
+      if (minPrice != null) 'min_price': minPrice,
+      if (maxPrice != null) 'max_price': maxPrice,
+      if (minArea != null) 'min_area': minArea,
+      if (maxArea != null) 'max_area': maxArea,
+      if (minBathrooms != null) 'min_bathrooms': minBathrooms,
+      if (verifiedOnly) 'verified': 'true',
+      if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
+      if (radiusKm != null) 'radius_km': radiusKm,
+      if (minLat != null && maxLat != null && minLng != null && maxLng != null) ...{
+        'min_lat': minLat,
+        'max_lat': maxLat,
+        'min_lng': minLng,
+        'max_lng': maxLng,
+      },
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
+      'page': page,
+      'limit': limit,
+    };
+    try {
+      final response = await _dio.get('/api/properties', queryParameters: params);
+      final data = response.data as Map<String, dynamic>;
+      final list = data['properties'] as List<dynamic>? ?? [];
+      return PropertyPage(
+        items: list.map((e) => Property.fromJson(e as Map<String, dynamic>)).toList(),
+        total: (data['total'] as num?)?.toInt() ?? list.length,
+        page: (data['page'] as num?)?.toInt() ?? page,
+        hasMore: data['has_more'] as bool? ?? false,
+      );
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   /// Fetches real properties from the backend and replaces the shared
   /// property list every screen reads from (PropertyStore.instance.all).
   /// Call this once at app startup (main.dart) and again on pull-to-refresh /
@@ -96,6 +172,8 @@ class PropertyService {
     bool isPriceNegotiable = false,
     String contactPreference = 'both',
     String postedBy = 'owner',
+    double latitude = 0,
+    double longitude = 0,
   }) async {
     try {
       String? dateOnly(DateTime? d) => d == null
@@ -133,6 +211,8 @@ class PropertyService {
         'is_price_negotiable': isPriceNegotiable,
         'contact_preference': contactPreference,
         'posted_by': postedBy,
+        'latitude': latitude,
+        'longitude': longitude,
       });
       return Property.fromJson(response.data['property'] as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -173,6 +253,8 @@ class PropertyService {
     String ownershipType = '',
     bool isPriceNegotiable = false,
     String contactPreference = 'both',
+    double latitude = 0,
+    double longitude = 0,
   }) async {
     try {
       String? dateOnly(DateTime? d) => d == null
@@ -208,6 +290,8 @@ class PropertyService {
         'ownership_type': ownershipType,
         'is_price_negotiable': isPriceNegotiable,
         'contact_preference': contactPreference,
+        'latitude': latitude,
+        'longitude': longitude,
       });
       return Property.fromJson(response.data['property'] as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -310,4 +394,13 @@ class PropertyService {
       throw _toException(e);
     }
   }
+}
+
+/// One page of server-side search results.
+class PropertyPage {
+  final List<Property> items;
+  final int total;
+  final int page;
+  final bool hasMore;
+  const PropertyPage({required this.items, required this.total, required this.page, required this.hasMore});
 }

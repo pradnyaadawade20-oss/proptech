@@ -10,6 +10,7 @@ import 'property_filters.dart';
 import 'advanced_filter_sheet.dart';
 import 'map_search_screen.dart';
 import '../../core/utils/price_format.dart';
+import '../../core/widgets/safe_network_image.dart';
 
 class CategoryScreen extends StatefulWidget {
   final String title;
@@ -338,7 +339,7 @@ class _BuyCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.network(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
+                SafeNetworkImage(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
                 Positioned(
                   top: 8,
                   right: 8,
@@ -412,7 +413,7 @@ class _RentCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.network(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
+                SafeNetworkImage(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
                 Positioned(
                   top: 8,
                   right: 8,
@@ -483,7 +484,7 @@ class _PGCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.network(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
+                SafeNetworkImage(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
                 Positioned(
                   top: 8,
                   right: 8,
@@ -575,7 +576,7 @@ class _CommercialCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.network(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
+                SafeNetworkImage(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
                 Positioned(
                   top: 8,
                   right: 8,
@@ -655,7 +656,7 @@ class _PlotCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.network(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
+                SafeNetworkImage(property.imageUrl, width: double.infinity, height: 150, fit: BoxFit.cover),
                 Positioned(
                   top: 8,
                   right: 8,

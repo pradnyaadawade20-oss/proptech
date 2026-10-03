@@ -7,10 +7,12 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/api/token_store.dart';
 import '../chat/chat_avatar.dart';
+import '../leads/lead_service.dart';
 import '../profile/profile_service.dart';
 import 'property_service.dart';
 import 'property.dart';
 import '../../core/utils/price_format.dart';
+import '../../core/widgets/safe_network_image.dart';
 
 class OwnerDetailScreen extends StatefulWidget {
   final Property property;
@@ -62,6 +64,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
       );
       return;
     }
+    LeadService.instance.track(property.id, 'chat');
     context.push('/chats/${property.ownerId}?propertyId=${property.id}');
   }
 
@@ -134,7 +137,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  child: Image.network(property.imageUrl, width: 56, height: 56, fit: BoxFit.cover),
+                  child: SafeNetworkImage(property.imageUrl, width: 56, height: 56, fit: BoxFit.cover),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -162,7 +165,12 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
                 child: AppButton(
                   label: 'Call',
                   outlined: true,
-                  onPressed: ownerPhone.isEmpty ? null : () => _callOwner(context, ownerPhone),
+                  onPressed: ownerPhone.isEmpty
+                      ? null
+                      : () {
+                          LeadService.instance.track(property.id, 'call');
+                          _callOwner(context, ownerPhone);
+                        },
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

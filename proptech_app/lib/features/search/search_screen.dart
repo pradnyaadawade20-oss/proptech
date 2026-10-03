@@ -20,7 +20,11 @@ import 'search_criteria.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? initialQuery;
-  const SearchScreen({super.key, this.initialQuery});
+
+  /// When true, opens straight into "properties near me": fetches the GPS
+  /// location right away (used by the location icon on the Home search bar).
+  final bool startNearby;
+  const SearchScreen({super.key, this.initialQuery, this.startNearby = false});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -729,6 +733,20 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                     ),
                   ),
                 ),
+              // "Use my current location" — same spot as 99acres' target icon.
+              Tooltip(
+                message: 'Use my current location',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _isLocating ? null : _useCurrentLocation,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: _isLocating
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.my_location, size: 22, color: AppColors.primary),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1061,6 +1079,24 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                               Text(formatDistance(km),
                                   style: AppTextStyles.caption
                                       .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        card,
+                      ],
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.near_me, size: 14, color: AppColors.primary),
+                              const SizedBox(width: 4),
+                              Text(formatDistance(km),
+                                  style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.primary, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),

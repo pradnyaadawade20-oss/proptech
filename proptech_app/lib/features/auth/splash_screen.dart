@@ -4,6 +4,7 @@ import '../../../app/router/route_names.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
+import '../../core/session/user_session.dart';
 import '../notifications/push_notification_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _SplashScreenState extends State<SplashScreen> {
     String? route;
     try {
       if (await TokenStore.instance.isLoggedIn()) {
+        await UserSession.instance.restore();
         route = await PushNotificationService.instance.launchRoute
             .timeout(const Duration(seconds: 3), onTimeout: () => null);
       }
@@ -37,6 +39,11 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       if (route != null) {
         await PushNotificationService.instance.openRoute(route);
+        return;
+      }
+      // Already logged in on this device -> skip onboarding/login.
+      if (await TokenStore.instance.isLoggedIn()) {
+        context.go(RouteNames.home);
         return;
       }
     } catch (e) {

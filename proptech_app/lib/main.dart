@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app/app.dart';
+import 'core/api/token_store.dart';
 import 'features/notifications/push_notification_service.dart';
 import 'features/properties/property_store.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Fresh install (incl. reinstall after uninstall) => no leftover login.
+  await TokenStore.instance.clearIfFreshInstall();
 
   // Show the app immediately. Push setup must never block (or crash) startup:
   // if Firebase isn't configured for this platform (web/desktop), or the

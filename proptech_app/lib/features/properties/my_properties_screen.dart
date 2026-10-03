@@ -5,6 +5,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
+import '../../core/widgets/safe_network_image.dart';
 import 'property.dart';
 import 'property_service.dart';
 import 'property_store.dart';
@@ -120,7 +121,7 @@ class _PropertyManageCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  child: Image.network(
+                  child: SafeNetworkImage(
                     property.imageUrl,
                     width: 72,
                     height: 72,

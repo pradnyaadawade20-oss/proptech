@@ -1,10 +1,10 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../properties/property_store.dart';
+import '../notifications/push_notification_service.dart';
 import '../../core/session/user_session.dart';
 import '../favorites/favorite_service.dart';
-
 class AuthResult {
   final bool success;
   final String? errorMessage;
@@ -106,6 +106,7 @@ class AuthService {
     await TokenStore.instance.saveToken(token);
     await TokenStore.instance.saveUserId(user['id'] as String);
     await PropertyStore.instance.load();
+    PushNotificationService.instance.registerForCurrentUser();
 
     final roles = <UserRole>{
       for (final r in (user['roles'] as List? ?? const []))

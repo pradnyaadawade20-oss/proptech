@@ -6,14 +6,14 @@ import "time"
 // requested -> draft_ready -> awaiting_signatures -> signed_by_owner
 // -> signed_by_tenant -> completed | rejected | cancelled
 type Agreement struct {
-	ID               string     `json:"id"`
-	PropertyID       string     `json:"property_id"`
-	PropertyTitle    string     `json:"property_title"`
-	PropertyImageURL string     `json:"property_image_url"`
-	OwnerID          string     `json:"owner_id"`
-	OwnerName        string     `json:"owner_name"`
-	TenantID         string     `json:"tenant_id"`
-	TenantName       string     `json:"tenant_name"`
+	ID               string `json:"id"`
+	PropertyID       string `json:"property_id"`
+	PropertyTitle    string `json:"property_title"`
+	PropertyImageURL string `json:"property_image_url"`
+	OwnerID          string `json:"owner_id"`
+	OwnerName        string `json:"owner_name"`
+	TenantID         string `json:"tenant_id"`
+	TenantName       string `json:"tenant_name"`
 
 	Status string `json:"status"`
 

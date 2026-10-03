@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../properties/property_store.dart';
+import '../notifications/push_notification_service.dart';
 import 'auth_service.dart' show AuthResult;
 
 /// Web OAuth client ID (Firebase console -> Authentication -> Sign-in method
@@ -50,6 +51,7 @@ class GoogleAuth {
       await TokenStore.instance
           .saveUserId((data['user'] as Map<String, dynamic>)['id'] as String);
       await PropertyStore.instance.load();
+      PushNotificationService.instance.registerForCurrentUser();
       return AuthResult.success();
     } on DioException catch (e) {
       final d = e.response?.data;

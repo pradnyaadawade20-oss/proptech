@@ -1,4 +1,7 @@
 import 'package:dio/dio.dart';
+import '../../app/router/app_router.dart';
+import '../../app/router/route_names.dart';
+import '../session/user_session.dart';
 import 'token_store.dart';
 
 /// Single Dio instance the whole app uses to talk to the Go backend.
@@ -32,8 +35,16 @@ class ApiClient {
           }
           handler.next(options);
         },
-        onError: (error, handler) {
-          // Centralized place to handle 401s later (e.g. force logout).
+        onError: (error, handler) async {
+          // Saved login expired/invalid (401 on a call that carried a token,
+          // not a login call) -> clear it and send the user to login.
+          final sentToken = error.requestOptions.headers['Authorization'] != null;
+          final isAuthCall = error.requestOptions.path.startsWith('/api/auth');
+          if (error.response?.statusCode == 401 && sentToken && !isAuthCall) {
+            await TokenStore.instance.clear();
+            UserSession.instance.reset();
+            appRouter.go(RouteNames.login);
+          }
           handler.next(error);
         },
       ),
@@ -41,4 +52,4 @@ class ApiClient {
 
     return dio;
   }
-}     
+}

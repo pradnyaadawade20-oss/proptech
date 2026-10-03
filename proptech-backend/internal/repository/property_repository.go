@@ -12,38 +12,23 @@ type PropertyRepository struct {
 	db *pgxpool.Pool
 }
 
+// propertyColumns is the single source of truth for the property SELECT /
+// RETURNING list; its order must match propertyDests below.
+const propertyColumns = "id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by, latitude, longitude"
+
 func NewPropertyRepository(db *pgxpool.Pool) *PropertyRepository {
 	return &PropertyRepository{db: db}
 }
 
 func (r *PropertyRepository) GetAll(ctx context.Context) ([]models.Property, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
-		FROM properties
-		ORDER BY created_at DESC
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var properties []models.Property
-	for rows.Next() {
-		var p models.Property
-		err := rows.Scan(propertyDests(&p)...)
-		if err != nil {
-			return nil, err
-		}
-		properties = append(properties, p)
-	}
-
-	return properties, nil
+	properties, _, err := r.Search(ctx, models.PropertyFilter{})
+	return properties, err
 }
 
 func (r *PropertyRepository) GetByID(ctx context.Context, id string) (*models.Property, error) {
 	var p models.Property
 	err := r.db.QueryRow(ctx, `
-		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+		SELECT `+propertyColumns+`
 		FROM properties
 		WHERE id = $1
 	`, id).Scan(propertyDests(&p)...)
@@ -109,7 +94,12 @@ func (r *PropertyRepository) SaveVerification(ctx context.Context, propertyID st
 		return err
 	}
 
-	_, err = tx.Exec(ctx, `UPDATE properties SET is_verified = TRUE WHERE id = $1`, propertyID)
+	_, err = tx.Exec(ctx, `
+		UPDATE properties
+		SET is_verified = TRUE,
+		    latitude  = CASE WHEN latitude = 0 AND longitude = 0 THEN $2::float8 ELSE latitude END,
+		    longitude = CASE WHEN latitude = 0 AND longitude = 0 THEN $3::float8 ELSE longitude END
+		WHERE id = $1`, propertyID, lat, lng)
 	if err != nil {
 		return err
 	}
@@ -133,7 +123,7 @@ func (r *PropertyRepository) GetVerificationPhoto(ctx context.Context, propertyI
 
 func (r *PropertyRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Property, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+		SELECT `+propertyColumns+`
 		FROM properties
 		WHERE owner_id = $1
 		ORDER BY created_at DESC
@@ -168,17 +158,20 @@ func (r *PropertyRepository) Create(ctx context.Context, req models.CreateProper
 			owner_id, title, image_url, price, price_unit, bhk, furnishing, location, category, amenities,
 			area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode,
 			security_deposit, maintenance_charges, preferred_tenants, available_from, description,
-			property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+			property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by,
+			latitude, longitude
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15, $16, $17, $18, $19,
 			$20, $21, $22, $23, $24,
-			$25, $26, $27, $28, $29, $30)
-		RETURNING id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+			$25, $26, $27, $28, $29, $30,
+			$31, $32)
+		RETURNING `+propertyColumns+`
 	`, req.OwnerID, req.Title, req.ImageURL, req.Price, req.PriceUnit, req.BHK, req.Furnishing, req.Location, req.Category, req.Amenities,
 		req.Area, req.Bathrooms, req.Balconies, req.FloorNumber, req.TotalFloors, req.City, req.Locality, req.Society, req.Pincode,
 		req.SecurityDeposit, req.MaintenanceCharges, req.TenantsOrEmpty(), availableFrom, req.Description,
-		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.PostedByOrDefault()).
+		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.PostedByOrDefault(),
+		req.Latitude, req.Longitude).
 		Scan(propertyDests(&p)...)
 	if err != nil {
 		return nil, err
@@ -199,14 +192,16 @@ func (r *PropertyRepository) Update(ctx context.Context, id string, req models.U
 			area_sqft = $10, bathrooms = $11, balconies = $12, floor_number = $13, total_floors = $14,
 			city = $15, locality = $16, society = $17, pincode = $18,
 			security_deposit = $19, maintenance_charges = $20, preferred_tenants = $21, available_from = $22, description = $23,
-			property_age_years = $24, facing = $25, ownership_type = $26, is_price_negotiable = $27, contact_preference = $28
-		WHERE id = $29
-		RETURNING id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+			property_age_years = $24, facing = $25, ownership_type = $26, is_price_negotiable = $27, contact_preference = $28,
+			latitude  = CASE WHEN $29::float8 <> 0 OR $30::float8 <> 0 THEN $29::float8 ELSE latitude END,
+			longitude = CASE WHEN $29::float8 <> 0 OR $30::float8 <> 0 THEN $30::float8 ELSE longitude END
+		WHERE id = $31
+		RETURNING `+propertyColumns+`
 	`, req.Title, req.ImageURL, req.Price, req.PriceUnit, req.BHK, req.Furnishing, req.Location, req.Category, req.Amenities,
 		req.Area, req.Bathrooms, req.Balconies, req.FloorNumber, req.TotalFloors,
 		req.City, req.Locality, req.Society, req.Pincode,
 		req.SecurityDeposit, req.MaintenanceCharges, req.TenantsOrEmpty(), availableFrom, req.Description,
-		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), id).
+		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.Latitude, req.Longitude, id).
 		Scan(propertyDests(&p)...)
 	if err != nil {
 		return nil, err
@@ -223,7 +218,7 @@ func (r *PropertyRepository) UpdateListingStatus(ctx context.Context, id string,
 		UPDATE properties
 		SET listing_status = $1
 		WHERE id = $2
-		RETURNING id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by
+		RETURNING `+propertyColumns+`
 	`, status, id).
 		Scan(propertyDests(&p)...)
 	if err != nil {
@@ -252,9 +247,9 @@ func (r *PropertyRepository) GetDashboardStats(ctx context.Context, ownerID stri
 	}
 
 	err = r.db.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT sender_id)
-		FROM messages
-		WHERE receiver_id = $1
+		SELECT COUNT(*)
+		FROM leads
+		WHERE owner_id = $1 AND status IN ('new', 'contacted')
 	`, ownerID).Scan(&s.ActiveLeads)
 	if err != nil {
 		return nil, err
@@ -288,5 +283,6 @@ func propertyDests(p *models.Property) []any {
 		&p.Area, &p.Bathrooms, &p.Balconies, &p.FloorNumber, &p.TotalFloors, &p.City, &p.Locality, &p.Society, &p.Pincode,
 		&p.SecurityDeposit, &p.MaintenanceCharges, &p.PreferredTenants, &p.AvailableFrom, &p.Description,
 		&p.PropertyAgeYears, &p.Facing, &p.OwnershipType, &p.IsPriceNegotiable, &p.ContactPreference, &p.PostedBy,
+		&p.Latitude, &p.Longitude,
 	}
 }

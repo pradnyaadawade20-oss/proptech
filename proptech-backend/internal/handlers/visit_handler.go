@@ -15,6 +15,13 @@ import (
 type VisitHandler struct {
 	repo         *repository.VisitRepository
 	propertyRepo *repository.PropertyRepository
+	leadRepo     *repository.LeadRepository // optional: set via WithLeads
+}
+
+// WithLeads makes every visit booking also register a lead for the owner.
+func (h *VisitHandler) WithLeads(l *repository.LeadRepository) *VisitHandler {
+	h.leadRepo = l
+	return h
 }
 
 func NewVisitHandler(repo *repository.VisitRepository, propertyRepo *repository.PropertyRepository) *VisitHandler {
@@ -45,6 +52,16 @@ func (h *VisitHandler) CreateVisit(c *gin.Context) {
 	if property, perr := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID); perr == nil && property.OwnerID != nil {
 		notify.Send(*property.OwnerID, "visit", "New visit request",
 			fmt.Sprintf("%s wants to visit %s", nameOr(visit.VisitorName, "Someone"), visit.PropertyTitle))
+
+		// A visit request is a strong lead — record it (no extra notification;
+		// the visit notification above already told the owner).
+		if h.leadRepo != nil && *property.OwnerID != userID {
+			_, _, _ = h.leadRepo.Upsert(c.Request.Context(), *property.OwnerID, userID, models.CreateLeadRequest{
+				PropertyID: visit.PropertyID,
+				Name:       visit.VisitorName,
+				Source:     "visit",
+			})
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"visit": visit})

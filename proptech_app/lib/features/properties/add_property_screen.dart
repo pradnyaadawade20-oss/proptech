@@ -7,6 +7,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
+import '../../core/services/place_autocomplete_service.dart';
 import '../../core/session/user_session.dart';
 import '../../core/widgets/app_button.dart';
 import 'property.dart';
@@ -302,6 +303,36 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   bool _submitting = false;
 
+  /// Finds the map coordinates of the typed address (OpenStreetMap geocoding)
+  /// so the listing shows up in map / "near me" search. Best effort: returns
+  /// (0, 0) when nothing is found — the backend then keeps whatever
+  /// coordinates the listing already has. In edit mode the old coordinates
+  /// are reused when the address wasn't changed.
+  Future<({double lat, double lng})> _resolveCoordinates({Property? existing}) async {
+    final city = _cityController.text.trim();
+    final locality = _localityController.text.trim();
+    final society = _societyController.text.trim();
+    final pincode = _pincodeController.text.trim();
+
+    if (existing != null &&
+        existing.hasMapPosition &&
+        existing.city == city &&
+        existing.locality == locality &&
+        existing.society == society) {
+      return (lat: existing.latitude, lng: existing.longitude);
+    }
+
+    String join(List<String> parts) => parts.where((e) => e.isNotEmpty).join(', ');
+    try {
+      var results = await PlaceAutocompleteService.instance.search(join([society, locality, city, pincode]));
+      if (results.isEmpty) {
+        results = await PlaceAutocompleteService.instance.search(join([locality, city]));
+      }
+      if (results.isNotEmpty) return (lat: results.first.lat, lng: results.first.lng);
+    } catch (_) {}
+    return (lat: 0.0, lng: 0.0);
+  }
+
   /// Edit mode: saves every field back to the existing listing. Photos are
   /// left untouched (the current cover image URL is sent back unchanged).
   Future<void> _saveEdit() async {
@@ -310,6 +341,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     try {
       final city = _cityController.text.trim();
       final locality = _localityController.text.trim();
+      final geo = await _resolveCoordinates(existing: p);
       await PropertyService.instance.update(
         id: p.id,
         title: _titleController.text.trim(),
@@ -328,6 +360,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         totalFloors: _isPlot ? 0 : _toInt(_totalFloorsController),
         city: city,
         locality: locality,
+        latitude: geo.lat,
+        longitude: geo.lng,
         society: _societyController.text.trim(),
         pincode: _pincodeController.text.trim(),
         securityDeposit: _isRent ? _toDouble(_depositController) : 0,
@@ -404,6 +438,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     try {
       final city = _cityController.text.trim();
       final locality = _localityController.text.trim();
+      final geo = await _resolveCoordinates();
       var created = await PropertyService.instance.create(
         postedBy: UserSession.instance.currentRole.value == UserRole.broker ? 'broker' : 'owner',
         ownerId: ownerId,
@@ -424,6 +459,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         totalFloors: _isPlot ? 0 : _toInt(_totalFloorsController),
         city: city,
         locality: locality,
+        latitude: geo.lat,
+        longitude: geo.lng,
         society: _societyController.text.trim(),
         pincode: _pincodeController.text.trim(),
         securityDeposit: _isRent ? _toDouble(_depositController) : 0,
