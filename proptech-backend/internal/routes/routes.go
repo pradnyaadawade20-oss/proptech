@@ -128,3 +128,14 @@ func RegisterDeviceTokenRoutes(router *gin.Engine, h *handlers.DeviceTokenHandle
 		deviceTokens.DELETE("", h.UnregisterToken)
 	}
 }
+func RegisterReviewRoutes(router *gin.Engine, h *handlers.ReviewHandler) {
+	// Reading reviews is public (same as viewing the listing).
+	router.GET("/api/properties/:id/reviews", h.GetReviews)
+
+	reviewsAuthed := router.Group("/api/properties/:id/reviews")
+	reviewsAuthed.Use(middleware.AuthRequired())
+	{
+		reviewsAuthed.POST("", h.CreateReview)
+		reviewsAuthed.GET("/eligibility", h.CanReview)
+	}
+}

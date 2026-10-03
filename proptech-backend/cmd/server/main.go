@@ -44,6 +44,8 @@ func main() {
 	log.Println("Migrations up to date")
 
 	propertyRepo := repository.NewPropertyRepository(dbPool)
+	reviewRepo := repository.NewReviewRepository(dbPool)
+	reviewHandler := handlers.NewReviewHandler(reviewRepo, propertyRepo)
 	propertyHandler := handlers.NewPropertyHandler(propertyRepo)
 
 	userRepo := repository.NewUserRepository(dbPool)
@@ -112,6 +114,7 @@ func main() {
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 	adminHandler := handlers.NewAdminHandler(dbPool)
 	routes.RegisterAdminRoutes(router, adminHandler)
+	routes.RegisterReviewRoutes(router, reviewHandler)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
