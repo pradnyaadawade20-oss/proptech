@@ -2,6 +2,16 @@ import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import 'agreement.dart';
 
+/// Thrown when the server refuses to sign/send a signing OTP because the
+/// user hasn't completed KYC (HTTP 403, code "kyc_required").
+class KycRequiredException implements Exception {
+  final String message;
+  const KycRequiredException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// Talks to /api/agreements/*. Mirrors AgreementRepository on the backend
 /// exactly: create -> updateDraft -> sign -> (auto-completes when both
 /// parties have signed) / updateStatus for cancel-reject.
@@ -16,6 +26,9 @@ class AgreementService {
     final message = (data is Map && data['error'] != null)
         ? data['error'].toString()
         : (e.message ?? 'Something went wrong.');
+    if (e.response?.statusCode == 403 && data is Map && data['code'] == 'kyc_required') {
+      return KycRequiredException(message);
+    }
     return Exception(message);
   }
 

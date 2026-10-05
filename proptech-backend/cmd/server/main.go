@@ -8,6 +8,7 @@ import (
 
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
+	"proptech-backend/internal/kyc"
 	"proptech-backend/internal/mail"
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/migrate"
@@ -79,8 +80,17 @@ func main() {
 	messageRepo := repository.NewMessageRepository(dbPool)
 	messageHandler := handlers.NewMessageHandler(messageRepo, leadRepo)
 
+	// --- Track B: KYC (B3) — must exist before the agreement handler, which gates signing on it ---
+	kycProvider, kycHasher, err := kyc.FromEnv(cfg.AppEnv)
+	if err != nil {
+		log.Fatal("KYC setup: ", err)
+	}
+	log.Println("KYC provider:", kycProvider.Name())
+	kycRepo := repository.NewKYCRepository(dbPool)
+	kycHandler := handlers.NewKYCHandler(kycRepo, kycProvider, kycHasher)
+
 	agreementRepo := repository.NewAgreementRepository(dbPool)
-	agreementHandler := handlers.NewAgreementHandler(agreementRepo, mailer, leadRepo)
+	agreementHandler := handlers.NewAgreementHandler(agreementRepo, mailer, leadRepo, kycRepo)
 
 	brokerSubscriptionRepo := repository.NewBrokerSubscriptionRepository(dbPool)
 	brokerHandler := handlers.NewBrokerHandler(brokerSubscriptionRepo)
@@ -117,6 +127,7 @@ func main() {
 	routes.RegisterProfileRoutes(router, profileHandler)
 	routes.RegisterAgreementRoutes(router, agreementHandler)
 	routes.RegisterLeadRoutes(router, leadHandler) // Track B
+	routes.RegisterKYCRoutes(router, kycHandler)   // Track B (B3)
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)

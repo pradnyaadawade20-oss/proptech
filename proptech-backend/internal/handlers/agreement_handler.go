@@ -22,10 +22,30 @@ type AgreementHandler struct {
 	repo   *repository.AgreementRepository
 	mailer *mail.Mailer
 	leads  *repository.LeadRepository
+	kyc    *repository.KYCRepository
 }
 
-func NewAgreementHandler(repo *repository.AgreementRepository, mailer *mail.Mailer, leads *repository.LeadRepository) *AgreementHandler {
-	return &AgreementHandler{repo: repo, mailer: mailer, leads: leads}
+func NewAgreementHandler(repo *repository.AgreementRepository, mailer *mail.Mailer, leads *repository.LeadRepository, kyc *repository.KYCRepository) *AgreementHandler {
+	return &AgreementHandler{repo: repo, mailer: mailer, leads: leads, kyc: kyc}
+}
+
+// requireKYC blocks signing (and the signing OTP) until the signer has a
+// verified Aadhaar KYC. Writes the 403 itself and returns false when blocked.
+// The Flutter app looks for code == "kyc_required" to open the KYC screen.
+func (h *AgreementHandler) requireKYC(c *gin.Context, userID string) bool {
+	ok, err := h.kyc.IsVerified(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check KYC status"})
+		return false
+	}
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "complete KYC verification before signing this agreement",
+			"code":  "kyc_required",
+		})
+		return false
+	}
+	return true
 }
 
 func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
@@ -156,6 +176,9 @@ func (h *AgreementHandler) SignAgreement(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only sign as yourself"})
 		return
 	}
+	if !h.requireKYC(c, userID) {
+		return
+	}
 
 	signed, err := h.repo.Sign(c.Request.Context(), id, req)
 	if err != nil {
@@ -198,6 +221,9 @@ func (h *AgreementHandler) SendSignOTP(c *gin.Context) {
 	}
 	if (req.SignerRole == "owner" && ag.OwnerID != userID) || (req.SignerRole == "tenant" && ag.TenantID != userID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only sign as yourself"})
+		return
+	}
+	if !h.requireKYC(c, userID) {
 		return
 	}
 	if ag.Status == "requested" || ag.Status == "completed" || ag.Status == "rejected" || ag.Status == "cancelled" {

@@ -4,6 +4,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/app_button.dart';
+import 'kyc_service.dart';
 import 'kyc_store.dart';
 
 /// Adds a space after every 4 digits as the user types an Aadhaar number,
@@ -23,11 +24,11 @@ class _AadhaarInputFormatter extends TextInputFormatter {
   }
 }
 
-/// Aadhaar-based KYC verification flow: enter Aadhaar number → verify OTP
-/// → done. This is a mock flow — there's no live UIDAI/Aadhaar API
-/// integration (the app has no backend), so it behaves the way the rest of
-/// the app's auth screens do (default OTP is always 123456), and only
-/// ever stores a masked Aadhaar number locally.
+/// Aadhaar-based KYC: enter Aadhaar number -> verify OTP -> done.
+/// Everything is verified server-side (/api/kyc/*); the app never stores the
+/// Aadhaar number, it only holds it in memory until the OTP step finishes.
+/// Pops with `true` once KYC is verified, so callers (e.g. the agreement
+/// signing flow) can continue.
 class KycVerificationScreen extends StatefulWidget {
   const KycVerificationScreen({super.key});
 
@@ -35,25 +36,23 @@ class KycVerificationScreen extends StatefulWidget {
   State<KycVerificationScreen> createState() => _KycVerificationScreenState();
 }
 
-enum _KycStep { details, otp, success }
+enum _KycStep { loading, details, otp, success }
 
 class _KycVerificationScreenState extends State<KycVerificationScreen> {
-  static const _defaultOtp = '123456';
-
-  _KycStep _step = _KycStep.details;
+  _KycStep _step = _KycStep.loading;
   final _aadhaarController = TextEditingController();
   final _otpController = TextEditingController();
   bool _consent = false;
-  bool _loading = false;
+  bool _busy = false;
   String? _aadhaarError;
   String? _otpError;
-  int _resendSeconds = 30;
+  String? _notice;
+  int _resendSeconds = 0;
 
   @override
   void initState() {
     super.initState();
-    final existing = KycStore.instance.status.value;
-    if (existing != null) _step = _KycStep.success;
+    _loadStatus();
   }
 
   @override
@@ -63,9 +62,26 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     super.dispose();
   }
 
+  Future<void> _loadStatus() async {
+    try {
+      final s = await KycService.instance.getStatus();
+      KycStore.instance.update(s);
+      if (!mounted) return;
+      setState(() => _step = s.isVerified ? _KycStep.success : _KycStep.details);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _step = _KycStep.details;
+        _notice = 'Could not check your KYC status. You can still continue.';
+      });
+    }
+  }
+
   bool get _isValidAadhaar => _aadhaarController.text.replaceAll(' ', '').length == 12;
 
-  Future<void> _sendOtp() async {
+  String _msg(Object e) => e.toString().replaceFirst('Exception: ', '');
+
+  Future<void> _sendOtp({bool isResend = false}) async {
     if (!_isValidAadhaar) {
       setState(() => _aadhaarError = 'Enter a valid 12-digit Aadhaar number');
       return;
@@ -78,19 +94,41 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     }
     setState(() {
       _aadhaarError = null;
-      _loading = true;
+      _busy = true;
     });
-    await Future.delayed(const Duration(milliseconds: 700)); // mock UIDAI OTP dispatch
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _step = _KycStep.otp;
-    });
-    _startResendCountdown();
+    try {
+      final wait = await KycService.instance.sendOtp(aadhaar: _aadhaarController.text, consent: _consent);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _step = _KycStep.otp;
+        _otpController.clear();
+        _otpError = null;
+      });
+      _startResendCountdown(wait);
+      if (isResend) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('OTP resent')));
+      }
+    } on KycException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (e.code == 'kyc_already_verified') {
+        await KycStore.instance.refresh();
+        if (mounted) setState(() => _step = _KycStep.success);
+      } else if (e.code == 'kyc_invalid_aadhaar') {
+        setState(() => _aadhaarError = e.message);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_msg(e))));
+    }
   }
 
-  void _startResendCountdown() {
-    _resendSeconds = 30;
+  void _startResendCountdown(int seconds) {
+    _resendSeconds = seconds;
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
       if (!mounted || _step != _KycStep.otp) return false;
@@ -100,21 +138,48 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   }
 
   Future<void> _verifyOtp() async {
-    if (_otpController.text.trim() != _defaultOtp) {
-      setState(() => _otpError = 'Invalid OTP. Try 123456 for now.');
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
+      setState(() => _otpError = 'Enter the 6-digit code');
       return;
     }
     setState(() {
       _otpError = null;
-      _loading = true;
+      _busy = true;
     });
-    await Future.delayed(const Duration(milliseconds: 600)); // mock verify delay
-    await KycStore.instance.markVerified(_aadhaarController.text);
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _step = _KycStep.success;
-    });
+    try {
+      final result = await KycService.instance.verifyOtp(otp);
+      KycStore.instance.update(result);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _step = _KycStep.success;
+      });
+    } on KycException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      switch (e.code) {
+        case 'kyc_invalid_otp':
+          setState(() => _otpError = e.attemptsLeft != null
+              ? 'Invalid OTP. ${e.attemptsLeft} attempt(s) left.'
+              : 'Invalid OTP.');
+        case 'kyc_too_many_attempts':
+        case 'kyc_no_active_otp':
+          // This OTP is dead — go back and request a new one.
+          setState(() {
+            _step = _KycStep.details;
+            _notice = e.message;
+          });
+        default:
+          setState(() => _otpError = e.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _otpError = _msg(e);
+      });
+    }
   }
 
   @override
@@ -124,6 +189,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: switch (_step) {
+          _KycStep.loading => const Center(child: CircularProgressIndicator()),
           _KycStep.details => _buildDetailsStep(),
           _KycStep.otp => _buildOtpStep(),
           _KycStep.success => _buildSuccessStep(),
@@ -141,9 +207,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         Text('Verify your identity', style: AppTextStyles.h2),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Complete Aadhaar-based KYC to unlock a "KYC Verified" badge on your profile and build trust with owners/dealers.',
+          'KYC is required before you can sign a rental agreement. It also adds a "KYC Verified" badge to your profile.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
         ),
+        if (_notice != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(_notice!, style: AppTextStyles.bodySmall.copyWith(color: Colors.red)),
+        ],
         const SizedBox(height: AppSpacing.xl),
         Text('Aadhaar Number', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
         const SizedBox(height: AppSpacing.sm),
@@ -175,8 +245,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         const Spacer(),
         AppButton(
           label: 'Send OTP',
-          loading: _loading,
-          onPressed: _loading ? null : _sendOtp,
+          loading: _busy,
+          onPressed: _busy ? null : _sendOtp,
         ),
         const SizedBox(height: AppSpacing.sm),
         Center(
@@ -218,26 +288,18 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
             if (_otpError != null) setState(() => _otpError = null);
           },
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text('Default OTP for testing: 123456', style: AppTextStyles.caption),
         const SizedBox(height: AppSpacing.lg),
         AppButton(
           label: 'Verify & Complete KYC',
-          loading: _loading,
-          onPressed: _loading ? null : _verifyOtp,
+          loading: _busy,
+          onPressed: _busy ? null : _verifyOtp,
         ),
         const SizedBox(height: AppSpacing.md),
         Center(
           child: _resendSeconds > 0
               ? Text('Resend code in ${_resendSeconds}s', style: AppTextStyles.caption)
               : TextButton(
-                  onPressed: () {
-                    _startResendCountdown();
-                    setState(() {});
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('OTP resent successfully')),
-                    );
-                  },
+                  onPressed: _busy ? null : () => _sendOtp(isResend: true),
                   child: const Text("Didn't receive code? Resend"),
                 ),
         ),
@@ -260,22 +322,25 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         Text('KYC Verified', style: AppTextStyles.h2),
         const SizedBox(height: AppSpacing.xs),
         if (result != null) ...[
-          Text(
-            'Aadhaar ${result.maskedAadhaar}',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Verified on ${result.verifiedAt.day}/${result.verifiedAt.month}/${result.verifiedAt.year}',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-          ),
+          if (result.maskedAadhaar != null)
+            Text(
+              'Aadhaar ${result.maskedAadhaar}',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            ),
+          if (result.verifiedAt != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Verified on ${result.verifiedAt!.day}/${result.verifiedAt!.month}/${result.verifiedAt!.year}',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+            ),
+          ],
         ],
         const SizedBox(height: AppSpacing.xl),
         SizedBox(
           width: double.infinity,
           child: AppButton(
             label: 'Done',
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).pop(true),
           ),
         ),
       ],

@@ -146,8 +146,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     }
   }
 
-  void _contactOwner(Property property) {
-    LeadService.instance.createLead(propertyId: property.id); // lead banao, UI ko block nahi karta
+    void _contactOwner(Property property) {
+    LeadService.instance.track(property.id, 'contact'); // lead banao, UI ko block nahi karta
     context.push('/property/${property.id}/owner');
   }
 
