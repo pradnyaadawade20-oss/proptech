@@ -386,12 +386,24 @@ func (h *PropertyHandler) VerifyProperty(c *gin.Context) {
 
 // ServeVerificationPhoto: GET /api/properties/:id/verification-photo
 func (h *PropertyHandler) ServeVerificationPhoto(c *gin.Context) {
-	data, contentType, err := h.repo.GetVerificationPhoto(c.Request.Context(), c.Param("id"))
+	id := c.Param("id")
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	role, _ := c.Get("role")
+	isAdmin := userID == middleware.AdminUserID && role == "admin"
+	if !isAdmin && !h.requireOwner(c, id) {
+		return // requireOwner already wrote the 403/404
+	}
+
+	data, contentType, err := h.repo.GetVerificationPhoto(c.Request.Context(), id)
 	if err != nil || len(data) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no verification photo for this property"})
 		return
 	}
 	c.Header("Content-Type", contentType)
-	c.Header("Cache-Control", "public, max-age=86400")
+	c.Header("Cache-Control", "private, max-age=3600")
 	c.Data(http.StatusOK, contentType, data)
 }

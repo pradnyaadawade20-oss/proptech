@@ -2,6 +2,8 @@ package models
 
 import "time"
 
+// Lead = one buyer/tenant enquiry on one property (unique per property+buyer).
+// Status flow (forward only): new -> contacted -> visited -> closed.
 type Lead struct {
 	ID               string    `json:"id"`
 	PropertyID       string    `json:"property_id"`
@@ -19,33 +21,24 @@ type Lead struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// CreateLeadRequest: buyer taps "Contact Owner" / Call / Chat / Book visit.
 type CreateLeadRequest struct {
 	PropertyID string `json:"property_id" binding:"required"`
 	Name       string `json:"name"`
 	Phone      string `json:"phone"`
 	Message    string `json:"message"`
-	Source     string `json:"source"` // contact | call | chat | visit (default contact)
+	Source     string `json:"source" binding:"omitempty,oneof=contact call chat visit"`
 }
 
+// Owner manages their own pipeline, so any status can be set manually.
+// (Automatic moves from chat / visit / agreement are forward-only.)
 type UpdateLeadStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=new contacted visited closed"`
 }
 
-// LeadCounts backs the tab badges on the Leads screen.
 type LeadCounts struct {
 	All       int `json:"all"`
 	New       int `json:"new"`
 	Contacted int `json:"contacted"`
 	Visited   int `json:"visited"`
 	Closed    int `json:"closed"`
-}
-
-// SourceOrDefault falls back to "contact" for empty/unknown values.
-func (r CreateLeadRequest) SourceOrDefault() string {
-	switch r.Source {
-	case "contact", "call", "chat", "visit":
-		return r.Source
-	}
-	return "contact"
 }

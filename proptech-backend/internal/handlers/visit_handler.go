@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"proptech-backend/internal/middleware"
@@ -15,17 +16,11 @@ import (
 type VisitHandler struct {
 	repo         *repository.VisitRepository
 	propertyRepo *repository.PropertyRepository
-	leadRepo     *repository.LeadRepository // optional: set via WithLeads
+	leads        *repository.LeadRepository
 }
 
-// WithLeads makes every visit booking also register a lead for the owner.
-func (h *VisitHandler) WithLeads(l *repository.LeadRepository) *VisitHandler {
-	h.leadRepo = l
-	return h
-}
-
-func NewVisitHandler(repo *repository.VisitRepository, propertyRepo *repository.PropertyRepository) *VisitHandler {
-	return &VisitHandler{repo: repo, propertyRepo: propertyRepo}
+func NewVisitHandler(repo *repository.VisitRepository, propertyRepo *repository.PropertyRepository, leads *repository.LeadRepository) *VisitHandler {
+	return &VisitHandler{repo: repo, propertyRepo: propertyRepo, leads: leads}
 }
 
 func (h *VisitHandler) CreateVisit(c *gin.Context) {
@@ -48,20 +43,15 @@ func (h *VisitHandler) CreateVisit(c *gin.Context) {
 		return
 	}
 
+	// Lead hook: booking a visit = an enquiry (own-property etc. errors are ignored).
+	if _, _, lerr := h.leads.Upsert(c.Request.Context(), visit.PropertyID, userID, "", "", "visit", ""); lerr != nil {
+		log.Printf("lead upsert (visit) skipped: %v", lerr)
+	}
+
 	// Tell the property owner someone wants to visit.
 	if property, perr := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID); perr == nil && property.OwnerID != nil {
 		notify.Send(*property.OwnerID, "visit", "New visit request",
 			fmt.Sprintf("%s wants to visit %s", nameOr(visit.VisitorName, "Someone"), visit.PropertyTitle))
-
-		// A visit request is a strong lead — record it (no extra notification;
-		// the visit notification above already told the owner).
-		if h.leadRepo != nil && *property.OwnerID != userID {
-			_, _, _ = h.leadRepo.Upsert(c.Request.Context(), *property.OwnerID, userID, models.CreateLeadRequest{
-				PropertyID: visit.PropertyID,
-				Name:       visit.VisitorName,
-				Source:     "visit",
-			})
-		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"visit": visit})
@@ -113,6 +103,13 @@ func (h *VisitHandler) UpdateVisitStatus(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Lead hook: completed visit -> lead becomes "visited" (forward only).
+	if visit.Status == "completed" {
+		if lerr := h.leads.Advance(c.Request.Context(), visit.PropertyID, visit.VisitorID, "visited"); lerr != nil {
+			log.Printf("lead advance (visited) failed: %v", lerr)
+		}
 	}
 
 	h.notifyVisitStatus(c, visit, userID)

@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"log"
@@ -24,6 +24,9 @@ func main() {
 	config.LoadDotEnv()
 
 	cfg := config.LoadConfig()
+	if cfg.AppEnv == "production" && (cfg.DevSkipOTP || cfg.DevLogOTP) {
+		log.Fatal("DEV_SKIP_OTP / DEV_LOG_OTP must be off when APP_ENV=production")
+	}
 	middleware.MustInit()
 	log.Println("Email OTP:", cfg.EmailTransport())
 	if cfg.DevSkipOTP {
@@ -66,18 +69,18 @@ func main() {
 	favoriteRepo := repository.NewFavoriteRepository(dbPool)
 	favoriteHandler := handlers.NewFavoriteHandler(favoriteRepo)
 
-	visitRepo := repository.NewVisitRepository(dbPool)
-	visitHandler := handlers.NewVisitHandler(visitRepo, propertyRepo)
-
+	// --- Track B: leads (shared by visits / chat / agreements) ---
 	leadRepo := repository.NewLeadRepository(dbPool)
-	leadHandler := handlers.NewLeadHandler(leadRepo, propertyRepo, userRepo)
-	visitHandler.WithLeads(leadRepo) // booking a visit also creates a lead
+	leadHandler := handlers.NewLeadHandler(leadRepo)
+
+	visitRepo := repository.NewVisitRepository(dbPool)
+	visitHandler := handlers.NewVisitHandler(visitRepo, propertyRepo, leadRepo)
 
 	messageRepo := repository.NewMessageRepository(dbPool)
-	messageHandler := handlers.NewMessageHandler(messageRepo)
+	messageHandler := handlers.NewMessageHandler(messageRepo, leadRepo)
 
 	agreementRepo := repository.NewAgreementRepository(dbPool)
-	agreementHandler := handlers.NewAgreementHandler(agreementRepo)
+	agreementHandler := handlers.NewAgreementHandler(agreementRepo, mailer, leadRepo)
 
 	brokerSubscriptionRepo := repository.NewBrokerSubscriptionRepository(dbPool)
 	brokerHandler := handlers.NewBrokerHandler(brokerSubscriptionRepo)
@@ -110,10 +113,10 @@ func main() {
 	routes.RegisterAuthRoutes(router, authHandler)
 	routes.RegisterFavoriteRoutes(router, favoriteHandler)
 	routes.RegisterVisitRoutes(router, visitHandler)
-	routes.RegisterLeadRoutes(router, leadHandler)
 	routes.RegisterMessageRoutes(router, messageHandler)
 	routes.RegisterProfileRoutes(router, profileHandler)
 	routes.RegisterAgreementRoutes(router, agreementHandler)
+	routes.RegisterLeadRoutes(router, leadHandler) // Track B
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)

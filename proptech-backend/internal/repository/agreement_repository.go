@@ -2,6 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -90,65 +93,143 @@ func (r *AgreementRepository) GetByUserID(ctx context.Context, userID string) ([
 	return agreements, nil
 }
 
+var (
+	ErrAgreementLocked   = errors.New("agreement cannot be edited now (already signed, or closed)")
+	ErrAgreementBadState = errors.New("this action is not allowed in the agreement's current status")
+	ErrOTPNotVerified    = errors.New("verify the OTP before signing")
+	ErrOTPInvalid        = errors.New("invalid or expired OTP")
+	ErrAlreadySigned     = errors.New("you have already signed this agreement")
+)
+
+func hashOTP(agreementID, role, code string) string {
+	h := sha256.Sum256([]byte(agreementID + ":" + role + ":" + code))
+	return hex.EncodeToString(h[:])
+}
+
 // UpdateDraft fills in the terms and moves status -> draft_ready.
+// Locked once anyone has signed or the agreement is closed.
 func (r *AgreementRepository) UpdateDraft(ctx context.Context, id string, req models.UpdateDraftRequest) (*models.Agreement, error) {
-	_, err := r.db.Exec(ctx, `
+	tag, err := r.db.Exec(ctx, `
 		UPDATE agreements
 		SET monthly_rent = $1, security_deposit = $2, start_date = $3,
-		    duration_months = $4, terms = $5, status = 'draft_ready', updated_at = now()
+		    duration_months = $4, terms = $5, status = 'draft_ready', updated_at = now(),
+		    owner_otp_verified = FALSE, tenant_otp_verified = FALSE,
+		    owner_otp_code = NULL, tenant_otp_code = NULL
 		WHERE id = $6
+		  AND status IN ('requested', 'draft_ready', 'awaiting_signatures')
+		  AND owner_signed_at IS NULL AND tenant_signed_at IS NULL
 	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id)
 	if err != nil {
 		return nil, err
 	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrAgreementLocked
+	}
 	return r.GetByID(ctx, id)
 }
 
-// Sign records a signature (drawn PNG or typed name) for owner or tenant,
-// and advances the status accordingly. Once both have signed -> completed.
+// PartyEmail returns the email of the owner or tenant on the agreement.
+func (r *AgreementRepository) PartyEmail(ctx context.Context, id, role string) (string, error) {
+	col := "a.tenant_id"
+	if role == "owner" {
+		col = "a.owner_id"
+	}
+	var email string
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(u.email,'') FROM agreements a JOIN users u ON u.id = `+col+` WHERE a.id = $1`, id).Scan(&email)
+	return email, err
+}
+
+// SetOTP stores a hashed 6-digit code (10 min validity) for the party.
+func (r *AgreementRepository) SetOTP(ctx context.Context, id, role, code string) error {
+	q := `UPDATE agreements SET tenant_otp_code=$1, tenant_otp_expires_at=now()+interval '10 minutes', tenant_otp_verified=FALSE, updated_at=now() WHERE id=$2`
+	if role == "owner" {
+		q = `UPDATE agreements SET owner_otp_code=$1, owner_otp_expires_at=now()+interval '10 minutes', owner_otp_verified=FALSE, updated_at=now() WHERE id=$2`
+	}
+	_, err := r.db.Exec(ctx, q, hashOTP(id, role, code), id)
+	return err
+}
+
+// VerifyOTP marks the party's OTP verified if the code matches and is unexpired.
+func (r *AgreementRepository) VerifyOTP(ctx context.Context, id, role, code string) error {
+	q := `UPDATE agreements SET tenant_otp_verified=TRUE, tenant_otp_code=NULL
+	      WHERE id=$1 AND tenant_otp_code=$2 AND tenant_otp_expires_at > now()`
+	if role == "owner" {
+		q = `UPDATE agreements SET owner_otp_verified=TRUE, owner_otp_code=NULL
+		     WHERE id=$1 AND owner_otp_code=$2 AND owner_otp_expires_at > now()`
+	}
+	tag, err := r.db.Exec(ctx, q, id, hashOTP(id, role, code))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrOTPInvalid
+	}
+	return nil
+}
+
+// Sign records a signature for owner or tenant. Requires: draft is final
+// (not "requested"), the party's OTP is verified, party hasn't signed yet.
+// Status is computed in the same atomic UPDATE. Both signed -> completed.
 func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.SignAgreementRequest) (*models.Agreement, error) {
 	current, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	var newStatus string
-	if req.SignerRole == "owner" {
-		_, err = r.db.Exec(ctx, `
-			UPDATE agreements
-			SET owner_signature_type = $1, owner_signature_data = $2, owner_signed_at = now(), updated_at = now()
-			WHERE id = $3
-		`, req.SignatureType, req.SignatureData, id)
-		if current.TenantSignedAt != nil {
-			newStatus = "completed"
-		} else {
-			newStatus = "signed_by_owner"
-		}
-	} else {
-		_, err = r.db.Exec(ctx, `
-			UPDATE agreements
-			SET tenant_signature_type = $1, tenant_signature_data = $2, tenant_signed_at = now(), updated_at = now()
-			WHERE id = $3
-		`, req.SignatureType, req.SignatureData, id)
-		if current.OwnerSignedAt != nil {
-			newStatus = "completed"
-		} else {
-			newStatus = "signed_by_tenant"
-		}
+	switch current.Status {
+	case "draft_ready", "awaiting_signatures", "signed_by_owner", "signed_by_tenant":
+	default:
+		return nil, ErrAgreementBadState
 	}
-	if err != nil {
+
+	var verified bool
+	col := "tenant"
+	if req.SignerRole == "owner" {
+		col = "owner"
+		if current.OwnerSignedAt != nil {
+			return nil, ErrAlreadySigned
+		}
+	} else if current.TenantSignedAt != nil {
+		return nil, ErrAlreadySigned
+	}
+	if err := r.db.QueryRow(ctx, `SELECT `+col+`_otp_verified FROM agreements WHERE id=$1`, id).Scan(&verified); err != nil {
 		return nil, err
 	}
+	if !verified {
+		return nil, ErrOTPNotVerified
+	}
 
-	_, err = r.db.Exec(ctx, `UPDATE agreements SET status = $1, updated_at = now() WHERE id = $2`, newStatus, id)
+	otherSigned := current.TenantSignedAt != nil
+	newStatus := "signed_by_owner"
+	if req.SignerRole == "tenant" {
+		otherSigned = current.OwnerSignedAt != nil
+		newStatus = "signed_by_tenant"
+	}
+	if otherSigned {
+		newStatus = "completed"
+	}
+
+	_, err = r.db.Exec(ctx, `
+		UPDATE agreements
+		SET `+col+`_signature_type = $1, `+col+`_signature_data = $2, `+col+`_signed_at = now(),
+		    `+col+`_otp_verified = FALSE, status = $3, updated_at = now()
+		WHERE id = $4
+	`, req.SignatureType, req.SignatureData, newStatus, id)
 	if err != nil {
 		return nil, err
 	}
 	return r.GetByID(ctx, id)
 }
 
+// UpdateStatus validates the transition against models.AgreementTransitions.
 func (r *AgreementRepository) UpdateStatus(ctx context.Context, id string, status string) (*models.Agreement, error) {
-	_, err := r.db.Exec(ctx, `UPDATE agreements SET status = $1, updated_at = now() WHERE id = $2`, status, id)
+	current, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !models.AgreementCanMove(current.Status, status) {
+		return nil, ErrAgreementBadState
+	}
+	_, err = r.db.Exec(ctx, `UPDATE agreements SET status = $1, updated_at = now() WHERE id = $2 AND status = $3`, status, id, current.Status)
 	if err != nil {
 		return nil, err
 	}

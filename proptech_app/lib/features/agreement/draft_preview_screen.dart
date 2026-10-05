@@ -92,7 +92,69 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     super.dispose();
   }
 
+  /// Sends an OTP to the signer's email and asks for it. true = verified.
+  Future<bool> _verifySignOtp() async {
+    final role = _isOwner ? 'owner' : 'tenant';
+    try {
+      await AgreementService.instance.sendSignOtp(id: widget.agreementId, signerRole: role);
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+      return false;
+    }
+    if (!mounted) return false;
+
+    final codeController = TextEditingController();
+    String? error;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Verify OTP'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('We emailed a 6-digit code to your account email.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: InputDecoration(counterText: '', errorText: error, hintText: '------'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await AgreementService.instance.verifySignOtp(
+                    id: widget.agreementId,
+                    signerRole: role,
+                    code: codeController.text.trim(),
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } catch (e) {
+                  setLocal(() => error = e.toString().replaceFirst('Exception: ', ''));
+                }
+              },
+              child: const Text('Verify'),
+            ),
+          ],
+        ),
+      ),
+    );
+    codeController.dispose();
+    return ok == true;
+  }
+
   Future<void> _openSignatureScreen() async {
+    if (!await _verifySignOtp()) return;
+    if (!mounted) return;
     final result = await Navigator.of(context).push<Map<String, String>>(
       MaterialPageRoute(
         builder: (_) => SignatureScreen(

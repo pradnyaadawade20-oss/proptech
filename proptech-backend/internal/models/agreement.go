@@ -60,6 +60,36 @@ type SignAgreementRequest struct {
 	SignatureData string `json:"signature_data" binding:"required"`
 }
 
+// Manual status changes: only these. "completed" is set ONLY by Sign (both
+// signatures), signed_by_* only by Sign, draft_ready only by UpdateDraft.
 type UpdateAgreementStatusRequest struct {
-	Status string `json:"status" binding:"required,oneof=requested draft_ready awaiting_signatures signed_by_owner signed_by_tenant completed rejected cancelled"`
+	Status string `json:"status" binding:"required,oneof=awaiting_signatures rejected cancelled"`
+}
+
+// Allowed status transitions (manual + automatic).
+var AgreementTransitions = map[string][]string{
+	"requested":           {"draft_ready", "rejected", "cancelled"},
+	"draft_ready":         {"draft_ready", "awaiting_signatures", "rejected", "cancelled"},
+	"awaiting_signatures": {"signed_by_owner", "signed_by_tenant", "draft_ready", "rejected", "cancelled"},
+	"signed_by_owner":     {"completed", "cancelled"},
+	"signed_by_tenant":    {"completed", "cancelled"},
+}
+
+func AgreementCanMove(from, to string) bool {
+	for _, t := range AgreementTransitions[from] {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
+
+// OTP before e-sign.
+type AgreementOTPSendRequest struct {
+	SignerRole string `json:"signer_role" binding:"required,oneof=owner tenant"`
+}
+
+type AgreementOTPVerifyRequest struct {
+	SignerRole string `json:"signer_role" binding:"required,oneof=owner tenant"`
+	Code       string `json:"code" binding:"required,len=6"`
 }

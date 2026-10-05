@@ -11,8 +11,8 @@ func RegisterLeadRoutes(router *gin.Engine, h *handlers.LeadHandler) {
 	leads := router.Group("/api/leads")
 	leads.Use(middleware.AuthRequired())
 	{
-		leads.POST("", h.CreateLead)
-		leads.GET("", h.GetLeads)
-		leads.PATCH("/:id/status", h.UpdateLeadStatus)
+		leads.POST("", h.Create)
+		leads.GET("", h.List)
+		leads.PATCH("/:id/status", h.UpdateStatus)
 	}
 }

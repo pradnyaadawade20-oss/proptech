@@ -81,7 +81,7 @@ class AgreementService {
   }
 
   /// Step 3: either party signs — draw (base64 PNG) or type (name text).
-  /// No OTP, matches SignatureScreen's flow.
+  /// Needs a verified OTP first (sendSignOtp -> verifySignOtp).
   Future<Agreement> sign({
     required String id,
     required String signerRole, // 'owner' | 'tenant'
@@ -95,6 +95,30 @@ class AgreementService {
         'signature_data': signatureData,
       });
       return Agreement.fromJson(response.data['agreement'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Emails a 6-digit code to the signer. Must be verified before sign().
+  Future<void> sendSignOtp({required String id, required String signerRole}) async {
+    try {
+      await _dio.post('/api/agreements/$id/sign/send-otp', data: {'signer_role': signerRole});
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  Future<void> verifySignOtp({
+    required String id,
+    required String signerRole,
+    required String code,
+  }) async {
+    try {
+      await _dio.post('/api/agreements/$id/sign/verify-otp', data: {
+        'signer_role': signerRole,
+        'code': code,
+      });
     } on DioException catch (e) {
       throw _toException(e);
     }

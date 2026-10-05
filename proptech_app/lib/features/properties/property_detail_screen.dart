@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../app/theme/app_colors.dart';
-import '../leads/contact_owner_sheet.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/gallery_viewer_screen.dart';
@@ -12,6 +11,7 @@ import '../../core/widgets/video_tour_player.dart';
 import '../../core/api/token_store.dart';
 import '../profile/profile_service.dart';
 import '../visits/visit_service.dart';
+import '../leads/lead_service.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
@@ -146,9 +146,9 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     }
   }
 
-  /// "Contact Owner" -> enquiry sheet (saves a lead, then offers Call / Chat).
   void _contactOwner(Property property) {
-    showContactOwnerSheet(context, property);
+    LeadService.instance.createLead(propertyId: property.id); // lead banao, UI ko block nahi karta
+    context.push('/property/${property.id}/owner');
   }
 
   Future<void> _requestAgreement(Property property) async {

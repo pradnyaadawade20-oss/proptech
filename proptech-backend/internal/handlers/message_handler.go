@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -15,11 +16,12 @@ import (
 const maxMessageLen = 2000
 
 type MessageHandler struct {
-	repo *repository.MessageRepository
+	repo  *repository.MessageRepository
+	leads *repository.LeadRepository
 }
 
-func NewMessageHandler(repo *repository.MessageRepository) *MessageHandler {
-	return &MessageHandler{repo: repo}
+func NewMessageHandler(repo *repository.MessageRepository, leads *repository.LeadRepository) *MessageHandler {
+	return &MessageHandler{repo: repo, leads: leads}
 }
 
 func (h *MessageHandler) SendMessage(c *gin.Context) {
@@ -53,6 +55,13 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Lead hook: buyer->owner chat creates a lead, owner->buyer reply marks it "contacted".
+	if req.PropertyID != nil && *req.PropertyID != "" {
+		if lerr := h.leads.TouchChat(c.Request.Context(), *req.PropertyID, req.SenderID, req.ReceiverID, req.Text); lerr != nil {
+			log.Printf("lead touch (chat) failed: %v", lerr)
+		}
 	}
 
 	notify.NewMessage(req.SenderID, req.ReceiverID, req.Text)
