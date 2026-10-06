@@ -9,6 +9,11 @@ class Visit {
   final DateTime scheduledAt;
   final VisitStatus status;
 
+  /// Visitor's feedback after a completed visit: 'interested' | 'maybe' |
+  /// 'not_interested' | '' (not given yet).
+  final String feedbackInterest;
+  final String feedbackNote;
+
   const Visit({
     required this.id,
     this.propertyId = '',
@@ -17,7 +22,11 @@ class Visit {
     required this.visitorName,
     required this.scheduledAt,
     required this.status,
+    this.feedbackInterest = '',
+    this.feedbackNote = '',
   });
+
+  bool get hasFeedback => feedbackInterest.isNotEmpty;
 
   factory Visit.fromJson(Map<String, dynamic> json) {
     final statusName = json['status'] as String? ?? 'pending';
@@ -32,6 +41,8 @@ class Visit {
         (s) => s.name == statusName,
         orElse: () => VisitStatus.pending,
       ),
+      feedbackInterest: json['feedback_interest'] as String? ?? '',
+      feedbackNote: json['feedback_note'] as String? ?? '',
     );
   }
 }

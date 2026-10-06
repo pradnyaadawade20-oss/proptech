@@ -3,6 +3,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import 'visit.dart';
+import 'visit_feedback_sheet.dart';
 import 'visit_service.dart';
 
 class VisitsScreen extends StatefulWidget {
@@ -81,6 +82,23 @@ class _VisitsScreenState extends State<VisitsScreen> {
     }
   }
 
+  Future<void> _giveFeedback(Visit visit) async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
+      ),
+      builder: (_) => VisitFeedbackSheet(visit: visit),
+    );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks! Your feedback was shared with the owner.')),
+      );
+      await _refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,6 +138,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   isOwner: _ownerVisitIds.contains(v.id),
                   busy: _busyIds.contains(v.id),
                   onChangeStatus: (s) => _changeStatus(v, s),
+                  onFeedback: () => _giveFeedback(v),
                 );
               },
             ),
@@ -135,11 +154,13 @@ class _VisitCard extends StatelessWidget {
   final bool isOwner;
   final bool busy;
   final ValueChanged<VisitStatus> onChangeStatus;
+  final VoidCallback onFeedback;
   const _VisitCard({
     required this.visit,
     required this.isOwner,
     required this.busy,
     required this.onChangeStatus,
+    required this.onFeedback,
   });
 
   Color _statusColor(VisitStatus status) {
@@ -214,6 +235,53 @@ class _VisitCard extends StatelessWidget {
     ];
   }
 
+  /// Visitor: give / edit feedback. Owner: sees what the visitor said.
+  Widget _feedbackSection() {
+    if (!visit.hasFeedback) {
+      if (isOwner) {
+        return Text('Waiting for visitor feedback', style: AppTextStyles.bodySmall);
+      }
+      return OutlinedButton.icon(
+        onPressed: onFeedback,
+        icon: const Icon(Icons.rate_review_outlined, size: 20),
+        label: const Text('How was the visit?'),
+      );
+    }
+    final color = feedbackColor(visit.feedbackInterest);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm + 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(feedbackIcon(visit.feedbackInterest), size: 18, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isOwner ? 'Visitor: ${feedbackLabel(visit.feedbackInterest)}' : 'You: ${feedbackLabel(visit.feedbackInterest)}',
+                  style: AppTextStyles.bodyMedium.copyWith(color: color, fontWeight: FontWeight.w600),
+                ),
+                if (visit.feedbackNote.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(visit.feedbackNote, style: AppTextStyles.bodySmall),
+                ],
+              ],
+            ),
+          ),
+          if (!isOwner)
+            TextButton(onPressed: onFeedback, child: const Text('Edit')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final actions = _actions();
@@ -281,6 +349,10 @@ class _VisitCard extends StatelessWidget {
               ),
             ],
           ),
+          if (visit.status == VisitStatus.completed) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _feedbackSection(),
+          ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Row(

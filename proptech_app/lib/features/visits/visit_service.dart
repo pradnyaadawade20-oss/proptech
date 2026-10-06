@@ -44,6 +44,20 @@ class VisitService {
     }
   }
 
+  /// Visitor's feedback after a completed visit.
+  /// [interest] = 'interested' | 'maybe' | 'not_interested'.
+  Future<Visit> submitFeedback(String id, {required String interest, String note = ''}) async {
+    try {
+      final response = await _dio.post('/api/visits/$id/feedback', data: {
+        'interest': interest,
+        'note': note,
+      });
+      return Visit.fromJson(response.data['visit'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   Future<void> updateStatus(String id, VisitStatus status) async {
     try {
       await _dio.patch('/api/visits/$id/status', data: {'status': status.name});

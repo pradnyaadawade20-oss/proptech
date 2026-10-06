@@ -177,3 +177,58 @@ func nameOr(name, fallback string) string {
 	}
 	return name
 }
+
+// POST /api/visits/:id/feedback
+// The visitor tells the owner how the visit went (only after it is completed).
+func (h *VisitHandler) SubmitFeedback(c *gin.Context) {
+	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	visit, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "visit not found"})
+		return
+	}
+	if visit.VisitorID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the visitor can give feedback"})
+		return
+	}
+	if visit.Status != "completed" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "feedback can be given after the visit is completed"})
+		return
+	}
+
+	var req models.VisitFeedbackRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	visit, err = h.repo.SetFeedback(c.Request.Context(), id, req.Interest, req.Note)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Tell the owner.
+	if property, perr := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID); perr == nil && property.OwnerID != nil {
+		who := nameOr(visit.VisitorName, "The visitor")
+		var body string
+		switch req.Interest {
+		case "interested":
+			body = fmt.Sprintf("%s is interested in %s", who, visit.PropertyTitle)
+		case "maybe":
+			body = fmt.Sprintf("%s is still thinking about %s", who, visit.PropertyTitle)
+		default:
+			body = fmt.Sprintf("%s is not interested in %s", who, visit.PropertyTitle)
+		}
+		notify.SendRoute(*property.OwnerID, "visit", "Visit feedback", body, "/visits")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"visit": visit})
+}

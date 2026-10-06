@@ -3,8 +3,9 @@ package repository
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"proptech-backend/internal/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type VisitRepository struct {
@@ -16,7 +17,8 @@ func NewVisitRepository(db *pgxpool.Pool) *VisitRepository {
 }
 
 const visitSelectQuery = `
-	SELECT v.id, v.property_id, p.title, p.image_url, v.visitor_id, u.name, v.scheduled_at, v.status, v.created_at
+	SELECT v.id, v.property_id, p.title, p.image_url, v.visitor_id, u.name, v.scheduled_at, v.status, v.created_at,
+		COALESCE(v.feedback_interest, ''), COALESCE(v.feedback_note, ''), v.feedback_at
 	FROM visits v
 	JOIN properties p ON p.id = v.property_id
 	JOIN users u ON u.id = v.visitor_id
@@ -26,7 +28,8 @@ func scanVisit(row interface {
 	Scan(dest ...any) error
 }) (*models.Visit, error) {
 	var v models.Visit
-	err := row.Scan(&v.ID, &v.PropertyID, &v.PropertyTitle, &v.PropertyImageURL, &v.VisitorID, &v.VisitorName, &v.ScheduledAt, &v.Status, &v.CreatedAt)
+	err := row.Scan(&v.ID, &v.PropertyID, &v.PropertyTitle, &v.PropertyImageURL, &v.VisitorID, &v.VisitorName, &v.ScheduledAt, &v.Status, &v.CreatedAt,
+		&v.FeedbackInterest, &v.FeedbackNote, &v.FeedbackAt)
 	if err != nil {
 		return nil, err
 	}
@@ -101,4 +104,16 @@ func (r *VisitRepository) UpdateStatus(ctx context.Context, id string, status st
 func (r *VisitRepository) Delete(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM visits WHERE id = $1`, id)
 	return err
+}
+
+// SetFeedback stores (or overwrites) the visitor's feedback for a visit.
+func (r *VisitRepository) SetFeedback(ctx context.Context, id, interest, note string) (*models.Visit, error) {
+	_, err := r.db.Exec(ctx, `
+		UPDATE visits SET feedback_interest = $1, feedback_note = $2, feedback_at = NOW()
+		WHERE id = $3
+	`, interest, note, id)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, id)
 }
