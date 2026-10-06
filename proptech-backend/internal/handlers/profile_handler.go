@@ -5,6 +5,7 @@ import (
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
+	"proptech-backend/internal/privacy"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,14 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 	if user == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
+	}
+
+	// Other people never see your real phone / email.
+	if viewer, _ := middleware.GetUserID(c); viewer != user.ID {
+		masked := *user
+		masked.Phone = privacy.MaskPhone(user.Phone)
+		masked.Email = privacy.MaskEmail(user.Email)
+		user = &masked
 	}
 
 	c.JSON(http.StatusOK, gin.H{"user": user})

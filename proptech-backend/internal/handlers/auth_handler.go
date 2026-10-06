@@ -16,6 +16,7 @@ import (
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
+	"proptech-backend/internal/ratelimit"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,10 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 	ctx := c.Request.Context()
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	name := strings.TrimSpace(req.Name)
+	if blocked, retry := ratelimit.Hit(ctx, "auth-otp-send:"+email, 5, 15*time.Minute, 30*time.Minute); blocked {
+		ratelimit.Reject(c, retry)
+		return
+	}
 
 	user, existingHash, err := h.userRepo.GetAuthByEmail(ctx, email)
 	if err != nil {
@@ -215,6 +220,10 @@ func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 	ctx := c.Request.Context()
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	otp := strings.TrimSpace(req.OTP)
+	if blocked, retry := ratelimit.Hit(ctx, "auth-otp-verify:"+email, 10, 15*time.Minute, 30*time.Minute); blocked {
+		ratelimit.Reject(c, retry)
+		return
+	}
 
 	rec, err := h.otpRepo.Get(ctx, email)
 	if err != nil {

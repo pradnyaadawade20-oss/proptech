@@ -1,6 +1,9 @@
 package routes
 
 import (
+	"time"
+
+	"proptech-backend/internal/ratelimit"
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/middleware"
 
@@ -31,15 +34,16 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 		propertiesAuthed.POST("/:id/media", h.UploadPropertyMedia)
 		propertiesAuthed.DELETE("/:id/media/:mediaId", h.DeletePropertyMedia)
 		propertiesAuthed.POST("/:id/verify", h.VerifyProperty)
+		propertiesAuthed.GET("/:id/verification-photo-url", h.VerificationPhotoURL)
 	}
 }
 
 func RegisterAuthRoutes(router *gin.Engine, h *handlers.AuthHandler) {
 	auth := router.Group("/api/auth")
 	{
-		auth.POST("/send-otp", h.SendOTP)
-		auth.POST("/verify-otp", h.VerifyOTP)
-		auth.POST("/skip-otp", h.SkipOTP)
+		auth.POST("/send-otp", ratelimit.IP("auth-send-otp", 10, 15*time.Minute, 30*time.Minute), h.SendOTP)
+		auth.POST("/verify-otp", ratelimit.IP("auth-verify-otp", 20, 15*time.Minute, 30*time.Minute), h.VerifyOTP)
+		auth.POST("/skip-otp", ratelimit.IP("auth-skip-otp", 20, 15*time.Minute, 30*time.Minute), h.SkipOTP)
 		auth.POST("/google", h.GoogleLogin)
 		auth.PATCH("/users/:id/role", middleware.AuthRequired(), h.SwitchRole)
 	}
@@ -94,8 +98,8 @@ func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 		agreements.GET("/:id", h.GetAgreementByID)
 		agreements.POST("", h.CreateAgreement)
 		agreements.PUT("/:id/draft", h.UpdateDraft)
-		agreements.POST("/:id/sign/send-otp", h.SendSignOTP)
-		agreements.POST("/:id/sign/verify-otp", h.VerifySignOTP)
+		agreements.POST("/:id/sign/send-otp", ratelimit.User("agr-send-otp", 5, time.Hour, time.Hour), h.SendSignOTP)
+		agreements.POST("/:id/sign/verify-otp", ratelimit.User("agr-verify-otp", 10, time.Hour, time.Hour), h.VerifySignOTP)
 		agreements.POST("/:id/sign", h.SignAgreement)
 		agreements.PATCH("/:id/status", h.UpdateStatus)
 	}

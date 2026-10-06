@@ -12,6 +12,7 @@ import (
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
+	"proptech-backend/internal/signedurl"
 
 	"github.com/gin-gonic/gin"
 )
@@ -378,32 +379,12 @@ func (h *PropertyHandler) VerifyProperty(c *gin.Context) {
 		return
 	}
 
+	photoURL := ""
+	if q, err := signedurl.Query(verificationResource(id), signedURLTTL); err == nil {
+		photoURL = fmt.Sprintf("%s/api/properties/%s/verification-photo?%s", baseURL(c), id, q)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"is_verified":            true,
-		"verification_photo_url": fmt.Sprintf("%s/api/properties/%s/verification-photo", baseURL(c), id),
+		"verification_photo_url": photoURL,
 	})
-}
-
-// ServeVerificationPhoto: GET /api/properties/:id/verification-photo
-func (h *PropertyHandler) ServeVerificationPhoto(c *gin.Context) {
-	id := c.Param("id")
-	userID, err := middleware.GetUserID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	role, _ := c.Get("role")
-	isAdmin := userID == middleware.AdminUserID && role == "admin"
-	if !isAdmin && !h.requireOwner(c, id) {
-		return // requireOwner already wrote the 403/404
-	}
-
-	data, contentType, err := h.repo.GetVerificationPhoto(c.Request.Context(), id)
-	if err != nil || len(data) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no verification photo for this property"})
-		return
-	}
-	c.Header("Content-Type", contentType)
-	c.Header("Cache-Control", "private, max-age=3600")
-	c.Data(http.StatusOK, contentType, data)
 }
