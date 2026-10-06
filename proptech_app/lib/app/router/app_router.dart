@@ -32,6 +32,7 @@ import '../../features/favorites/favorites_screen.dart';
 import '../../features/agreement/agreement_request_screen.dart';
 import '../../features/agreement/draft_preview_screen.dart';
 import '../../features/agreement/agreement_status_screen.dart';
+import '../../features/profile/kyc_verification_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import 'main_shell.dart';
 
@@ -282,6 +283,10 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
     GoRoute(
       path: RouteNames.agreementStatus,
       builder: (context, state) => AgreementStatusScreen(agreementId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: RouteNames.kycVerification,
+      builder: (context, state) => const KycVerificationScreen(),
     ),
   ],
 );

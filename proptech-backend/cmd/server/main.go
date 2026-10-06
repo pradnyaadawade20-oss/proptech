@@ -8,6 +8,7 @@ import (
 
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
+	"proptech-backend/internal/kyc"
 	"proptech-backend/internal/mail"
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/migrate"
@@ -79,8 +80,17 @@ func main() {
 	messageRepo := repository.NewMessageRepository(dbPool)
 	messageHandler := handlers.NewMessageHandler(messageRepo, leadRepo)
 
+	// --- Track B: KYC (B3) — must exist before the agreement handler, which gates signing on it ---
+	kycProvider, kycHasher, err := kyc.FromEnv(cfg.AppEnv)
+	if err != nil {
+		log.Fatal("KYC setup: ", err)
+	}
+	log.Println("KYC provider:", kycProvider.Name())
+	kycRepo := repository.NewKYCRepository(dbPool)
+	kycHandler := handlers.NewKYCHandler(kycRepo, kycProvider, kycHasher)
+
 	agreementRepo := repository.NewAgreementRepository(dbPool)
-	agreementHandler := handlers.NewAgreementHandler(agreementRepo, mailer, leadRepo)
+	agreementHandler := handlers.NewAgreementHandler(agreementRepo, mailer, leadRepo, kycRepo)
 
 	brokerSubscriptionRepo := repository.NewBrokerSubscriptionRepository(dbPool)
 	brokerHandler := handlers.NewBrokerHandler(brokerSubscriptionRepo)
@@ -117,12 +127,22 @@ func main() {
 	routes.RegisterProfileRoutes(router, profileHandler)
 	routes.RegisterAgreementRoutes(router, agreementHandler)
 	routes.RegisterLeadRoutes(router, leadHandler) // Track B
+	routes.RegisterKYCRoutes(router, kycHandler)   // Track B (B3)
 	routes.RegisterBrokerRoutes(router, brokerHandler)
 	routes.RegisterNotificationRoutes(router, notificationHandler)
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 	adminHandler := handlers.NewAdminHandler(dbPool)
 	routes.RegisterAdminRoutes(router, adminHandler)
+	// Step 3: listing moderation (approval, reports, duplicate check)
+	moderationHandler := handlers.NewModerationHandler(dbPool)
+	routes.RegisterModerationRoutes(router, moderationHandler)
 	routes.RegisterReviewRoutes(router, reviewHandler)
+
+	// Rent lifecycle: leases, rent, deposit, move-in/out photos
+	leaseRepo := repository.NewLeaseRepository(dbPool)
+	leaseHandler := handlers.NewLeaseHandler(leaseRepo)
+	routes.RegisterLeaseRoutes(router, leaseHandler)
+	startLeaseJobs(context.Background(), leaseRepo)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {

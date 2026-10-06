@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
@@ -92,11 +94,31 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     super.dispose();
   }
 
+  /// Server says KYC is missing: offer to do it now. After KYC the user taps Sign again.
+  Future<void> _promptKyc() async {
+    if (!mounted) return;
+    final goKyc = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('KYC required'),
+        content: const Text('Complete Aadhaar KYC before signing this agreement. It only takes a minute.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Verify now')),
+        ],
+      ),
+    );
+    if (goKyc == true && mounted) await context.push(RouteNames.kycVerification);
+  }
+
   /// Sends an OTP to the signer's email and asks for it. true = verified.
   Future<bool> _verifySignOtp() async {
     final role = _isOwner ? 'owner' : 'tenant';
     try {
       await AgreementService.instance.sendSignOtp(id: widget.agreementId, signerRole: role);
+    } on KycRequiredException {
+      await _promptKyc();
+      return false;
     } catch (e) {
       if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -187,6 +209,10 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
           ),
         ),
       );
+    } on KycRequiredException {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      await _promptKyc();
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

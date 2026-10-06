@@ -8,6 +8,7 @@ import '../../core/session/user_session.dart';
 import '../auth/auth_service.dart';
 import '../chat/chat_avatar.dart';
 import 'profile_service.dart';
+import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -66,6 +67,7 @@ Future<void> _logout() async {
   }
   await AuthService.instance.logout();
   UserSession.instance.reset();
+  KycStore.instance.clear();
   if (mounted) context.go(RouteNames.login);
 }
 
@@ -150,6 +152,11 @@ Future<void> _logout() async {
             icon: Icons.chat_bubble_outline,
             title: 'Chats',
             onTap: () => context.go(RouteNames.chatList),
+          ),
+          _ProfileMenuTile(
+            icon: Icons.verified_user_outlined,
+            title: 'KYC Verification',
+            onTap: () => context.push(RouteNames.kycVerification),
           ),
           const Divider(height: AppSpacing.lg * 2),
           _ProfileMenuTile(

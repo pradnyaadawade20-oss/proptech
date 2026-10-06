@@ -16,3 +16,12 @@ func RegisterLeadRoutes(router *gin.Engine, h *handlers.LeadHandler) {
 		leads.PATCH("/:id/status", h.UpdateStatus)
 	}
 }
+func RegisterKYCRoutes(router *gin.Engine, h *handlers.KYCHandler) {
+	kycGroup := router.Group("/api/kyc")
+	kycGroup.Use(middleware.AuthRequired())
+	{
+		kycGroup.GET("/status", h.GetStatus)
+		kycGroup.POST("/aadhaar/send-otp", h.SendOTP)
+		kycGroup.POST("/aadhaar/verify-otp", h.VerifyOTP)
+	}
+}
