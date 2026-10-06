@@ -21,6 +21,9 @@ func NewModerationHandler(db *pgxpool.Pool) *ModerationHandler {
 	return &ModerationHandler{db: db, repo: repository.NewPropertyRepository(db)}
 }
 
+// Open reports from different users that hide a listing automatically.
+const autoHideReportCount = 3
+
 var validReportReasons = map[string]bool{
 	"spam": true, "fake_listing": true, "wrong_info": true,
 	"already_rented_sold": true, "duplicate": true, "inappropriate": true, "other": true,
@@ -134,6 +137,17 @@ func (h *ModerationHandler) Report(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "you have already reported this listing"})
 		return
 	}
+	// 3+ different users reported it -> hide automatically until an admin reviews.
+	hidden, err := h.db.Exec(c.Request.Context(),
+		`UPDATE properties SET approval_status = 'hidden', hidden_reason = 'reports'
+		 WHERE id = $1::uuid AND approval_status = 'approved'
+		   AND (SELECT COUNT(DISTINCT reporter_id) FROM property_reports
+		        WHERE property_id = $1::uuid AND status = 'open') >= $2`, id, autoHideReportCount)
+	if err == nil && hidden.RowsAffected() > 0 {
+		writeAudit(c.Request.Context(), h.db, "system", "property.auto_hide", "property", id,
+			gin.H{"approval_status": "approved"},
+			gin.H{"approval_status": "hidden", "reason": "reports", "report_count": autoHideReportCount})
+	}
 	c.JSON(http.StatusCreated, gin.H{"message": "report submitted"})
 }
 
@@ -176,8 +190,11 @@ func (h *ModerationHandler) AdminReview(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "a rejection reason is required"})
 		return
 	}
+	var oldStatus string
+	_ = h.db.QueryRow(c.Request.Context(),
+		`SELECT approval_status FROM properties WHERE id = $1::uuid`, c.Param("id")).Scan(&oldStatus)
 	tag, err := h.db.Exec(c.Request.Context(),
-		`UPDATE properties SET approval_status = $2, rejection_reason = $3, reviewed_at = NOW()
+		`UPDATE properties SET approval_status = $2, rejection_reason = $3, hidden_reason = '', reviewed_at = NOW()
 		 WHERE id = $1::uuid`, c.Param("id"), req.Status, strings.TrimSpace(req.Reason))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update listing"})
@@ -187,6 +204,9 @@ func (h *ModerationHandler) AdminReview(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "listing not found"})
 		return
 	}
+	writeAudit(c.Request.Context(), h.db, adminEmail(c), "property.review", "property", c.Param("id"),
+		gin.H{"approval_status": oldStatus},
+		gin.H{"approval_status": req.Status, "reason": strings.TrimSpace(req.Reason)})
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }
 
@@ -224,6 +244,9 @@ func (h *ModerationHandler) AdminResolveReport(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be dismissed or resolved"})
 		return
 	}
+	var oldReport string
+	_ = h.db.QueryRow(c.Request.Context(),
+		`SELECT status FROM property_reports WHERE id = $1::uuid`, c.Param("id")).Scan(&oldReport)
 	tag, err := h.db.Exec(c.Request.Context(),
 		`UPDATE property_reports SET status = $2, admin_note = $3, resolved_at = NOW() WHERE id = $1::uuid`,
 		c.Param("id"), req.Status, strings.TrimSpace(req.AdminNote))
@@ -235,5 +258,7 @@ func (h *ModerationHandler) AdminResolveReport(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
 		return
 	}
+	writeAudit(c.Request.Context(), h.db, adminEmail(c), "report.resolve", "report", c.Param("id"),
+		gin.H{"status": oldReport}, gin.H{"status": req.Status, "note": strings.TrimSpace(req.AdminNote)})
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }

@@ -10,6 +10,7 @@ import (
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
+	"proptech-backend/internal/privacy"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -69,8 +70,9 @@ func (h *LeadHandler) Create(c *gin.Context) {
 	c.JSON(status, gin.H{
 		"lead":        lead,
 		"is_new":      created,
-		"owner_name":  ownerName,
-		"owner_phone": ownerPhone,
+		"owner_name":         ownerName,
+		"owner_phone_masked": privacy.MaskPhone(ownerPhone),
+		"contact_via":        "relay", // POST /api/contact/request-call {lead_id}
 	})
 }
 

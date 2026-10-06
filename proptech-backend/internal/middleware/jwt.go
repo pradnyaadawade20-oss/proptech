@@ -82,6 +82,10 @@ func AuthRequired() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
 			return
 		}
+		if isSuspended(c.Request.Context(), userID) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Your account has been suspended. Contact support.", "code": "account_suspended"})
+			return
+		}
 		c.Set("user_id", userID)
 		if email, ok := claims["email"].(string); ok {
 			c.Set("email", email)
