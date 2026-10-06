@@ -321,6 +321,11 @@ func (h *AuthHandler) completeLogin(c *gin.Context, email string, rec *repositor
 		}
 	}
 
+	if suspended, _ := h.userRepo.IsSuspended(ctx, user.ID); suspended {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Your account has been suspended. Contact support.", "code": "account_suspended"})
+		return
+	}
+
 	token, err := middleware.GenerateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})

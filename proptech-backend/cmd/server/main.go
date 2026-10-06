@@ -109,6 +109,14 @@ func main() {
 	// Auto notifications (chat, visits, agreements, listings, login) use this.
 	notify.Init(dbPool, notificationRepo, deviceTokenRepo, pushSender)
 
+	middleware.SetSuspensionChecker(func(ctx context.Context, userID string) bool {
+		var s bool
+		if err := dbPool.QueryRow(ctx, `SELECT suspended_at IS NOT NULL FROM users WHERE id = $1::uuid`, userID).Scan(&s); err != nil {
+			return false
+		}
+		return s
+	})
+
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {

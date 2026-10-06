@@ -127,29 +127,6 @@ func (h *AdminHandler) Agreements(c *gin.Context) {
 		ORDER BY a.created_at DESC LIMIT 1000`)
 }
 
-// SetVerified: PATCH /api/admin/properties/:id/verified {verified: bool}
-func (h *AdminHandler) SetVerified(c *gin.Context) {
-	var req struct {
-		Verified *bool `json:"verified" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "verified (true/false) is required"})
-		return
-	}
-	tag, err := h.db.Exec(c.Request.Context(), `UPDATE properties SET is_verified = $1 WHERE id = $2::uuid`, *req.Verified, c.Param("id"))
-	h.done(c, tag.RowsAffected(), err, "Property updated")
-}
-
-func (h *AdminHandler) DeleteProperty(c *gin.Context) {
-	tag, err := h.db.Exec(c.Request.Context(), `DELETE FROM properties WHERE id = $1::uuid`, c.Param("id"))
-	h.done(c, tag.RowsAffected(), err, "Property deleted")
-}
-
-func (h *AdminHandler) DeleteUser(c *gin.Context) {
-	tag, err := h.db.Exec(c.Request.Context(), `DELETE FROM users WHERE id = $1::uuid`, c.Param("id"))
-	h.done(c, tag.RowsAffected(), err, "User deleted")
-}
-
 func (h *AdminHandler) done(c *gin.Context, affected int64, err error, msg string) {
 	switch {
 	case err != nil:

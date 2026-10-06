@@ -30,6 +30,9 @@ func AdminRequired() gin.HandlerFunc {
 			return
 		}
 		c.Set("user_id", uid)
+		if email, ok := claims["email"].(string); ok {
+			c.Set("admin_email", email)
+		}
 		c.Next()
 	}
 }
