@@ -12,6 +12,7 @@ import '../../core/api/token_store.dart';
 import '../profile/profile_service.dart';
 import '../visits/visit_service.dart';
 import '../leads/lead_service.dart';
+import '../moderation/report_listing_sheet.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
@@ -304,6 +305,11 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                             _RoundIconButton(
                               icon: Icons.share_outlined,
                               onTap: () => _shareProperty(property),
+                            ),
+                            const SizedBox(width: 8),
+                            _RoundIconButton(
+                              icon: Icons.flag_outlined,
+                              onTap: () => ReportListingSheet.show(context, property.id),
                             ),
                             const SizedBox(width: 8),
                             _RoundIconButton(

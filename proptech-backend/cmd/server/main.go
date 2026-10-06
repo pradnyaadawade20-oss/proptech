@@ -133,7 +133,16 @@ func main() {
 	routes.RegisterDeviceTokenRoutes(router, deviceTokenHandler)
 	adminHandler := handlers.NewAdminHandler(dbPool)
 	routes.RegisterAdminRoutes(router, adminHandler)
+	// Step 3: listing moderation (approval, reports, duplicate check)
+	moderationHandler := handlers.NewModerationHandler(dbPool)
+	routes.RegisterModerationRoutes(router, moderationHandler)
 	routes.RegisterReviewRoutes(router, reviewHandler)
+
+	// Rent lifecycle: leases, rent, deposit, move-in/out photos
+	leaseRepo := repository.NewLeaseRepository(dbPool)
+	leaseHandler := handlers.NewLeaseHandler(leaseRepo)
+	routes.RegisterLeaseRoutes(router, leaseHandler)
+	startLeaseJobs(context.Background(), leaseRepo)
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
