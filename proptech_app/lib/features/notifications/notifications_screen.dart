@@ -103,8 +103,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.description_outlined;
       case 'property':
         return Icons.home_work_outlined;
-      case 'offer':
-        return Icons.local_offer_outlined;
       default:
         return Icons.notifications_none;
     }

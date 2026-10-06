@@ -5,7 +5,7 @@ import "time"
 type Notification struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
-	Type      string    `json:"type"` // property | visit | agreement | message | offer | account
+	Type      string    `json:"type"` // property | visit | agreement | message | account
 	Title     string    `json:"title"`
 	Body      string    `json:"body"`
 	Route     string    `json:"route"`
@@ -15,7 +15,7 @@ type Notification struct {
 
 type CreateNotificationRequest struct {
 	UserID string `json:"user_id" binding:"required"`
-	Type   string `json:"type" binding:"required,oneof=property visit agreement message offer account"`
+	Type   string `json:"type" binding:"required,oneof=property visit agreement message account"`
 	Title  string `json:"title" binding:"required"`
 	Body   string `json:"body" binding:"required"`
 	Route  string `json:"route"`
