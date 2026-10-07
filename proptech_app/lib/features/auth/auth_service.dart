@@ -99,6 +99,35 @@ class AuthService {
     }
   }
 
+  /// Forgot password step 1: emails a 6-digit code. The backend answers the
+  /// same whether or not the email has an account.
+  Future<AuthResult> sendPasswordReset(String email) async {
+    try {
+      await _dio.post('/api/auth/forgot-password', data: {'email': email});
+      return AuthResult.success();
+    } on DioException catch (e) {
+      return AuthResult.failure(_extractError(e));
+    }
+  }
+
+  /// Forgot password step 2: code + new password.
+  Future<AuthResult> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.post('/api/auth/reset-password', data: {
+        'email': email,
+        'otp': otp,
+        'new_password': newPassword,
+      });
+      return AuthResult.success();
+    } on DioException catch (e) {
+      return AuthResult.failure(_extractError(e));
+    }
+  }
+
   Future<void> _saveSession(dynamic data) async {
     final token = data['token'] as String;
     final user = data['user'] as Map<String, dynamic>;

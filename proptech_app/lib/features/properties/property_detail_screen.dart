@@ -15,6 +15,7 @@ import '../leads/lead_service.dart';
 import '../moderation/report_listing_sheet.dart';
 import '../../app/router/route_names.dart';
 import '../compare/compare_store.dart';
+import '../reviews/property_reviews_section.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
@@ -703,6 +704,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                         ),
                       ),
                     ),
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Reviews (public; writing needs a completed visit).
+                    PropertyReviewsSection(propertyId: property.id),
                     const SizedBox(height: AppSpacing.xl),
 
                     // Similar Properties

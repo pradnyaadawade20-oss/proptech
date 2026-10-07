@@ -11,6 +11,7 @@ import '../../features/properties/property.dart';
 import '../../features/properties/property_store.dart';
 import 'route_names.dart';
 import '../../features/auth/otp_screen.dart';
+import '../../features/auth/forgot_password_screen.dart';
 import '../../features/owner/owner_dashboard_screen.dart';
 import '../../features/broker/broker_dashboard_screen.dart';
 import '../../features/visits/visits_screen.dart';
@@ -52,6 +53,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.login,
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.forgotPassword,
+      builder: (context, state) => ForgotPasswordScreen(
+        initialEmail: state.extra is String ? state.extra as String : '',
+      ),
     ),
     GoRoute(
       path: RouteNames.otpVerification,

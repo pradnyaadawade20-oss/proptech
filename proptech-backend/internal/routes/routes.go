@@ -142,3 +142,11 @@ func RegisterReviewRoutes(router *gin.Engine, h *handlers.ReviewHandler) {
 		reviewsAuthed.GET("/eligibility", h.CanReview)
 	}
 }
+
+func RegisterPasswordResetRoutes(router *gin.Engine, h *handlers.PasswordResetHandler) {
+	auth := router.Group("/api/auth")
+	{
+		auth.POST("/forgot-password", h.ForgotPassword)
+		auth.POST("/reset-password", h.ResetPassword)
+	}
+}

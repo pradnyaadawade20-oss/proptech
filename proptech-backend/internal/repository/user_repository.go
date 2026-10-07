@@ -136,3 +136,12 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, id string, req model
 		WHERE id = $3
 		RETURNING `+userColumns, req.Name, req.AvatarURL, id))
 }
+
+// SetPasswordByEmail stores a new bcrypt hash. Receiving the reset code by
+// email proves ownership, so the email is marked verified too.
+func (r *UserRepository) SetPasswordByEmail(ctx context.Context, email, passwordHash string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE users SET password_hash = $1, email_verified = TRUE WHERE LOWER(email) = $2
+	`, passwordHash, normalizeEmail(email))
+	return err
+}

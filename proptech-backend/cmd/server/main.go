@@ -65,6 +65,7 @@ func main() {
 		DevLogOTP:   cfg.DevLogOTP,
 	})
 	authHandler := handlers.NewAuthHandler(userRepo, otpRepo, mailer, cfg.DevSkipOTP)
+	passwordResetHandler := handlers.NewPasswordResetHandler(userRepo, repository.NewPasswordResetRepository(dbPool), mailer)
 	profileHandler := handlers.NewProfileHandler(userRepo)
 
 	favoriteRepo := repository.NewFavoriteRepository(dbPool)
@@ -129,6 +130,7 @@ func main() {
 
 	routes.RegisterPropertyRoutes(router, propertyHandler)
 	routes.RegisterAuthRoutes(router, authHandler)
+	routes.RegisterPasswordResetRoutes(router, passwordResetHandler)
 	routes.RegisterFavoriteRoutes(router, favoriteHandler)
 	routes.RegisterVisitRoutes(router, visitHandler)
 	routes.RegisterMessageRoutes(router, messageHandler)

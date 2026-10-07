@@ -353,8 +353,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             alignment: const Alignment(1, -0.14),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () =>
-                                  _snack('Password reset is coming soon'),
+                              onTap: () => context.push(
+                                  RouteNames.forgotPassword,
+                                  extra: _emailController.text.trim()),
                               child: Text(
                                 'Forgot password?',
                                 style: GoogleFonts.plusJakartaSans(

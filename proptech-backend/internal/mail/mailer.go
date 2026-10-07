@@ -194,3 +194,32 @@ func (m *Mailer) sendSMTP(ctx context.Context, to, subject, text string) error {
 	}
 	return c.Quit()
 }
+
+// SendPasswordReset emails a password-reset code to `to`.
+func (m *Mailer) SendPasswordReset(ctx context.Context, to, otp string) error {
+	subject := "Reset your PropTech password"
+	text := fmt.Sprintf(
+		"Your PropTech password reset code is %s.\n\nIt expires in 10 minutes. If you didn't request this, you can ignore this email — your password will not change.",
+		otp,
+	)
+	html := fmt.Sprintf(
+		`<div style="font-family:Arial,sans-serif;max-width:420px;margin:auto">`+
+			`<h2>Reset your password</h2>`+
+			`<p>Your PropTech password reset code is:</p>`+
+			`<p style="font-size:32px;letter-spacing:8px;font-weight:bold">%s</p>`+
+			`<p style="color:#666">It expires in 10 minutes. If you didn't request this, you can ignore this email — your password will not change.</p>`+
+			`</div>`, otp,
+	)
+
+	switch {
+	case m.cfg.BrevoAPIKey != "":
+		return m.sendBrevo(ctx, to, subject, html, text)
+	case m.cfg.Host != "":
+		return m.sendSMTP(ctx, to, subject, text)
+	case m.cfg.DevLogOTP:
+		log.Printf("[DEV] email not configured — password reset code for %s is %s", to, otp)
+		return nil
+	default:
+		return errors.New("email is not configured (set SMTP_HOST or BREVO_API_KEY)")
+	}
+}
