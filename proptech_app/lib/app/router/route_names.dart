@@ -36,7 +36,12 @@ class RouteNames {
   // screen (Owner/Broker Dashboard) — same GlobalKey conflict as chatListStandalone.
   static const profileStandalone = '/profile-view';
   static const emiCalculator = '/emi-calculator';
+  static const compare = '/compare';
   static const kycVerification = '/kyc'; // B3: Aadhaar KYC (needed before signing agreements)
+
+  // Lease / rent lifecycle
+  static const leases = '/leases';
+  static const leaseDetail = '/lease/:id'; // also the target of lease/rent/deposit notifications
 
   // Owner
   static const ownerDashboard = '/owner';

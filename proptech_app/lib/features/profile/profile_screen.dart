@@ -144,6 +144,11 @@ Future<void> _logout() async {
             onTap: () => context.push(RouteNames.myVisits),
           ),
           _ProfileMenuTile(
+            icon: Icons.key_outlined,
+            title: 'My Leases & Rent',
+            onTap: () => context.push(RouteNames.leases),
+          ),
+          _ProfileMenuTile(
             icon: Icons.favorite_border,
             title: 'Favorites',
             onTap: () => context.push(RouteNames.favorites),

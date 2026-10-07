@@ -13,6 +13,8 @@ import '../profile/profile_service.dart';
 import '../visits/visit_service.dart';
 import '../leads/lead_service.dart';
 import '../moderation/report_listing_sheet.dart';
+import '../../app/router/route_names.dart';
+import '../compare/compare_store.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
@@ -108,6 +110,23 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     );
   }
 
+
+  void _toggleCompare(Property property) {
+    final store = CompareStore.instance;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    if (!store.contains(property.id) && store.count >= CompareStore.maxItems) {
+      messenger.showSnackBar(const SnackBar(content: Text('You can compare up to 3 properties. Remove one first.')));
+      return;
+    }
+    store.toggle(property.id);
+    setState(() {});
+    final added = store.contains(property.id);
+    messenger.showSnackBar(SnackBar(
+      content: Text(added ? 'Added to compare (${store.count}/${CompareStore.maxItems})' : 'Removed from compare'),
+      action: store.count >= 2 ? SnackBarAction(label: 'COMPARE', onPressed: () => context.push(RouteNames.compare)) : null,
+    ));
+  }
 
   void _toggleFavorite(Property property) {
     PropertyStore.instance.toggleFavorite(property.id);
@@ -305,6 +324,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                             _RoundIconButton(
                               icon: Icons.share_outlined,
                               onTap: () => _shareProperty(property),
+                            ),
+                            const SizedBox(width: 8),
+                            _RoundIconButton(
+                              icon: Icons.compare_arrows,
+                              iconColor: CompareStore.instance.contains(property.id) ? AppColors.primary : AppColors.textPrimary,
+                              onTap: () => _toggleCompare(property),
                             ),
                             const SizedBox(width: 8),
                             _RoundIconButton(

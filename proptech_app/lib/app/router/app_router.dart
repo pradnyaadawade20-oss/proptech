@@ -34,6 +34,8 @@ import '../../features/agreement/draft_preview_screen.dart';
 import '../../features/agreement/agreement_status_screen.dart';
 import '../../features/profile/kyc_verification_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
+import '../../features/properties/emi_calculator_screen.dart';
+import '../../features/compare/compare_screen.dart';
 import 'main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -191,6 +193,17 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.notifications,
       builder: (context, state) => const NotificationsScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.compare,
+      builder: (context, state) => const CompareScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.emiCalculator,
+      builder: (context, state) {
+        final amount = state.extra is double ? state.extra as double : null;
+        return EmiCalculatorScreen(initialLoanAmount: amount);
+      },
     ),
     GoRoute(
       path: '/property/:id/owner',

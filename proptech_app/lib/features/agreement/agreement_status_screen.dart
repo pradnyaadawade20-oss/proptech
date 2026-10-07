@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../app/theme/app_colors.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
+import '../lease/lease_service.dart';
 
 /// Step 4: shows the overall status of an agreement as a simple vertical
 /// timeline — requested -> draft ready -> signatures -> completed.
@@ -168,6 +170,26 @@ class _AgreementStatusScreenState extends State<AgreementStatusScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.home_work_outlined),
+                label: const Text('View lease & rent'),
+                onPressed: () async {
+                  try {
+                    final lease = await LeaseService.instance.leaseForAgreement(agreement.id);
+                    if (!mounted) return;
+                    context.push('/lease/${lease.id}');
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                    );
+                  }
+                },
               ),
             ),
           ],
