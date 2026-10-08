@@ -62,6 +62,7 @@ func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 		visits.GET("", h.GetVisits)
 		visits.POST("", h.CreateVisit)
 		visits.PATCH("/:id/status", h.UpdateVisitStatus)
+		visits.PATCH("/:id/reschedule", h.RescheduleVisit)
 		visits.POST("/:id/feedback", h.SubmitFeedback)
 		visits.DELETE("/:id", h.DeleteVisit)
 	}

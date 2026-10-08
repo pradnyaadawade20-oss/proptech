@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// maxReschedules caps how many times one visit can be moved.
+const maxReschedules = 3
 
 type VisitHandler struct {
 	repo         *repository.VisitRepository
@@ -231,4 +235,75 @@ func (h *VisitHandler) SubmitFeedback(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"visit": visit})
+}
+
+// PATCH /api/visits/:id/reschedule   body: {"scheduled_at": "<RFC3339>"}
+// Visitor or property owner can move a pending/confirmed visit to a new time.
+//   visitor reschedules -> status goes back to "pending" (owner re-confirms)
+//   owner reschedules   -> status becomes "confirmed" (visitor is told the new time)
+func (h *VisitHandler) RescheduleVisit(c *gin.Context) {
+	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.userCanActOnVisit(c, id, userID) {
+		return
+	}
+
+	var req models.RescheduleVisitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	visit, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "visit not found"})
+		return
+	}
+	if visit.Status != "pending" && visit.Status != "confirmed" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "only upcoming (pending or confirmed) visits can be rescheduled"})
+		return
+	}
+	if visit.RescheduleCount >= maxReschedules {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("this visit was already rescheduled %d times", maxReschedules)})
+		return
+	}
+	if !req.ScheduledAt.After(time.Now().Add(15 * time.Minute)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please pick a time in the future"})
+		return
+	}
+	if req.ScheduledAt.Equal(visit.ScheduledAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "new time is the same as the current time"})
+		return
+	}
+
+	actorIsVisitor := visit.VisitorID == userID
+	newStatus := "confirmed"
+	if actorIsVisitor {
+		newStatus = "pending"
+	}
+
+	updated, err := h.repo.Reschedule(c.Request.Context(), id, req.ScheduledAt, newStatus)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Tell the other party.
+	when := updated.ScheduledAt.Local().Format("2 Jan, 3:04 PM")
+	if actorIsVisitor {
+		if property, perr := h.propertyRepo.GetByID(c.Request.Context(), updated.PropertyID); perr == nil && property.OwnerID != nil {
+			notify.SendRoute(*property.OwnerID, "visit", "Visit rescheduled",
+				fmt.Sprintf("%s moved the visit to %s to %s — please confirm", nameOr(updated.VisitorName, "The visitor"), updated.PropertyTitle, when), "/visits")
+		}
+	} else {
+		notify.SendRoute(updated.VisitorID, "visit", "Visit rescheduled",
+			fmt.Sprintf("Your visit to %s was moved to %s", updated.PropertyTitle, when), "/visits")
+	}
+
+	c.JSON(http.StatusOK, gin.H{"visit": updated})
 }

@@ -82,6 +82,67 @@ class _VisitsScreenState extends State<VisitsScreen> {
     }
   }
 
+  Future<void> _reschedule(Visit visit) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: visit.scheduledAt.isAfter(now) ? visit.scheduledAt : now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+      helpText: 'Select new date',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(visit.scheduledAt),
+      helpText: 'Select new time',
+    );
+    if (time == null || !mounted) return;
+
+    final newTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!newTime.isAfter(now.add(const Duration(minutes: 15)))) {
+      messenger.showSnackBar(const SnackBar(content: Text('Please pick a time in the future')));
+      return;
+    }
+    if (newTime == visit.scheduledAt) {
+      messenger.showSnackBar(const SnackBar(content: Text('That is the same time as the current booking')));
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reschedule visit?'),
+        content: Text(
+          '${visit.propertyTitle}\n'
+          'New time: ${newTime.day}/${newTime.month}/${newTime.year}, ${time.format(ctx)}',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Back')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _busyIds.add(visit.id));
+    try {
+      await VisitService.instance.reschedule(visit.id, newTime);
+      messenger.showSnackBar(const SnackBar(content: Text('Visit rescheduled')));
+      await _refresh();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not reschedule: ${e.toString().replaceFirst('Exception: ', '')}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(visit.id));
+    }
+  }
+
   Future<void> _giveFeedback(Visit visit) async {
     final sent = await showModalBottomSheet<bool>(
       context: context,
@@ -139,6 +200,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   busy: _busyIds.contains(v.id),
                   onChangeStatus: (s) => _changeStatus(v, s),
                   onFeedback: () => _giveFeedback(v),
+                  onReschedule: () => _reschedule(v),
                 );
               },
             ),
@@ -155,12 +217,14 @@ class _VisitCard extends StatelessWidget {
   final bool busy;
   final ValueChanged<VisitStatus> onChangeStatus;
   final VoidCallback onFeedback;
+  final VoidCallback onReschedule;
   const _VisitCard({
     required this.visit,
     required this.isOwner,
     required this.busy,
     required this.onChangeStatus,
     required this.onFeedback,
+    required this.onReschedule,
   });
 
   Color _statusColor(VisitStatus status) {
@@ -201,6 +265,13 @@ class _VisitCard extends StatelessWidget {
     final s = visit.status;
     if (s == VisitStatus.completed || s == VisitStatus.cancelled) return const [];
 
+    final reschedule = visit.canReschedule
+        ? OutlinedButton(
+            onPressed: busy ? null : onReschedule,
+            child: const Text('Reschedule'),
+          )
+        : null;
+
     if (isOwner) {
       if (s == VisitStatus.pending) {
         return [
@@ -208,6 +279,7 @@ class _VisitCard extends StatelessWidget {
             onPressed: busy ? null : () => onChangeStatus(VisitStatus.cancelled),
             child: const Text('Decline'),
           ),
+          if (reschedule != null) reschedule,
           ElevatedButton(
             onPressed: busy ? null : () => onChangeStatus(VisitStatus.confirmed),
             child: const Text('Confirm'),
@@ -220,6 +292,7 @@ class _VisitCard extends StatelessWidget {
           onPressed: busy ? null : () => onChangeStatus(VisitStatus.cancelled),
           child: const Text('Cancel'),
         ),
+        if (reschedule != null) reschedule,
         ElevatedButton(
           onPressed: busy ? null : () => onChangeStatus(VisitStatus.completed),
           child: const Text('Mark completed'),
@@ -232,6 +305,7 @@ class _VisitCard extends StatelessWidget {
         onPressed: busy ? null : () => onChangeStatus(VisitStatus.cancelled),
         child: const Text('Cancel visit'),
       ),
+      if (reschedule != null) reschedule,
     ];
   }
 
@@ -333,6 +407,8 @@ class _VisitCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(_dateTime(context), style: AppTextStyles.bodySmall),
+                    if (visit.rescheduleCount > 0)
+                      Text('Rescheduled', style: AppTextStyles.caption.copyWith(color: Colors.orange)),
                   ],
                 ),
               ),
@@ -355,14 +431,11 @@ class _VisitCard extends StatelessWidget {
           ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                for (var i = 0; i < actions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: AppSpacing.sm),
-                  actions[i],
-                ],
-              ],
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: actions,
             ),
           ],
         ],

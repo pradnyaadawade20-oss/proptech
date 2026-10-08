@@ -58,6 +58,19 @@ class VisitService {
     }
   }
 
+  /// Moves a pending/confirmed visit to [scheduledAt]. Visitor reschedule →
+  /// back to pending; owner reschedule → confirmed.
+  Future<Visit> reschedule(String id, DateTime scheduledAt) async {
+    try {
+      final response = await _dio.patch('/api/visits/$id/reschedule', data: {
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+      });
+      return Visit.fromJson(response.data['visit'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   Future<void> updateStatus(String id, VisitStatus status) async {
     try {
       await _dio.patch('/api/visits/$id/status', data: {'status': status.name});

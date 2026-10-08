@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"proptech-backend/internal/models"
 
@@ -18,7 +19,8 @@ func NewVisitRepository(db *pgxpool.Pool) *VisitRepository {
 
 const visitSelectQuery = `
 	SELECT v.id, v.property_id, p.title, p.image_url, v.visitor_id, u.name, v.scheduled_at, v.status, v.created_at,
-		COALESCE(v.feedback_interest, ''), COALESCE(v.feedback_note, ''), v.feedback_at
+		COALESCE(v.feedback_interest, ''), COALESCE(v.feedback_note, ''), v.feedback_at,
+		COALESCE(v.reschedule_count, 0), v.rescheduled_at
 	FROM visits v
 	JOIN properties p ON p.id = v.property_id
 	JOIN users u ON u.id = v.visitor_id
@@ -29,7 +31,7 @@ func scanVisit(row interface {
 }) (*models.Visit, error) {
 	var v models.Visit
 	err := row.Scan(&v.ID, &v.PropertyID, &v.PropertyTitle, &v.PropertyImageURL, &v.VisitorID, &v.VisitorName, &v.ScheduledAt, &v.Status, &v.CreatedAt,
-		&v.FeedbackInterest, &v.FeedbackNote, &v.FeedbackAt)
+		&v.FeedbackInterest, &v.FeedbackNote, &v.FeedbackAt, &v.RescheduleCount, &v.RescheduledAt)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +114,20 @@ func (r *VisitRepository) SetFeedback(ctx context.Context, id, interest, note st
 		UPDATE visits SET feedback_interest = $1, feedback_note = $2, feedback_at = NOW()
 		WHERE id = $3
 	`, interest, note, id)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+// Reschedule moves a visit to a new time, sets its new status and bumps the
+// reschedule counter.
+func (r *VisitRepository) Reschedule(ctx context.Context, id string, scheduledAt time.Time, status string) (*models.Visit, error) {
+	_, err := r.db.Exec(ctx, `
+		UPDATE visits
+		SET scheduled_at = $1, status = $2, reschedule_count = COALESCE(reschedule_count, 0) + 1, rescheduled_at = NOW()
+		WHERE id = $3
+	`, scheduledAt, status, id)
 	if err != nil {
 		return nil, err
 	}

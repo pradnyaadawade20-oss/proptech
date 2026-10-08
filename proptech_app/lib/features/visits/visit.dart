@@ -14,6 +14,9 @@ class Visit {
   final String feedbackInterest;
   final String feedbackNote;
 
+  /// How many times this visit was rescheduled.
+  final int rescheduleCount;
+
   const Visit({
     required this.id,
     this.propertyId = '',
@@ -24,9 +27,15 @@ class Visit {
     required this.status,
     this.feedbackInterest = '',
     this.feedbackNote = '',
+    this.rescheduleCount = 0,
   });
 
   bool get hasFeedback => feedbackInterest.isNotEmpty;
+
+  bool get isUpcoming => status == VisitStatus.pending || status == VisitStatus.confirmed;
+
+  /// Mirrors the backend cap (maxReschedules = 3).
+  bool get canReschedule => isUpcoming && rescheduleCount < 3;
 
   factory Visit.fromJson(Map<String, dynamic> json) {
     final statusName = json['status'] as String? ?? 'pending';
@@ -43,6 +52,7 @@ class Visit {
       ),
       feedbackInterest: json['feedback_interest'] as String? ?? '',
       feedbackNote: json['feedback_note'] as String? ?? '',
+      rescheduleCount: (json['reschedule_count'] as num?)?.toInt() ?? 0,
     );
   }
 }

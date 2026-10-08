@@ -17,6 +17,10 @@ type Visit struct {
 	FeedbackInterest string     `json:"feedback_interest"`
 	FeedbackNote     string     `json:"feedback_note"`
 	FeedbackAt       *time.Time `json:"feedback_at"`
+
+	// How many times this visit was rescheduled (and when last).
+	RescheduleCount int        `json:"reschedule_count"`
+	RescheduledAt   *time.Time `json:"rescheduled_at"`
 }
 
 type CreateVisitRequest struct {
@@ -32,4 +36,8 @@ type UpdateVisitStatusRequest struct {
 type VisitFeedbackRequest struct {
 	Interest string `json:"interest" binding:"required,oneof=interested maybe not_interested"`
 	Note     string `json:"note" binding:"max=500"`
+}
+
+type RescheduleVisitRequest struct {
+	ScheduledAt time.Time `json:"scheduled_at" binding:"required"`
 }
