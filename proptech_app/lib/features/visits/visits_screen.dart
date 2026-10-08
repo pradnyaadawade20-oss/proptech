@@ -44,9 +44,11 @@ class _VisitsScreenState extends State<VisitsScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _load());
-    await _future.catchError((_) => <Visit>[]);
-  }
+  setState(() {
+    _future = _load();
+  });
+  await _future.catchError((_) => <Visit>[]);
+}
 
   Future<void> _changeStatus(Visit visit, VisitStatus status) async {
     if (status == VisitStatus.cancelled) {
