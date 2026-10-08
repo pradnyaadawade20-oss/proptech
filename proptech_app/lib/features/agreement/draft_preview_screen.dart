@@ -8,6 +8,7 @@ import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
+import 'agreement_status_widgets.dart';
 import 'signature_screen.dart';
 
 /// Step 2/3: shows the drafted agreement terms and lets the current user
@@ -42,7 +43,22 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
   bool get _isOwner => _currentUserId != null && _currentUserId == _agreement?.ownerId;
   String get _currentUserName => _isOwner ? (_agreement?.ownerName ?? '') : (_agreement?.tenantName ?? '');
 
-  bool get _isDraftEditable => _isOwner && _agreement?.status == AgreementStatus.requested;
+  // Owner can edit until anyone has signed (backend allows it too), not only on the first save.
+  bool get _isDraftEditable =>
+      _isOwner &&
+      !(_agreement?.ownerHasSigned ?? false) &&
+      !(_agreement?.tenantHasSigned ?? false) &&
+      const {
+        AgreementStatus.requested,
+        AgreementStatus.draftReady,
+        AgreementStatus.awaitingSignatures,
+      }.contains(_agreement?.status);
+
+  // Rejected / cancelled / expired: read-only, no signing.
+  bool get _isClosed => _agreement?.status.isClosedWithoutSigning ?? false;
+
+  // The owner has not filled in the draft yet, so there is nothing to sign.
+  bool get _waitingForOwner => !_isOwner && _agreement?.status == AgreementStatus.requested;
   bool get _hasSignedAlready =>
       _isOwner ? (_agreement?.ownerHasSigned ?? false) : (_agreement?.tenantHasSigned ?? false);
 
@@ -259,6 +275,13 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         elevation: 0,
         foregroundColor: AppColors.textPrimary,
         title: Text('Agreement Draft', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        actions: [
+          IconButton(
+            tooltip: 'Agreement status',
+            icon: const Icon(Icons.timeline_outlined),
+            onPressed: () => context.push(RouteNames.agreementStatus.replaceFirst(':id', widget.agreementId)),
+          ),
+        ],
       ),
       body: SafeArea(
         child: _loading
@@ -289,6 +312,46 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 14),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryLight,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _isOwner
+                                        ? (_isDraftEditable
+                                            ? 'Logged in as Owner (you can edit)'
+                                            : (_isClosed ? 'Logged in as Owner (agreement closed)' : 'Logged in as Owner (locked, already signed)'))
+                                        : 'Logged in as Tenant (view only, only the owner edits the draft)',
+                                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    AgreementStatusChip(status: _agreement!.status),
+                                    const Spacer(),
+                                  ],
+                                ),
+                                AgreementExpiryNote(agreement: _agreement!),
+                                const SizedBox(height: 12),
+                                AgreementClosedBanner(agreement: _agreement!),
+                                if (_waitingForOwner) ...[
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning.withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'Waiting for the owner to fill in the rent, deposit and terms. You can sign once the draft is ready.',
+                                      style: GoogleFonts.inter(fontSize: 13, color: AppColors.warning, fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                ],
                                 Row(
                                   children: [
                                     Expanded(
@@ -308,6 +371,7 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                                 TextField(
                                   controller: _termsController,
                                   readOnly: !_isDraftEditable,
+                                  onTap: _isDraftEditable ? null : _explainReadOnly,
                                   maxLines: 8,
                                   style: GoogleFonts.inter(fontSize: 13.5, height: 1.5),
                                   decoration: const InputDecoration(
@@ -331,16 +395,35 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                             label: 'Save Draft & Send for Signature',
                             onPressed: _saving ? null : _saveDraftAndContinue,
                           )
+                        else if (_isClosed)
+                          AppButton(
+                            label: 'Agreement ${_agreement!.status.displayLabel.toLowerCase()}',
+                            onPressed: null,
+                          )
                         else
                           AppButton(
-                            label: _hasSignedAlready ? 'You already signed' : 'Review & Sign Agreement',
-                            onPressed: (_hasSignedAlready || _saving) ? null : _openSignatureScreen,
+                            label: _waitingForOwner
+                                ? 'Waiting for owner'
+                                : (_hasSignedAlready ? 'You already signed' : 'Review & Sign Agreement'),
+                            onPressed: (_hasSignedAlready || _saving || _waitingForOwner) ? null : _openSignatureScreen,
                           ),
                       ],
                     ),
                   ),
       ),
     );
+  }
+
+  void _explainReadOnly() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(_isClosed
+            ? 'This agreement is ${_agreement!.status.displayLabel.toLowerCase()}, so it can no longer be edited.'
+            : _isOwner
+            ? 'This draft is locked because a party has already signed.'
+            : 'Only the owner can edit the draft. Log in as the owner to fill it in.'),
+      ));
   }
 
   Widget _field(String label, TextEditingController controller, {required bool editable}) {
@@ -352,6 +435,7 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         TextField(
           controller: controller,
           readOnly: !editable,
+          onTap: editable ? null : _explainReadOnly,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
             filled: true,

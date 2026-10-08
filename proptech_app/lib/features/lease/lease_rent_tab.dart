@@ -19,7 +19,7 @@ class LeaseRentTab extends StatefulWidget {
 }
 
 class _LeaseRentTabState extends State<LeaseRentTab> {
-  late Future<(List<RentPayment>, RentSummary)> _future = LeaseService.instance.rent(widget.lease.id);
+  late final Future<(List<RentPayment>, RentSummary)> _future = LeaseService.instance.rent(widget.lease.id);
   String? _busyId;
 
   bool get _tenant => widget.role == 'tenant';

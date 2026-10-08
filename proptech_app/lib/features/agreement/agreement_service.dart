@@ -137,10 +137,18 @@ class AgreementService {
     }
   }
 
-  /// Cancel or reject an agreement.
-  Future<Agreement> updateStatus({required String id, required String status}) async {
+  /// Reject (owner), cancel (either party) or approve ('awaiting_signatures',
+  /// owner). [reason] is optional and shown to the other party.
+  Future<Agreement> updateStatus({
+    required String id,
+    required String status,
+    String? reason,
+  }) async {
     try {
-      final response = await _dio.patch('/api/agreements/$id/status', data: {'status': status});
+      final response = await _dio.patch('/api/agreements/$id/status', data: {
+        'status': status,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      });
       return Agreement.fromJson(response.data['agreement'] as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _toException(e);

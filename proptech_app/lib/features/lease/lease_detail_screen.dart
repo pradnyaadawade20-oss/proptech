@@ -150,7 +150,9 @@ class _OverviewTab extends StatelessWidget {
       'Confirm move-in',
       'This locks the move-in photos. They will be used to compare the condition when you move out. Continue?',
       yes: 'Confirm',
-    )) return;
+    )) {
+      return;
+    }
     if (!context.mounted) return;
     if (await runGuarded(context, () => LeaseService.instance.confirmMoveIn(lease.id), success: 'Move-in confirmed')) {
       await onChanged();
@@ -188,7 +190,9 @@ class _OverviewTab extends StatelessWidget {
       'Confirm move-out',
       'Confirm the tenant has moved out. You need at least one move-out photo first. The property becomes available again.',
       yes: 'Confirm',
-    )) return;
+    )) {
+      return;
+    }
     if (!context.mounted) return;
     if (await runGuarded(context, () => LeaseService.instance.completeMoveOut(lease.id), success: 'Move-out confirmed')) {
       await onChanged();
@@ -232,7 +236,7 @@ class _OverviewTab extends StatelessWidget {
           if (lease.renewalStatus == 'renew_accepted')
             const InfoBanner('Renewal accepted. A new agreement has been created for signing.', color: AppColors.success, icon: Icons.verified_outlined),
           if (_tenant && lease.status == 'active' && lease.moveInConfirmedAt == null)
-            InfoBanner('Review the move-in photos (Photos tab) and confirm the condition of the property.', icon: Icons.photo_camera_outlined),
+            const InfoBanner('Review the move-in photos (Photos tab) and confirm the condition of the property.', icon: Icons.photo_camera_outlined),
 
           // ---- terms
           SectionCard(

@@ -7,6 +7,7 @@ enum AgreementStatus {
   completed,
   rejected,
   cancelled,
+  expired,
 }
 
 extension AgreementStatusX on AgreementStatus {
@@ -19,6 +20,7 @@ extension AgreementStatusX on AgreementStatus {
         AgreementStatus.completed => 'completed',
         AgreementStatus.rejected => 'rejected',
         AgreementStatus.cancelled => 'cancelled',
+        AgreementStatus.expired => 'expired',
       };
 
   String get label => switch (this) {
@@ -30,7 +32,33 @@ extension AgreementStatusX on AgreementStatus {
         AgreementStatus.completed => 'Completed',
         AgreementStatus.rejected => 'Rejected',
         AgreementStatus.cancelled => 'Cancelled',
+        AgreementStatus.expired => 'Expired',
       };
+
+  /// User-facing state from spec 12.5: Pending -> Approved / Rejected ->
+  /// Signed -> Expired / Cancelled. ("Approved" = owner accepted and the draft
+  /// is ready; a one-sided signature shows as "Partially signed".)
+  String get displayLabel => switch (this) {
+        AgreementStatus.requested => 'Pending',
+        AgreementStatus.draftReady => 'Approved',
+        AgreementStatus.awaitingSignatures => 'Approved',
+        AgreementStatus.signedByOwner => 'Partially signed',
+        AgreementStatus.signedByTenant => 'Partially signed',
+        AgreementStatus.completed => 'Signed',
+        AgreementStatus.rejected => 'Rejected',
+        AgreementStatus.cancelled => 'Cancelled',
+        AgreementStatus.expired => 'Expired',
+      };
+
+  /// No further action is possible (signed, or closed without signing).
+  bool get isFinal =>
+      this == AgreementStatus.completed || isClosedWithoutSigning;
+
+  /// Rejected / cancelled / expired.
+  bool get isClosedWithoutSigning =>
+      this == AgreementStatus.rejected ||
+      this == AgreementStatus.cancelled ||
+      this == AgreementStatus.expired;
 
   static AgreementStatus fromApi(String value) => switch (value) {
         'draft_ready' => AgreementStatus.draftReady,
@@ -40,6 +68,7 @@ extension AgreementStatusX on AgreementStatus {
         'completed' => AgreementStatus.completed,
         'rejected' => AgreementStatus.rejected,
         'cancelled' => AgreementStatus.cancelled,
+        'expired' => AgreementStatus.expired,
         _ => AgreementStatus.requested,
       };
 }
@@ -76,6 +105,18 @@ class Agreement {
   final String? tenantSignatureData;
   final DateTime? tenantSignedAt;
 
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  /// Deadline for the next step (null once the agreement is final).
+  final DateTime? expiresAt;
+
+  /// Why / who / when for rejected, cancelled and expired. [statusChangedBy] is
+  /// null when the system expired the agreement.
+  final String? statusReason;
+  final String? statusChangedBy;
+  final DateTime? statusChangedAt;
+
   const Agreement({
     required this.id,
     required this.propertyId,
@@ -97,10 +138,25 @@ class Agreement {
     this.tenantSignatureType,
     this.tenantSignatureData,
     this.tenantSignedAt,
+    this.createdAt,
+    this.updatedAt,
+    this.expiresAt,
+    this.statusReason,
+    this.statusChangedBy,
+    this.statusChangedAt,
   });
 
   bool get ownerHasSigned => ownerSignedAt != null;
   bool get tenantHasSigned => tenantSignedAt != null;
+  bool get hasDraft => terms != null && terms!.isNotEmpty;
+
+  /// Name of whoever rejected/cancelled it, or null (system / unknown).
+  String? get statusChangedByName {
+    if (statusChangedBy == null || statusChangedBy!.isEmpty) return null;
+    if (statusChangedBy == ownerId) return ownerName;
+    if (statusChangedBy == tenantId) return tenantName;
+    return null;
+  }
 
   factory Agreement.fromJson(Map<String, dynamic> json) {
     SignatureType? parseSigType(String? v) =>
@@ -127,6 +183,12 @@ class Agreement {
       tenantSignatureType: parseSigType(json['tenant_signature_type'] as String?),
       tenantSignatureData: json['tenant_signature_data'] as String?,
       tenantSignedAt: json['tenant_signed_at'] != null ? DateTime.tryParse(json['tenant_signed_at']) : null,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,
+      expiresAt: json['expires_at'] != null ? DateTime.tryParse(json['expires_at']) : null,
+      statusReason: json['status_reason'] as String?,
+      statusChangedBy: json['status_changed_by'] as String?,
+      statusChangedAt: json['status_changed_at'] != null ? DateTime.tryParse(json['status_changed_at']) : null,
     );
   }
 }

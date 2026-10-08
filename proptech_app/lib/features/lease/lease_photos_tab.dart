@@ -23,7 +23,7 @@ class LeasePhotosTab extends StatefulWidget {
 }
 
 class _LeasePhotosTabState extends State<LeasePhotosTab> {
-  late Future<List<RoomComparison>> _future = LeaseService.instance.comparison(widget.lease.id);
+  late final Future<List<RoomComparison>> _future = LeaseService.instance.comparison(widget.lease.id);
   String? _myId;
   bool _busy = false;
 

@@ -19,7 +19,7 @@ class LeaseDepositTab extends StatefulWidget {
 }
 
 class _LeaseDepositTabState extends State<LeaseDepositTab> {
-  late Future<Deposit?> _future = LeaseService.instance.deposit(widget.lease.id);
+  late final Future<Deposit?> _future = LeaseService.instance.deposit(widget.lease.id);
   bool _busy = false;
 
   bool get _tenant => widget.role == 'tenant';
