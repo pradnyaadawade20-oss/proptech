@@ -62,7 +62,7 @@ func (r *PaymentRepository) SaveBank(ctx context.Context, ownerID, vendorID, hol
 		INSERT INTO owner_bank_accounts (owner_id, vendor_id, account_holder, account_number, account_last4, ifsc, status, status_detail)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (owner_id) DO UPDATE SET
-			account_holder = EXCLUDED.account_holder, account_number = EXCLUDED.account_number,
+			vendor_id = EXCLUDED.vendor_id, account_holder = EXCLUDED.account_holder, account_number = EXCLUDED.account_number,
 			account_last4 = EXCLUDED.account_last4, ifsc = EXCLUDED.ifsc,
 			status = EXCLUDED.status, status_detail = EXCLUDED.status_detail, updated_at = now()`,
 		ownerID, vendorID, holder, encNumber, last4, ifsc, status, detail)

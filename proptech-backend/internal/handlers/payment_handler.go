@@ -186,7 +186,9 @@ func (h *PaymentHandler) SaveBank(c *gin.Context) {
 		return
 	}
 
-	vendorID := vendorIDFor(userID)
+	// A fresh vendor id on every save: Cashfree refuses to edit a vendor whose
+	// verification failed ("Invalid state"), so a corrected account becomes a new vendor.
+	vendorID := vendorIDFor(userID) + "_" + newOrderID("v")[5:11]
 	enc, err := h.cf.Config().Encrypt(acc)
 	if err != nil {
 		leaseErr(c, err)
