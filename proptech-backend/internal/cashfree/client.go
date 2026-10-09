@@ -380,6 +380,7 @@ type VendorReq struct {
 	Email    string
 	Phone    string
 	Bank     VendorBank
+	PAN      string // owner PAN, required by Cashfree for vendor KYC (sent, never stored)
 }
 
 type Vendor struct {
@@ -397,6 +398,12 @@ func (c *Client) vendorBody(v VendorReq, withID bool) map[string]any {
 		"dashboard_access": false,
 		"schedule_option":  1,
 		"bank":             v.Bank,
+		// Cashfree rejects vendors without kyc_details ("kyc_details : is missing").
+		"kyc_details": map[string]any{
+			"account_type":  "INDIVIDUAL",
+			"business_type": envOr("CASHFREE_VENDOR_BUSINESS_TYPE", "Real Estate, Housing, Rentals"),
+			"pan":           v.PAN,
+		},
 	}
 	if withID {
 		b["vendor_id"] = v.VendorID

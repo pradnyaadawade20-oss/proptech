@@ -48,6 +48,7 @@ class PaymentService {
     required String accountNumber,
     required String confirmAccountNumber,
     required String ifsc,
+    String pan = '',
   }) =>
       _run(() async {
         final r = await _dio.put('/api/owner/bank', data: {
@@ -55,6 +56,7 @@ class PaymentService {
           'account_number': accountNumber,
           'confirm_account_number': confirmAccountNumber,
           'ifsc': ifsc,
+          'pan': pan,
         });
         final b = r.data['bank'];
         return b is Map<String, dynamic> ? OwnerBank.fromJson(b) : null;

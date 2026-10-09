@@ -18,6 +18,7 @@ type SaveBankRequest struct {
 	AccountNumber        string `json:"account_number" binding:"required"`
 	ConfirmAccountNumber string `json:"confirm_account_number" binding:"required"`
 	IFSC                 string `json:"ifsc" binding:"required"`
+	PAN                  string `json:"pan"` // required in production, sandbox falls back to a test PAN
 }
 
 // PaymentOrder is one Cashfree checkout attempt group (an "order") for a rent month or a deposit.

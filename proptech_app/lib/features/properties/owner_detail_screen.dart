@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
-import '../../core/widgets/app_button.dart';
 import '../../core/api/token_store.dart';
 import '../chat/chat_avatar.dart';
 import '../leads/lead_service.dart';
@@ -77,112 +76,236 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Owner Details')),
+      appBar: AppBar(
+        title: Text(
+          'Owner Details',
+          style: AppTextStyles.h3.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryDark,
+          ),
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(context, ownerName, ownerPhone, memberSince, listed),
     );
   }
 
-  Widget _buildContent(BuildContext context, String ownerName, String ownerPhone,
-      String memberSince, String listed) {
-    return ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          // Owner card
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: AppColors.border),
+  Widget _buildOwnerCard(String ownerName, String memberSince, String listed) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.surfaceSoft, Colors.white],
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg - 1),
+        child: Stack(
+          children: [
+            // Soft decorative circles (top-left / bottom-right).
+            Positioned(
+              top: -50,
+              left: -40,
+              child: _softCircle(140),
             ),
+            Positioned(
+              bottom: -60,
+              right: -50,
+              child: _softCircle(170),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.md,
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ChatAvatar(
+                      name: ownerName,
+                      avatarUrl: _owner?.avatarUrl ?? '',
+                      radius: 48,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    ownerName,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.h2.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Property Owner',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        Expanded(child: _StatColumn(label: 'Listed', value: listed)),
+                        const VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: AppColors.border,
+                        ),
+                        Expanded(child: _StatColumn(label: 'Member since', value: memberSince)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _softCircle(double size) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.primary.withValues(alpha: 0.05),
+        ),
+      );
+
+  Widget _buildListingCard() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: SafeNetworkImage(property.imageUrl, width: 88, height: 80, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ChatAvatar(name: ownerName, avatarUrl: _owner?.avatarUrl ?? '', radius: 40),
-                const SizedBox(height: AppSpacing.md),
-                Text(ownerName, style: AppTextStyles.h2),
+                Text(
+                  property.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Property Owner', style: AppTextStyles.bodyMedium),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _StatColumn(label: 'Listed', value: listed),
-                    Container(width: 1, height: 32, color: AppColors.border),
-                    _StatColumn(label: 'Member since', value: memberSince),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          // Property this owner is being contacted about
-          Text('About this listing', style: AppTextStyles.h3),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  child: SafeNetworkImage(property.imageUrl, width: 56, height: 56, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(property.title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                      Text(property.location, style: AppTextStyles.caption),
-                      Text(
-                        formatPrice(property.price, property.priceUnit),
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+                    const Icon(Icons.location_on, size: 16, color: AppColors.textHint),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        property.location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: AppColors.textSecondary),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatPrice(property.price, property.priceUnit),
+                  style: AppTextStyles.h3.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // Contact options
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Call',
-                  outlined: true,
-                  onPressed: ownerPhone.isEmpty
-                      ? null
-                      : () {
-                          LeadService.instance.track(property.id, 'call');
-                          _callOwner(context, ownerPhone);
-                        },
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: AppButton(
-                  label: 'Message',
-                  onPressed: property.ownerId.isEmpty ? null : _messageOwner,
-                ),
-              ),
-            ],
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, String ownerName, String ownerPhone,
+      String memberSince, String listed) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: [
+        _buildOwnerCard(ownerName, memberSince, listed),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Property this owner is being contacted about
+        Text(
+          'About this listing',
+          style: AppTextStyles.h2.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryDark,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _buildListingCard(),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Contact options
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+                icon: const Icon(Icons.phone_outlined),
+                label: Text(
+                  'Call',
+                  style: AppTextStyles.button.copyWith(color: AppColors.primary),
+                ),
+                onPressed: ownerPhone.isEmpty
+                    ? null
+                    : () {
+                        LeadService.instance.track(property.id, 'call');
+                        _callOwner(context, ownerPhone);
+                      },
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Message'),
+                onPressed: property.ownerId.isEmpty ? null : _messageOwner,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -206,10 +329,21 @@ class _StatColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: AppTextStyles.h3.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.primaryDark,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(label, style: AppTextStyles.caption),
+        Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+        ),
       ],
     );
   }

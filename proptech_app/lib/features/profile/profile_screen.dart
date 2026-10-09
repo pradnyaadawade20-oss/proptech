@@ -72,16 +72,16 @@ Future<void> _logout() async {
 }
 
   Widget _buildHeader() {
+    final Widget content;
+    final profile = _profile;
+
     if (_loading) {
-      return const SizedBox(
+      content = const SizedBox(
         height: 72,
         child: Center(child: CircularProgressIndicator()),
       );
-    }
-
-    final profile = _profile;
-    if (profile == null) {
-      return Row(
+    } else if (profile == null) {
+      content = Row(
         children: [
           Expanded(
             child: Text(
@@ -92,102 +92,214 @@ Future<void> _logout() async {
           TextButton(onPressed: _loadProfile, child: const Text('Retry')),
         ],
       );
+    } else {
+      content = Row(
+        children: [
+          // White ring + soft shadow around the avatar, like the reference.
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ChatAvatar(
+              name: profile.name,
+              avatarUrl: profile.avatarUrl,
+              radius: 34,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.h3.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  profile.email.isNotEmpty ? profile.email : 'Add your email',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+                if (profile.phone.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    profile.phone,
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+            onPressed: _editProfile,
+          ),
+        ],
+      );
     }
 
-    return Row(
-      children: [
-        ChatAvatar(name: profile.name, avatarUrl: profile.avatarUrl, radius: 36),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(profile.name, style: AppTextStyles.h3),
-              const SizedBox(height: 2),
-              Text(
-                profile.email.isNotEmpty ? profile.email : 'Add your email',
-                style: AppTextStyles.bodySmall,
-              ),
-              if (profile.phone.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(profile.phone, style: AppTextStyles.bodySmall),
-              ],
-            ],
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: _editProfile,
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: content,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          _buildHeader(),
-          const SizedBox(height: AppSpacing.lg),
-      
-          _ProfileMenuTile(
-            icon: Icons.home_work_outlined,
-            title: 'My Properties',
-            onTap: () => context.push(RouteNames.myProperties),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.lg,
           ),
-          _ProfileMenuTile(
-            icon: Icons.event_available_outlined,
-            title: 'My Visits',
-            onTap: () => context.push(RouteNames.myVisits),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.key_outlined,
-            title: 'My Leases & Rent',
-            onTap: () => context.push(RouteNames.leases),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.favorite_border,
-            title: 'Favorites',
-            onTap: () => context.push(RouteNames.favorites),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.chat_bubble_outline,
-            title: 'Chats',
-            onTap: () => context.go(RouteNames.chatList),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.verified_user_outlined,
-            title: 'KYC Verification',
-            onTap: () => context.push(RouteNames.kycVerification),
-          ),
-          const Divider(height: AppSpacing.lg * 2),
-          _ProfileMenuTile(
-            icon: Icons.settings_outlined,
-            title: 'Settings',
-            onTap: () => context.push(RouteNames.settings),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.help_outline,
-            title: 'Help & Support',
-            onTap: () => context.push(RouteNames.helpSupport),
-          ),
-          _ProfileMenuTile(
-            icon: Icons.info_outline,
-            title: 'About',
-            onTap: () => context.push(RouteNames.about),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _ProfileMenuTile(
-            icon: Icons.logout,
-            title: 'Logout',
-            iconColor: Colors.red,
-            textColor: Colors.red,
-            onTap: _logout,
-          ),
-        ],
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                'Profile',
+                style: AppTextStyles.h1.copyWith(
+                  fontSize: 28,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _buildHeader(),
+            const SizedBox(height: AppSpacing.md),
+            _MenuGroup(
+              children: [
+                _ProfileMenuTile(
+                  icon: Icons.home_outlined,
+                  title: 'My Properties',
+                  onTap: () => context.push(RouteNames.myProperties),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.calendar_today_outlined,
+                  title: 'My Visits',
+                  onTap: () => context.push(RouteNames.myVisits),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.key_outlined,
+                  title: 'My Leases & Rent',
+                  onTap: () => context.push(RouteNames.leases),
+                ),
+                // Anyone who posts a property (owner or broker) adds the bank
+                // account that receives rent here.
+                _ProfileMenuTile(
+                  icon: Icons.account_balance_outlined,
+                  title: 'Bank & Payouts',
+                  onTap: () => context.push(RouteNames.ownerBank),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.favorite_border,
+                  title: 'Favorites',
+                  onTap: () => context.push(RouteNames.favorites),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.chat_bubble_outline,
+                  title: 'Chats',
+                  onTap: () => context.go(RouteNames.chatList),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.verified_user_outlined,
+                  title: 'KYC Verification',
+                  onTap: () => context.push(RouteNames.kycVerification),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _MenuGroup(
+              children: [
+                _ProfileMenuTile(
+                  icon: Icons.settings_outlined,
+                  title: 'Settings',
+                  onTap: () => context.push(RouteNames.settings),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.help_outline,
+                  title: 'Help & Support',
+                  onTap: () => context.push(RouteNames.helpSupport),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.info_outline,
+                  title: 'About',
+                  onTap: () => context.push(RouteNames.about),
+                ),
+                _ProfileMenuTile(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  iconColor: AppColors.error,
+                  textColor: AppColors.error,
+                  onTap: _logout,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded, bordered card that stacks menu tiles with inset dividers.
+class _MenuGroup extends StatelessWidget {
+  final List<Widget> children;
+  const _MenuGroup({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      items.add(children[i]);
+      if (i != children.length - 1) {
+        items.add(const Padding(
+          padding: EdgeInsets.only(left: 58, right: AppSpacing.md),
+          child: Divider(height: 1, thickness: 1, color: AppColors.divider),
+        ));
+      }
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg - 1),
+        child: Material(
+          color: Colors.transparent,
+          child: Column(children: items),
+        ),
       ),
     );
   }
@@ -210,15 +322,30 @@ class _ProfileMenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: iconColor ?? AppColors.textPrimary),
-      title: Text(
-        title,
-        style: AppTextStyles.bodyMedium.copyWith(color: textColor ?? AppColors.textPrimary),
-      ),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.textHint),
+    return InkWell(
       onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 14,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 26, color: iconColor ?? AppColors.primaryDark),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: textColor ?? AppColors.primaryDark,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textHint),
+          ],
+        ),
+      ),
     );
   }
 }

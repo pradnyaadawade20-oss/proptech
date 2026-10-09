@@ -38,6 +38,7 @@ var (
 	ifscRe    = regexp.MustCompile(`^[A-Z]{4}0[A-Z0-9]{6}$`)
 	accountRe = regexp.MustCompile(`^[0-9]{9,18}$`)
 	holderRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z .'-]{1,98}$`)
+	panRe     = regexp.MustCompile(`^[A-Z]{5}[0-9]{4}[A-Z]$`)
 )
 
 func round2f(v float64) float64 { return math.Round(v*100) / 100 }
@@ -141,6 +142,10 @@ func (h *PaymentHandler) SaveBank(c *gin.Context) {
 	holder := strings.TrimSpace(req.AccountHolder)
 	acc := strings.TrimSpace(req.AccountNumber)
 	ifsc := strings.ToUpper(strings.TrimSpace(req.IFSC))
+	pan := strings.ToUpper(strings.TrimSpace(req.PAN))
+	if pan == "" && h.cf.Config().Sandbox() {
+		pan = "ABCPV1234D" // Cashfree's documented valid test PAN
+	}
 	switch {
 	case !holderRe.MatchString(holder):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "enter the account holder name exactly as in the bank"})
@@ -153,6 +158,9 @@ func (h *PaymentHandler) SaveBank(c *gin.Context) {
 		return
 	case !ifscRe.MatchString(ifsc):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "IFSC looks wrong (example: HDFC0001234)"})
+		return
+	case !h.cf.Config().Sandbox() && !panRe.MatchString(pan):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter a valid PAN (example: ABCDE1234F)"})
 		return
 	}
 
@@ -188,7 +196,7 @@ func (h *PaymentHandler) SaveBank(c *gin.Context) {
 
 	status, detail := "pending", "Bank details sent for verification"
 	v, cfErr := h.cf.UpsertVendor(ctx, cashfree.VendorReq{
-		VendorID: vendorID, Name: holder, Email: email, Phone: phone,
+		VendorID: vendorID, Name: holder, Email: email, Phone: phone, PAN: pan,
 		Bank: cashfree.VendorBank{AccountNumber: acc, AccountHolder: holder, IFSC: ifsc},
 	})
 	if cfErr != nil {

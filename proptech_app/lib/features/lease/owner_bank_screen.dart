@@ -20,6 +20,7 @@ class _OwnerBankScreenState extends State<OwnerBankScreen> {
   final _account = TextEditingController();
   final _confirm = TextEditingController();
   final _ifsc = TextEditingController();
+  final _pan = TextEditingController();
 
   OwnerBank? _bank;
   List<PaymentOrder> _orders = const [];
@@ -39,6 +40,7 @@ class _OwnerBankScreenState extends State<OwnerBankScreen> {
     _account.dispose();
     _confirm.dispose();
     _ifsc.dispose();
+    _pan.dispose();
     super.dispose();
   }
 
@@ -72,6 +74,7 @@ class _OwnerBankScreenState extends State<OwnerBankScreen> {
         accountNumber: _account.text.trim(),
         confirmAccountNumber: _confirm.text.trim(),
         ifsc: _ifsc.text.trim().toUpperCase(),
+        pan: _pan.text.trim().toUpperCase(),
       );
       if (mounted) setState(() => _bank = b);
     }, success: 'Bank details saved');
@@ -194,6 +197,17 @@ class _OwnerBankScreenState extends State<OwnerBankScreen> {
         TextField(controller: _confirm, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Confirm account number')),
         const SizedBox(height: 10),
         TextField(controller: _ifsc, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'IFSC code')),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _pan,
+          textCapitalization: TextCapitalization.characters,
+          maxLength: 10,
+          decoration: const InputDecoration(
+            labelText: 'PAN of account holder',
+            helperText: 'Needed by our payment partner for KYC',
+            counterText: '',
+          ),
+        ),
         const SizedBox(height: 14),
         Row(children: [
           Expanded(
