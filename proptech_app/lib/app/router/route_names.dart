@@ -43,6 +43,7 @@ class RouteNames {
   // Lease / rent lifecycle
   static const leases = '/leases';
   static const leaseDetail = '/lease/:id'; // also the target of lease/rent/deposit notifications
+  static const ownerBank = '/owner/bank'; // owner payout (bank) setup + settlements
 
   // Owner
   static const ownerDashboard = '/owner';

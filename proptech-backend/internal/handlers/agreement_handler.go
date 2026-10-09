@@ -48,6 +48,23 @@ func (h *AgreementHandler) requireKYC(c *gin.Context, userID string) bool {
 	return true
 }
 
+// writeStateError maps the repository's state errors to HTTP responses. The
+// Flutter app keys off "code" (kyc_required / agreement_expired) for dialogs.
+func writeStateError(c *gin.Context, err error) bool {
+	switch {
+	case errors.Is(err, repository.ErrAgreementExpired):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "agreement_expired"})
+	case errors.Is(err, repository.ErrAgreementLocked),
+		errors.Is(err, repository.ErrAgreementBadState),
+		errors.Is(err, repository.ErrOTPNotVerified),
+		errors.Is(err, repository.ErrAlreadySigned):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	default:
+		return false
+	}
+	return true
+}
+
 func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -138,8 +155,7 @@ func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 
 	agreement, err := h.repo.UpdateDraft(c.Request.Context(), id, req)
 	if err != nil {
-		if errors.Is(err, repository.ErrAgreementLocked) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if writeStateError(c, err) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -182,8 +198,7 @@ func (h *AgreementHandler) SignAgreement(c *gin.Context) {
 
 	signed, err := h.repo.Sign(c.Request.Context(), id, req)
 	if err != nil {
-		if errors.Is(err, repository.ErrOTPNotVerified) || errors.Is(err, repository.ErrAgreementBadState) || errors.Is(err, repository.ErrAlreadySigned) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if writeStateError(c, err) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -226,8 +241,12 @@ func (h *AgreementHandler) SendSignOTP(c *gin.Context) {
 	if !h.requireKYC(c, userID) {
 		return
 	}
-	if ag.Status == "requested" || ag.Status == "completed" || ag.Status == "rejected" || ag.Status == "cancelled" {
-		c.JSON(http.StatusConflict, gin.H{"error": repository.ErrAgreementBadState.Error()})
+	if ag.Status == "expired" || ag.PastDeadline() {
+		writeStateError(c, repository.ErrAgreementExpired)
+		return
+	}
+	if ag.Status == "requested" || models.AgreementIsFinal(ag.Status) {
+		writeStateError(c, repository.ErrAgreementBadState)
 		return
 	}
 	email, err := h.repo.PartyEmail(c.Request.Context(), id, req.SignerRole)
@@ -314,17 +333,29 @@ func (h *AgreementHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	agreement, err := h.repo.UpdateStatus(c.Request.Context(), id, req.Status)
+	reason := strings.TrimSpace(req.Reason)
+	agreement, err := h.repo.UpdateStatus(c.Request.Context(), id, req.Status, userID, reason)
 	if err != nil {
-		if errors.Is(err, repository.ErrAgreementBadState) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if writeStateError(c, err) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	notifyOtherParty(agreement, userID, "Agreement update",
-		fmt.Sprintf("The agreement for %s is now: %s", agreement.PropertyTitle, strings.ReplaceAll(agreement.Status, "_", " ")))
+	title, body := "Agreement update",
+		fmt.Sprintf("The agreement for %s is now: %s", agreement.PropertyTitle, strings.ReplaceAll(agreement.Status, "_", " "))
+	switch agreement.Status {
+	case "awaiting_signatures":
+		title, body = "Agreement approved", fmt.Sprintf("The draft for %s is approved. Review and sign it.", agreement.PropertyTitle)
+	case "rejected":
+		title, body = "Agreement rejected", fmt.Sprintf("The agreement for %s was rejected.", agreement.PropertyTitle)
+	case "cancelled":
+		title, body = "Agreement cancelled", fmt.Sprintf("The agreement for %s was cancelled.", agreement.PropertyTitle)
+	}
+	if reason != "" && (agreement.Status == "rejected" || agreement.Status == "cancelled") {
+		body += " Reason: " + reason
+	}
+	notifyOtherParty(agreement, userID, title, body)
 
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
 }

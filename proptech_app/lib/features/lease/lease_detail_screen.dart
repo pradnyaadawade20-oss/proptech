@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -219,6 +220,18 @@ class _OverviewTab extends StatelessWidget {
             StatusPill.status(lease.status),
           ]),
           const SizedBox(height: AppSpacing.md),
+
+          if (_owner)
+            SectionCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.account_balance_outlined, color: AppColors.primary),
+                title: const Text('Payouts & bank account'),
+                subtitle: const Text('Add your bank to receive rent and deposit online'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(RouteNames.ownerBank),
+              ),
+            ),
 
           // ---- banners
           if (lease.overdueCount > 0)

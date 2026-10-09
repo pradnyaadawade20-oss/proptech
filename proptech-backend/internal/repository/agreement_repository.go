@@ -25,7 +25,8 @@ const agreementSelectQuery = `
 	       a.status, a.monthly_rent, a.security_deposit, a.start_date, a.duration_months, a.terms,
 	       COALESCE(a.owner_signature_type, ''), COALESCE(a.owner_signature_data, ''), a.owner_signed_at,
 	       COALESCE(a.tenant_signature_type, ''), COALESCE(a.tenant_signature_data, ''), a.tenant_signed_at,
-	       COALESCE(a.final_pdf_url, ''), a.created_at, a.updated_at
+	       COALESCE(a.final_pdf_url, ''), a.created_at, a.updated_at,
+	       a.expires_at, COALESCE(a.status_reason, ''), COALESCE(a.status_changed_by::text, ''), a.status_changed_at
 	FROM agreements a
 	JOIN properties p ON p.id = a.property_id
 	JOIN users ou ON ou.id = a.owner_id
@@ -42,6 +43,7 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 		&a.OwnerSignatureType, &a.OwnerSignatureData, &a.OwnerSignedAt,
 		&a.TenantSignatureType, &a.TenantSignatureData, &a.TenantSignedAt,
 		&a.FinalPDFURL, &a.CreatedAt, &a.UpdatedAt,
+		&a.ExpiresAt, &a.StatusReason, &a.StatusChangedBy, &a.StatusChangedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -56,10 +58,10 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 func (r *AgreementRepository) Create(ctx context.Context, req models.CreateAgreementRequest) (*models.Agreement, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `
-		INSERT INTO agreements (property_id, owner_id, tenant_id, status)
-		VALUES ($1, $2, $3, 'requested')
+		INSERT INTO agreements (property_id, owner_id, tenant_id, status, expires_at)
+		VALUES ($1, $2, $3, 'requested', now() + make_interval(days => $4))
 		RETURNING id
-	`, req.PropertyID, req.OwnerID, req.TenantID).Scan(&id)
+	`, req.PropertyID, req.OwnerID, req.TenantID, models.AgreementExpiryDays).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +96,8 @@ func (r *AgreementRepository) GetByUserID(ctx context.Context, userID string) ([
 }
 
 var (
-	ErrAgreementLocked   = errors.New("agreement cannot be edited now (already signed, or closed)")
+	ErrAgreementLocked   = errors.New("agreement cannot be edited now (already signed, closed or expired)")
+	ErrAgreementExpired  = errors.New("this agreement has expired; please request a new one")
 	ErrAgreementBadState = errors.New("this action is not allowed in the agreement's current status")
 	ErrOTPNotVerified    = errors.New("verify the OTP before signing")
 	ErrOTPInvalid        = errors.New("invalid or expired OTP")
@@ -113,12 +116,14 @@ func (r *AgreementRepository) UpdateDraft(ctx context.Context, id string, req mo
 		UPDATE agreements
 		SET monthly_rent = $1, security_deposit = $2, start_date = $3,
 		    duration_months = $4, terms = $5, status = 'draft_ready', updated_at = now(),
+		    expires_at = now() + make_interval(days => $7),
 		    owner_otp_verified = FALSE, tenant_otp_verified = FALSE,
 		    owner_otp_code = NULL, tenant_otp_code = NULL
 		WHERE id = $6
 		  AND status IN ('requested', 'draft_ready', 'awaiting_signatures')
+		  AND (expires_at IS NULL OR expires_at > now())
 		  AND owner_signed_at IS NULL AND tenant_signed_at IS NULL
-	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id)
+	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id, models.AgreementExpiryDays)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +180,9 @@ func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.Si
 	if err != nil {
 		return nil, err
 	}
+	if current.Status == "expired" || current.PastDeadline() {
+		return nil, ErrAgreementExpired
+	}
 	switch current.Status {
 	case "draft_ready", "awaiting_signatures", "signed_by_owner", "signed_by_tenant":
 	default:
@@ -211,27 +219,88 @@ func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.Si
 	_, err = r.db.Exec(ctx, `
 		UPDATE agreements
 		SET `+col+`_signature_type = $1, `+col+`_signature_data = $2, `+col+`_signed_at = now(),
-		    `+col+`_otp_verified = FALSE, status = $3, updated_at = now()
+		    `+col+`_otp_verified = FALSE, status = $3::text, updated_at = now(),
+		    expires_at = CASE WHEN $3::text = 'completed' THEN NULL ELSE now() + make_interval(days => $5) END
 		WHERE id = $4
-	`, req.SignatureType, req.SignatureData, newStatus, id)
+	`, req.SignatureType, req.SignatureData, newStatus, id, models.AgreementExpiryDays)
 	if err != nil {
 		return nil, err
 	}
 	return r.GetByID(ctx, id)
 }
 
-// UpdateStatus validates the transition against models.AgreementTransitions.
-func (r *AgreementRepository) UpdateStatus(ctx context.Context, id string, status string) (*models.Agreement, error) {
+// UpdateStatus validates the transition against models.AgreementTransitions and
+// records who changed it, when and (optionally) why. Final states clear the
+// expiry deadline; "awaiting_signatures" (owner approval) restarts it.
+func (r *AgreementRepository) UpdateStatus(ctx context.Context, id, status, actorID, reason string) (*models.Agreement, error) {
 	current, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	if current.Status == "expired" || current.PastDeadline() {
+		return nil, ErrAgreementExpired
+	}
 	if !models.AgreementCanMove(current.Status, status) {
 		return nil, ErrAgreementBadState
 	}
-	_, err = r.db.Exec(ctx, `UPDATE agreements SET status = $1, updated_at = now() WHERE id = $2 AND status = $3`, status, id, current.Status)
+	tag, err := r.db.Exec(ctx, `
+		UPDATE agreements
+		SET status = $1::text, updated_at = now(),
+		    status_reason = NULLIF($4, ''), status_changed_by = $5, status_changed_at = now(),
+		    expires_at = CASE WHEN $1::text IN ('rejected', 'cancelled') THEN NULL
+		                      ELSE now() + make_interval(days => $6) END,
+		    owner_otp_code = NULL, tenant_otp_code = NULL,
+		    owner_otp_verified = FALSE, tenant_otp_verified = FALSE
+		WHERE id = $2 AND status = $3
+	`, status, id, current.Status, reason, actorID, models.AgreementExpiryDays)
 	if err != nil {
 		return nil, err
 	}
+	if tag.RowsAffected() == 0 { // someone else moved it first
+		return nil, ErrAgreementBadState
+	}
 	return r.GetByID(ctx, id)
+}
+
+// ExpiredAgreement is what the expiry job needs to notify both parties.
+type ExpiredAgreement struct {
+	ID            string
+	OwnerID       string
+	TenantID      string
+	PropertyTitle string
+}
+
+// ExpireStale atomically flips every open agreement whose deadline has passed
+// to "expired" and returns them. The UPDATE is the claim, so several server
+// instances running the job never expire (or notify about) the same row twice.
+func (r *AgreementRepository) ExpireStale(ctx context.Context) ([]ExpiredAgreement, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH expired AS (
+			UPDATE agreements
+			SET status = 'expired', updated_at = now(), expires_at = NULL,
+			    status_reason = 'No action was taken before the deadline',
+			    status_changed_by = NULL, status_changed_at = now(),
+			    owner_otp_code = NULL, tenant_otp_code = NULL,
+			    owner_otp_verified = FALSE, tenant_otp_verified = FALSE
+			WHERE status IN ('requested', 'draft_ready', 'awaiting_signatures', 'signed_by_owner', 'signed_by_tenant')
+			  AND expires_at IS NOT NULL AND expires_at < now()
+			RETURNING id, owner_id, tenant_id, property_id
+		)
+		SELECT e.id::text, e.owner_id::text, e.tenant_id::text, COALESCE(p.title, '')
+		FROM expired e LEFT JOIN properties p ON p.id = e.property_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ExpiredAgreement
+	for rows.Next() {
+		var e ExpiredAgreement
+		if err := rows.Scan(&e.ID, &e.OwnerID, &e.TenantID, &e.PropertyTitle); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

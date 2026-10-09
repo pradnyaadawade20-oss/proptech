@@ -25,6 +25,12 @@ type Data struct {
 	LateFee       float64
 	LateDays      int
 	Total         float64
+
+	// Optional - defaults make it a normal rent receipt.
+	Title         string // default "RENT RECEIPT"
+	PeriodRowName string // default "Rent period"
+	AmountLabel   string // default "Monthly rent"
+	HideLate      bool   // true for a security-deposit receipt
 }
 
 func clean(s string, max int) string {
@@ -59,6 +65,15 @@ func money(v float64) string { return fmt.Sprintf("Rs. %.2f", v) }
 // Build returns the PDF bytes.
 func Build(d Data) []byte {
 	var c bytes.Buffer
+	if d.Title == "" {
+		d.Title = "RENT RECEIPT"
+	}
+	if d.PeriodRowName == "" {
+		d.PeriodRowName = "Rent period"
+	}
+	if d.AmountLabel == "" {
+		d.AmountLabel = "Monthly rent"
+	}
 
 	text := func(font string, size int, x, y int, s string) {
 		fmt.Fprintf(&c, "BT /%s %d Tf %d %d Td (%s) Tj ET\n", font, size, x, y, esc(s))
@@ -70,7 +85,7 @@ func Build(d Data) []byte {
 	// Header band
 	c.WriteString("0.082 0.333 0.541 rg 0 742 595 100 re f\n")
 	c.WriteString("1 1 1 rg\n")
-	text("F2", 24, 50, 790, "RENT RECEIPT")
+	text("F2", 24, 50, 790, clean(d.Title, 40))
 	text("F1", 11, 50, 766, "Receipt No: "+clean(d.ReceiptNo, 40))
 	c.WriteString("0 0 0 rg\n")
 
@@ -84,8 +99,10 @@ func Build(d Data) []byte {
 	row("Property", d.PropertyTitle)
 	row("Tenant", d.TenantName)
 	row("Landlord", d.OwnerName)
-	row("Rent period", d.PeriodLabel)
-	row("Due date", d.DueDate)
+	row(d.PeriodRowName, d.PeriodLabel)
+	if d.DueDate != "" {
+		row("Due date", d.DueDate)
+	}
 	row("Paid on", d.PaidDate)
 	row("Payment mode", d.Method)
 	if d.Reference != "" {
@@ -94,14 +111,16 @@ func Build(d Data) []byte {
 
 	y -= 10
 	c.WriteString("0.94 0.96 0.98 rg 50 " + fmt.Sprint(y-92) + " 495 108 re f\n0 0 0 rg\n")
-	text("F1", 12, 65, y-8, "Monthly rent")
+	text("F1", 12, 65, y-8, clean(d.AmountLabel, 40))
 	text("F1", 12, 400, y-8, money(d.RentAmount))
-	lateLabel := "Late fee"
-	if d.LateDays > 0 {
-		lateLabel = fmt.Sprintf("Late fee (%d days late)", d.LateDays)
+	if !d.HideLate {
+		lateLabel := "Late fee"
+		if d.LateDays > 0 {
+			lateLabel = fmt.Sprintf("Late fee (%d days late)", d.LateDays)
+		}
+		text("F1", 12, 65, y-34, lateLabel)
+		text("F1", 12, 400, y-34, money(d.LateFee))
 	}
-	text("F1", 12, 65, y-34, lateLabel)
-	text("F1", 12, 400, y-34, money(d.LateFee))
 	line(65, y-48, 530, y-48)
 	text("F2", 14, 65, y-74, "TOTAL PAID")
 	text("F2", 14, 400, y-74, money(d.Total))

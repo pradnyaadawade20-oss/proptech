@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import 'lease_models.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
+import 'payment_checkout.dart';
+import 'payment_service.dart';
 
 class LeaseDepositTab extends StatefulWidget {
   final Lease lease;
@@ -43,6 +46,27 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     );
     if (r == null) return;
     await _run(() => LeaseService.instance.depositPay(_id, r.method, r.reference), 'Sent to owner for confirmation');
+  }
+
+  Future<void> _payOnline() async {
+    setState(() => _busy = true);
+    await payOnline(context, start: () => PaymentService.instance.startDepositCheckout(_id));
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await widget.onChanged();
+  }
+
+  Future<void> _receipt() async {
+    setState(() => _busy = true);
+    try {
+      final bytes = await PaymentService.instance.depositReceiptPdf(_id);
+      const name = 'deposit-receipt.pdf';
+      await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: name)], fileNameOverrides: [name]);
+    } catch (e) {
+      if (mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _refund(Deposit d) async {
@@ -108,6 +132,18 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
                     InfoRow('Paid via', prettify(d.paymentMethod) + (d.reference.isEmpty ? '' : ' • ${d.reference}')),
                   if (d.refundMethod.isNotEmpty)
                     InfoRow('Refunded via', prettify(d.refundMethod) + (d.refundReference.isEmpty ? '' : ' • ${d.refundReference}')),
+                  if (d.paymentMethod.isNotEmpty && d.status != 'pending' && d.status != 'submitted' && d.status != 'carried_forward')
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _receipt,
+                          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                          label: const Text('Deposit receipt'),
+                        ),
+                      ),
+                    ),
                 ]),
               ),
               _statusBlock(d),
@@ -192,7 +228,10 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     switch (d.status) {
       case 'pending':
         return _tenant
-            ? btn('Pay deposit (${inr(d.amount)})', () => _tenantPay(d))
+            ? Column(children: [
+                btn('Pay deposit ${inr(d.amount)} online', _payOnline),
+                btn('Paid another way', () => _tenantPay(d), outlined: true),
+              ])
             : const InfoBanner('Waiting for the tenant to pay the deposit.', icon: Icons.hourglass_empty);
       case 'submitted':
         return _owner

@@ -6,7 +6,10 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import 'lease_models.dart';
 import 'lease_service.dart';
+import 'lease_payments_section.dart';
 import 'lease_widgets.dart';
+import 'payment_checkout.dart';
+import 'payment_service.dart';
 
 class LeaseRentTab extends StatefulWidget {
   final Lease lease;
@@ -42,6 +45,14 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
     );
     if (r == null) return;
     await _run(p.id, () => LeaseService.instance.payRent(p.id, r.method, r.reference), 'Sent to owner for confirmation');
+  }
+
+  Future<void> _payOnline(RentPayment p) async {
+    setState(() => _busyId = p.id);
+    await payOnline(context, start: () => PaymentService.instance.startRentCheckout(p.id));
+    if (!mounted) return;
+    setState(() => _busyId = null);
+    await widget.onChanged(); // refresh even on failure: the server may have updated the state
   }
 
   Future<void> _markPaid(RentPayment p) async {
@@ -110,6 +121,7 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
                   child: Center(child: Text('No rent schedule yet.', style: GoogleFonts.inter(color: AppColors.textSecondary))),
                 ),
               ...payments.map(_card),
+              LeasePaymentsSection(leaseId: widget.lease.id, role: widget.role),
             ],
           ),
         );
@@ -131,7 +143,14 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
     final unpaid = st == 'pending' || st == 'overdue';
 
     final actions = <Widget>[];
-    if (_tenant && unpaid) actions.add(ElevatedButton(onPressed: busy ? null : () => _pay(p), child: Text('Pay ${inr(p.total)}')));
+    if (_tenant && unpaid) {
+      actions.add(ElevatedButton.icon(
+        onPressed: busy ? null : () => _payOnline(p),
+        icon: const Icon(Icons.lock_outline, size: 18),
+        label: Text('Pay ${inr(p.total)} online'),
+      ));
+      actions.add(OutlinedButton(onPressed: busy ? null : () => _pay(p), child: const Text('Paid another way')));
+    }
     if (_owner && st == 'submitted') {
       actions.add(ElevatedButton(
         onPressed: busy ? null : () => _run(p.id, () => LeaseService.instance.confirmRent(p.id), 'Rent confirmed'),

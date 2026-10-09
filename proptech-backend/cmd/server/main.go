@@ -6,6 +6,7 @@ import (
 
 	"context"
 
+	"proptech-backend/internal/cashfree"
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/kyc"
@@ -153,6 +154,21 @@ func main() {
 	leaseHandler := handlers.NewLeaseHandler(leaseRepo)
 	routes.RegisterLeaseRoutes(router, leaseHandler)
 	startLeaseJobs(context.Background(), leaseRepo)
+
+	// Online payments (Cashfree sandbox/production). Secret keys are read from env vars only.
+	cfCfg := cashfree.ConfigFromEnv(cfg.JWTSecret)
+	if cfCfg.Enabled() {
+		log.Printf("Cashfree enabled (%s). Webhook URL: %q", cfCfg.Env, cfCfg.NotifyURL)
+		if cfg.AppEnv == "production" && cfCfg.Sandbox() {
+			log.Println("NOTE: running with Cashfree SANDBOX keys - no real money moves")
+		}
+	} else {
+		log.Println("Cashfree NOT configured (set CASHFREE_APP_ID and CASHFREE_SECRET_KEY) - online payments disabled")
+	}
+	paymentRepo := repository.NewPaymentRepository(dbPool)
+	paymentHandler := handlers.NewPaymentHandler(paymentRepo, leaseRepo, cashfree.NewClient(cfCfg))
+	routes.RegisterPaymentRoutes(router, paymentHandler)
+	paymentHandler.StartPaymentJobs(context.Background())
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {
