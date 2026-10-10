@@ -40,6 +40,22 @@ func startLeaseJobs(ctx context.Context, repo *repository.LeaseRepository) {
 			}
 		}
 
+		// Owner has not confirmed a UPI payment for 24h -> remind (once per payment).
+		confirms, err := repo.ClaimConfirmReminders(ctx)
+		if err != nil {
+			log.Println("lease jobs: confirm reminders:", err)
+		}
+		for _, cr := range confirms {
+			what := "rent"
+			if cr.What == "deposit" {
+				what = "security deposit"
+			}
+			notify.SendRoute(cr.OwnerID, "payment_confirm", "Confirm payment received",
+				fmt.Sprintf("%s paid %s of ₹%.0f for %s by UPI over 24 hours ago. Please check your bank and confirm or reject it.",
+					cr.TenantName, what, cr.Amount, cr.PropertyTitle),
+				"/lease/"+cr.LeaseID)
+		}
+
 		prompts, err := repo.ClaimRenewalPrompts(ctx)
 		if err != nil {
 			log.Println("lease jobs: renewal prompts:", err)

@@ -35,18 +35,7 @@ services:
         value: 544072846065-o5b43q1sd2jbk0hkea2sg408htpkfpc1.apps.googleusercontent.com
       - key: DEV_SKIP_OTP
         value: "true"
-      # ---- Cashfree online payments (sandbox / test keys). Secrets are set in the Render dashboard, never in git.
-      - key: CASHFREE_ENV
-        value: sandbox
-      - key: CASHFREE_APP_ID
-        sync: false
-      - key: CASHFREE_SECRET_KEY
-        sync: false
-      # PUBLIC https URL of this service + /api/webhooks/cashfree
-      - key: CASHFREE_NOTIFY_URL
-        sync: false
-      # optional: % of each payment kept by the platform (default 0)
-      - key: PLATFORM_FEE_PCT
+      
         value: "0"
 
 databases:
