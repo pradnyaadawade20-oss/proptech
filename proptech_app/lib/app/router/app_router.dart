@@ -39,7 +39,7 @@ import '../../features/properties/emi_calculator_screen.dart';
 import '../../features/compare/compare_screen.dart';
 import '../../features/lease/leases_screen.dart';
 import '../../features/lease/lease_detail_screen.dart';
-import '../../features/lease/owner_bank_screen.dart';
+import '../../features/agreement/agreements_screen.dart';
 import 'main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -304,6 +304,10 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
       builder: (context, state) => DraftPreviewScreen(agreementId: state.pathParameters['id']!),
     ),
     GoRoute(
+      path: RouteNames.agreements,
+      builder: (context, state) => const AgreementsScreen(),
+    ),
+    GoRoute(
       path: RouteNames.agreementStatus,
       builder: (context, state) => AgreementStatusScreen(agreementId: state.pathParameters['id']!),
     ),
@@ -318,10 +322,6 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
     GoRoute(
       path: RouteNames.leaseDetail,
       builder: (context, state) => LeaseDetailScreen(leaseId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: RouteNames.ownerBank,
-      builder: (context, state) => const OwnerBankScreen(),
     ),
   ],
 );

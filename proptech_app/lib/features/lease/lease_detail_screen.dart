@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/safe_network_image.dart';
@@ -13,6 +12,7 @@ import 'lease_photos_tab.dart';
 import 'lease_rent_tab.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
+import 'upi_pay_sheet.dart';
 
 /// One lease: Overview / Rent / Deposit / Photos / Activity.
 /// Route: /lease/:id (also the target of lease/rent/deposit push notifications).
@@ -225,11 +225,11 @@ class _OverviewTab extends StatelessWidget {
             SectionCard(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.account_balance_outlined, color: AppColors.primary),
-                title: const Text('Payouts & bank account'),
-                subtitle: const Text('Add your bank to receive rent and deposit online'),
+                leading: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
+                title: const Text('Your UPI ID'),
+                subtitle: const Text('Tenants pay rent and deposit to this UPI ID'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push(RouteNames.ownerBank),
+                onTap: () => editOwnerUpi(context),
               ),
             ),
 

@@ -43,7 +43,6 @@ class RouteNames {
   // Lease / rent lifecycle
   static const leases = '/leases';
   static const leaseDetail = '/lease/:id'; // also the target of lease/rent/deposit notifications
-  static const ownerBank = '/owner/bank'; // owner payout (bank) setup + settlements
 
   // Owner
   static const ownerDashboard = '/owner';
@@ -58,5 +57,7 @@ class RouteNames {
   static const agreementRequest = '/property/:id/agreement/request';
   static const agreementDraft = '/agreement/:id/draft';
   static const agreementSignature = '/agreement/:id/sign';
+ 
+  static const agreements = '/agreements';
   static const agreementStatus = '/agreement/:id/status';
 }

@@ -8,8 +8,8 @@ import '../../app/theme/app_spacing.dart';
 import 'lease_models.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
-import 'payment_checkout.dart';
-import 'payment_service.dart';
+import 'upi_pay_sheet.dart';
+import 'upi_service.dart';
 
 class LeaseDepositTab extends StatefulWidget {
   final Lease lease;
@@ -48,18 +48,22 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     await _run(() => LeaseService.instance.depositPay(_id, r.method, r.reference), 'Sent to owner for confirmation');
   }
 
-  Future<void> _payOnline() async {
-    setState(() => _busy = true);
-    await payOnline(context, start: () => PaymentService.instance.startDepositCheckout(_id));
+  Future<void> _payUpi(Deposit d) async {
+    final sent = await showUpiPaySheet(
+      context,
+      title: 'Security deposit',
+      loadLink: () => UpiService.instance.depositLink(_id),
+      submit: (utr, shot) => UpiService.instance.submitDeposit(_id, utr, shot),
+    );
     if (!mounted) return;
-    setState(() => _busy = false);
+    if (sent) snack(context, 'Sent to owner for confirmation');
     await widget.onChanged();
   }
 
   Future<void> _receipt() async {
     setState(() => _busy = true);
     try {
-      final bytes = await PaymentService.instance.depositReceiptPdf(_id);
+      final bytes = await UpiService.instance.depositReceiptPdf(_id);
       const name = 'deposit-receipt.pdf';
       await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: name)], fileNameOverrides: [name]);
     } catch (e) {
@@ -132,16 +136,22 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
                     InfoRow('Paid via', prettify(d.paymentMethod) + (d.reference.isEmpty ? '' : ' • ${d.reference}')),
                   if (d.refundMethod.isNotEmpty)
                     InfoRow('Refunded via', prettify(d.refundMethod) + (d.refundReference.isEmpty ? '' : ' • ${d.refundReference}')),
+                  if (d.paymentMethod == 'upi' && d.status != 'pending')
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => showProofDialog(context, () => UpiService.instance.depositProof(_id)),
+                        icon: const Icon(Icons.image_outlined, size: 18),
+                        label: const Text('Payment screenshot'),
+                      ),
+                    ),
                   if (d.paymentMethod.isNotEmpty && d.status != 'pending' && d.status != 'submitted' && d.status != 'carried_forward')
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: OutlinedButton.icon(
-                          onPressed: _busy ? null : _receipt,
-                          icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                          label: const Text('Deposit receipt'),
-                        ),
+                      child: OutlinedButton.icon(
+                        onPressed: _busy ? null : _receipt,
+                        icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                        label: const Text('Deposit receipt'),
                       ),
                     ),
                 ]),
@@ -229,8 +239,8 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
       case 'pending':
         return _tenant
             ? Column(children: [
-                btn('Pay deposit ${inr(d.amount)} online', _payOnline),
-                btn('Paid another way', () => _tenantPay(d), outlined: true),
+                btn('Pay deposit ${inr(d.amount)} by UPI', () => _payUpi(d)),
+                btn('Cash / other', () => _tenantPay(d), outlined: true),
               ])
             : const InfoBanner('Waiting for the tenant to pay the deposit.', icon: Icons.hourglass_empty);
       case 'submitted':

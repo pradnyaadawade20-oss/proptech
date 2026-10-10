@@ -13,6 +13,10 @@ func RegisterLeaseRoutes(router *gin.Engine, h *handlers.LeaseHandler) {
 	api.GET("/leases", h.ListMine)
 	api.GET("/agreements/:id/lease", h.GetByAgreement)
 
+	// Direct UPI payments
+	api.GET("/owner/upi", h.OwnerUPIGet)
+	api.PUT("/owner/upi", h.OwnerUPISet)
+
 	l := api.Group("/leases/:id")
 	{
 		l.GET("", h.Get)
@@ -26,6 +30,10 @@ func RegisterLeaseRoutes(router *gin.Engine, h *handlers.LeaseHandler) {
 
 		l.GET("/deposit", h.Deposit)
 		l.POST("/deposit/pay", h.DepositPay)
+		l.GET("/deposit/upi-link", h.DepositUPILink)
+		l.POST("/deposit/upi-submit", h.DepositUPISubmit)
+		l.GET("/deposit/proof", h.DepositProof)
+		l.GET("/deposit/receipt", h.DepositReceipt)
 		l.POST("/deposit/confirm", h.DepositConfirm)
 		l.POST("/deposit/reject", h.DepositReject)
 		l.POST("/deposit/inspection", h.DepositInspection)
@@ -45,6 +53,9 @@ func RegisterLeaseRoutes(router *gin.Engine, h *handlers.LeaseHandler) {
 	rent := api.Group("/rent/:paymentId")
 	{
 		rent.POST("/pay", h.PayRent)
+		rent.GET("/upi-link", h.RentUPILink)
+		rent.POST("/upi-submit", h.RentUPISubmit)
+		rent.GET("/proof", h.RentProof)
 		rent.POST("/confirm", h.ConfirmRent)
 		rent.POST("/mark-paid", h.MarkRentPaid)
 		rent.POST("/reject", h.RejectRent)

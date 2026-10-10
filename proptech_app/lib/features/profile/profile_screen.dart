@@ -215,11 +215,7 @@ Future<void> _logout() async {
                 ),
                 // Anyone who posts a property (owner or broker) adds the bank
                 // account that receives rent here.
-                _ProfileMenuTile(
-                  icon: Icons.account_balance_outlined,
-                  title: 'Bank & Payouts',
-                  onTap: () => context.push(RouteNames.ownerBank),
-                ),
+                
                 _ProfileMenuTile(
                   icon: Icons.favorite_border,
                   title: 'Favorites',

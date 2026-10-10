@@ -6,10 +6,9 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import 'lease_models.dart';
 import 'lease_service.dart';
-import 'lease_payments_section.dart';
 import 'lease_widgets.dart';
-import 'payment_checkout.dart';
-import 'payment_service.dart';
+import 'upi_pay_sheet.dart';
+import 'upi_service.dart';
 
 class LeaseRentTab extends StatefulWidget {
   final Lease lease;
@@ -47,12 +46,16 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
     await _run(p.id, () => LeaseService.instance.payRent(p.id, r.method, r.reference), 'Sent to owner for confirmation');
   }
 
-  Future<void> _payOnline(RentPayment p) async {
-    setState(() => _busyId = p.id);
-    await payOnline(context, start: () => PaymentService.instance.startRentCheckout(p.id));
+  Future<void> _payUpi(RentPayment p) async {
+    final sent = await showUpiPaySheet(
+      context,
+      title: 'Pay ${_period(p.dueDate)} rent',
+      loadLink: () => UpiService.instance.rentLink(p.id),
+      submit: (utr, shot) => UpiService.instance.submitRent(p.id, utr, shot),
+    );
     if (!mounted) return;
-    setState(() => _busyId = null);
-    await widget.onChanged(); // refresh even on failure: the server may have updated the state
+    if (sent) snack(context, 'Sent to owner for confirmation');
+    await widget.onChanged();
   }
 
   Future<void> _markPaid(RentPayment p) async {
@@ -121,7 +124,6 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
                   child: Center(child: Text('No rent schedule yet.', style: GoogleFonts.inter(color: AppColors.textSecondary))),
                 ),
               ...payments.map(_card),
-              LeasePaymentsSection(leaseId: widget.lease.id, role: widget.role),
             ],
           ),
         );
@@ -145,11 +147,18 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
     final actions = <Widget>[];
     if (_tenant && unpaid) {
       actions.add(ElevatedButton.icon(
-        onPressed: busy ? null : () => _payOnline(p),
-        icon: const Icon(Icons.lock_outline, size: 18),
-        label: Text('Pay ${inr(p.total)} online'),
+        onPressed: busy ? null : () => _payUpi(p),
+        icon: const Icon(Icons.qr_code_2, size: 18),
+        label: Text('Pay ${inr(p.total)} by UPI'),
       ));
-      actions.add(OutlinedButton(onPressed: busy ? null : () => _pay(p), child: const Text('Paid another way')));
+      actions.add(OutlinedButton(onPressed: busy ? null : () => _pay(p), child: const Text('Cash / other')));
+    }
+    if ((st == 'submitted' || p.status == 'paid') && p.paymentMethod == 'upi') {
+      actions.add(OutlinedButton.icon(
+        onPressed: () => showProofDialog(context, () => UpiService.instance.rentProof(p.id)),
+        icon: const Icon(Icons.image_outlined, size: 18),
+        label: const Text('Payment screenshot'),
+      ));
     }
     if (_owner && st == 'submitted') {
       actions.add(ElevatedButton(
