@@ -30,6 +30,11 @@ type Agreement struct {
 	DurationMonths  *int     `json:"duration_months,omitempty"`
 	Terms           *string  `json:"terms,omitempty"`
 
+	// Draft details filled by the owner.
+	PropertyAddress  *string `json:"property_address,omitempty"`
+	NoticePeriodDays *int    `json:"notice_period_days,omitempty"`
+	RentDueDay       *int    `json:"rent_due_day,omitempty"`
+
 	OwnerSignatureType string     `json:"owner_signature_type,omitempty"`
 	OwnerSignatureData string     `json:"owner_signature_data,omitempty"`
 	OwnerSignedAt      *time.Time `json:"owner_signed_at,omitempty"`
@@ -66,6 +71,10 @@ type UpdateDraftRequest struct {
 	StartDate       *string  `json:"start_date"`
 	DurationMonths  *int     `json:"duration_months"`
 	Terms           *string  `json:"terms" binding:"required"`
+
+	PropertyAddress  *string `json:"property_address"`
+	NoticePeriodDays *int    `json:"notice_period_days"`
+	RentDueDay       *int    `json:"rent_due_day"`
 }
 
 // Step 3: either party signs — via drawn signature (base64 PNG) or typed name.

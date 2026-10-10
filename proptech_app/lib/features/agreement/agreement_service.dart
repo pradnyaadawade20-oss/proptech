@@ -78,6 +78,9 @@ class AgreementService {
     String? startDate, // YYYY-MM-DD
     int? durationMonths,
     required String terms,
+    String? propertyAddress,
+    int? noticePeriodDays,
+    int? rentDueDay,
   }) async {
     try {
       final response = await _dio.put('/api/agreements/$id/draft', data: {
@@ -86,6 +89,9 @@ class AgreementService {
         'start_date': startDate,
         'duration_months': durationMonths,
         'terms': terms,
+        'property_address': propertyAddress,
+        'notice_period_days': noticePeriodDays,
+        'rent_due_day': rentDueDay,
       });
       return Agreement.fromJson(response.data['agreement'] as Map<String, dynamic>);
     } on DioException catch (e) {

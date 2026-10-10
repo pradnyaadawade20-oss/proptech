@@ -26,7 +26,8 @@ const agreementSelectQuery = `
 	       COALESCE(a.owner_signature_type, ''), COALESCE(a.owner_signature_data, ''), a.owner_signed_at,
 	       COALESCE(a.tenant_signature_type, ''), COALESCE(a.tenant_signature_data, ''), a.tenant_signed_at,
 	       COALESCE(a.final_pdf_url, ''), a.created_at, a.updated_at,
-	       a.expires_at, COALESCE(a.status_reason, ''), COALESCE(a.status_changed_by::text, ''), a.status_changed_at
+	       a.expires_at, COALESCE(a.status_reason, ''), COALESCE(a.status_changed_by::text, ''), a.status_changed_at,
+	       a.property_address, a.notice_period_days, a.rent_due_day
 	FROM agreements a
 	JOIN properties p ON p.id = a.property_id
 	JOIN users ou ON ou.id = a.owner_id
@@ -44,6 +45,7 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 		&a.TenantSignatureType, &a.TenantSignatureData, &a.TenantSignedAt,
 		&a.FinalPDFURL, &a.CreatedAt, &a.UpdatedAt,
 		&a.ExpiresAt, &a.StatusReason, &a.StatusChangedBy, &a.StatusChangedAt,
+		&a.PropertyAddress, &a.NoticePeriodDays, &a.RentDueDay,
 	)
 	if err != nil {
 		return nil, err
@@ -116,6 +118,7 @@ func (r *AgreementRepository) UpdateDraft(ctx context.Context, id string, req mo
 		UPDATE agreements
 		SET monthly_rent = $1, security_deposit = $2, start_date = $3,
 		    duration_months = $4, terms = $5, status = 'draft_ready', updated_at = now(),
+		    property_address = $8, notice_period_days = $9, rent_due_day = $10,
 		    expires_at = now() + make_interval(days => $7),
 		    owner_otp_verified = FALSE, tenant_otp_verified = FALSE,
 		    owner_otp_code = NULL, tenant_otp_code = NULL
@@ -123,7 +126,8 @@ func (r *AgreementRepository) UpdateDraft(ctx context.Context, id string, req mo
 		  AND status IN ('requested', 'draft_ready', 'awaiting_signatures')
 		  AND (expires_at IS NULL OR expires_at > now())
 		  AND owner_signed_at IS NULL AND tenant_signed_at IS NULL
-	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id, models.AgreementExpiryDays)
+	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id, models.AgreementExpiryDays,
+		req.PropertyAddress, req.NoticePeriodDays, req.RentDueDay)
 	if err != nil {
 		return nil, err
 	}

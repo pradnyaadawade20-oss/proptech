@@ -97,6 +97,11 @@ class Agreement {
   final int? durationMonths;
   final String? terms;
 
+  /// Filled by the owner while drafting.
+  final String? propertyAddress;
+  final int? noticePeriodDays;
+  final int? rentDueDay;
+
   final SignatureType? ownerSignatureType;
   final String? ownerSignatureData; // base64 PNG or typed name
   final DateTime? ownerSignedAt;
@@ -132,6 +137,9 @@ class Agreement {
     this.startDate,
     this.durationMonths,
     this.terms,
+    this.propertyAddress,
+    this.noticePeriodDays,
+    this.rentDueDay,
     this.ownerSignatureType,
     this.ownerSignatureData,
     this.ownerSignedAt,
@@ -149,6 +157,20 @@ class Agreement {
   bool get ownerHasSigned => ownerSignedAt != null;
   bool get tenantHasSigned => tenantSignedAt != null;
   bool get hasDraft => terms != null && terms!.isNotEmpty;
+
+  /// Readable reference like RA-2026-1A2B3C (built from the creation year + id).
+  String get agreementNumber {
+    final year = (createdAt ?? DateTime.now()).year;
+    final tail = id.replaceAll('-', '').toUpperCase();
+    return 'RA-$year-${tail.length < 6 ? tail : tail.substring(0, 6)}';
+  }
+
+  /// Last day of the lease (start + duration - 1 day), when both are known.
+  DateTime? get endDate {
+    if (startDate == null || durationMonths == null) return null;
+    final s = startDate!;
+    return DateTime(s.year, s.month + durationMonths!, s.day).subtract(const Duration(days: 1));
+  }
 
   /// Name of whoever rejected/cancelled it, or null (system / unknown).
   String? get statusChangedByName {
@@ -177,6 +199,9 @@ class Agreement {
       startDate: json['start_date'] != null ? DateTime.tryParse(json['start_date']) : null,
       durationMonths: json['duration_months'] as int?,
       terms: json['terms'] as String?,
+      propertyAddress: json['property_address'] as String?,
+      noticePeriodDays: (json['notice_period_days'] as num?)?.toInt(),
+      rentDueDay: (json['rent_due_day'] as num?)?.toInt(),
       ownerSignatureType: parseSigType(json['owner_signature_type'] as String?),
       ownerSignatureData: json['owner_signature_data'] as String?,
       ownerSignedAt: json['owner_signed_at'] != null ? DateTime.tryParse(json['owner_signed_at']) : null,

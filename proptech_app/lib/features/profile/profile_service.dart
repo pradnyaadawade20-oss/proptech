@@ -1,4 +1,5 @@
 ﻿import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 
@@ -78,6 +79,42 @@ class ProfileService {
         'email': email,
         'avatar_url': avatarUrl,
       });
+      return UserProfile.fromJson(response.data['user'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Uploads a new profile photo. Returns the profile with the new avatarUrl.
+  Future<UserProfile> uploadAvatar({
+    required String userId,
+    required XFile file,
+  }) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final form = FormData.fromMap({
+        'avatar': MultipartFile.fromBytes(
+          bytes,
+          filename: file.name.isEmpty ? 'avatar.jpg' : file.name,
+        ),
+      });
+      final response = await _dio.post(
+        '/api/profile/$userId/avatar',
+        data: form,
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
+      return UserProfile.fromJson(response.data['user'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  Future<UserProfile> removeAvatar(String userId) async {
+    try {
+      final response = await _dio.delete('/api/profile/$userId/avatar');
       return UserProfile.fromJson(response.data['user'] as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _toException(e);

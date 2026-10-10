@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 
 	"proptech-backend/internal/mail"
@@ -153,6 +154,23 @@ func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 		return
 	}
 
+	if req.PropertyAddress != nil {
+		addr := strings.TrimSpace(*req.PropertyAddress)
+		if len(addr) > 500 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "property address is too long (max 500 characters)"})
+			return
+		}
+		req.PropertyAddress = &addr
+	}
+	if req.RentDueDay != nil && (*req.RentDueDay < 1 || *req.RentDueDay > 28) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "rent due day must be between 1 and 28"})
+		return
+	}
+	if req.NoticePeriodDays != nil && (*req.NoticePeriodDays < 0 || *req.NoticePeriodDays > 365) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "notice period must be between 0 and 365 days"})
+		return
+	}
+
 	agreement, err := h.repo.UpdateDraft(c.Request.Context(), id, req)
 	if err != nil {
 		if writeStateError(c, err) {
@@ -260,8 +278,19 @@ func (h *AgreementHandler) SendSignOTP(c *gin.Context) {
 		return
 	}
 	code := fmt.Sprintf("%06d", n.Int64())
+	// TESTING ONLY: DEV_FIXED_SIGN_OTP=true makes the signing OTP always 123456
+	// and skips the email. main.go refuses to start with it in production.
+	devOTP := os.Getenv("DEV_FIXED_SIGN_OTP") == "true"
+	if devOTP {
+		code = "123456"
+	}
 	if err := h.repo.SetOTP(c.Request.Context(), id, req.SignerRole, code); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create OTP"})
+		return
+	}
+	if devOTP {
+		log.Printf("DEV_FIXED_SIGN_OTP on: fixed OTP used for agreement %s", id)
+		c.JSON(http.StatusOK, gin.H{"message": "OTP sent"})
 		return
 	}
 	if err := h.mailer.SendOTP(c.Request.Context(), email, code); err != nil {

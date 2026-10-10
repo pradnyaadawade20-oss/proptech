@@ -80,11 +80,16 @@ func RegisterMessageRoutes(router *gin.Engine, h *handlers.MessageHandler) {
 }
 
 func RegisterProfileRoutes(router *gin.Engine, h *handlers.ProfileHandler) {
+	// Public: Image.network JWT nahi bhej sakta, aur chat/owner screens pe dusron ki photo bhi dikhti hai
+	router.GET("/api/profile/:id/avatar", h.ServeAvatar)
+
 	profile := router.Group("/api/profile")
 	profile.Use(middleware.AuthRequired())
 	{
 		profile.GET("/:id", h.GetProfile)
 		profile.PUT("/:id", h.UpdateProfile)
+		profile.POST("/:id/avatar", h.UploadAvatar)
+		profile.DELETE("/:id/avatar", h.DeleteAvatar)
 	}
 }
 
