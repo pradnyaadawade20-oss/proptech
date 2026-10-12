@@ -36,7 +36,6 @@ services:
       - key: DEV_SKIP_OTP
         value: "true"
       
-        value: "0"
 
 databases:
   - name: proptech-db

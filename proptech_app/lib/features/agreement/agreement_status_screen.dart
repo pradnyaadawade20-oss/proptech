@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -250,6 +251,20 @@ class _AgreementStatusScreenState extends State<AgreementStatusScreen> {
     if (mounted) _load(silent: true);
   }
 
+  Future<void> _downloadPdf(Agreement a) async {
+    try {
+      final bytes = await AgreementService.instance.downloadPdf(a.id);
+      const name = 'rental-agreement.pdf';
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, mimeType: 'application/pdf', name: name)],
+        fileNameOverrides: [name],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _snack(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   Future<void> _openLease(Agreement a) async {
     try {
       final lease = await LeaseService.instance.leaseForAgreement(a.id);
@@ -388,6 +403,15 @@ class _AgreementStatusScreenState extends State<AgreementStatusScreen> {
               icon: const Icon(Icons.home_work_outlined),
               label: const Text('View lease & rent'),
               onPressed: () => _openLease(a),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('Download agreement PDF'),
+              onPressed: () => _downloadPdf(a),
             ),
           ),
         ] else if (!status.isFinal && isParty) ...[

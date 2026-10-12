@@ -14,7 +14,16 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _anim =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -55,12 +64,36 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Text(
-          'PropTech',
-          style: AppTextStyles.h1.copyWith(color: Colors.white, fontSize: 32),
+      backgroundColor: Colors.white,
+      body: FadeTransition(
+        opacity: fade,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1.0).animate(fade),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/images/logo.png', width: 190, height: 190),
+                const SizedBox(height: 4),
+                Text(
+                  'PropTech',
+                  style: AppTextStyles.h1.copyWith(
+                    color: AppColors.primaryDark,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Find your perfect space',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, letterSpacing: 0.3),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

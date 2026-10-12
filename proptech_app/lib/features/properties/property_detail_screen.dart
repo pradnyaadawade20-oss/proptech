@@ -290,24 +290,18 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                 ),
                 if (property.galleryImages.length > 1)
                   Positioned(
-                    bottom: 12,
-                    left: 0,
-                    right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(property.galleryImages.length, (i) {
-                        final active = i == _imageIndex;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: active ? 18 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: active ? Colors.white : Colors.white70,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        );
-                      }),
+                    bottom: 38,
+                    left: AppSpacing.md,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        '${_imageIndex + 1} / ${property.galleryImages.length}',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
                     ),
                   ),
                 SafeArea(
@@ -325,17 +319,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                             _RoundIconButton(
                               icon: Icons.share_outlined,
                               onTap: () => _shareProperty(property),
-                            ),
-                            const SizedBox(width: 8),
-                            _RoundIconButton(
-                              icon: Icons.compare_arrows,
-                              iconColor: CompareStore.instance.contains(property.id) ? AppColors.primary : AppColors.textPrimary,
-                              onTap: () => _toggleCompare(property),
-                            ),
-                            const SizedBox(width: 8),
-                            _RoundIconButton(
-                              icon: Icons.flag_outlined,
-                              onTap: () => ReportListingSheet.show(context, property.id),
                             ),
                             const SizedBox(width: 8),
                             _RoundIconButton(
@@ -432,7 +415,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                         Expanded(
                           child: Text(property.location, style: AppTextStyles.bodySmall),
                         ),
-                        if (property.reviewCount > 0) ...[
+                        if (property.priceUnit.isEmpty && property.area > 0)
+                          Text(
+                            '${formatPrice(property.price / property.area)} / sq.ft',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          )
+                        else if (property.reviewCount > 0) ...[
                           const Icon(Icons.star, size: 16, color: Colors.amber),
                           const SizedBox(width: 2),
                           Text(
@@ -447,15 +435,29 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     // Beds / Baths / Sqft / Type row
                     Row(
                       children: [
-                        _InfoTag(icon: Icons.bed_outlined, label: property.bhk),
-                        const SizedBox(width: AppSpacing.sm),
-                        _InfoTag(icon: Icons.chair_outlined, label: property.furnishing),
-                        const SizedBox(width: AppSpacing.sm),
+                        if (property.bhk.isNotEmpty) ...[
+                          _InfoTag(icon: Icons.bed_outlined, label: property.bhk),
+                          const SizedBox(width: AppSpacing.sm),
+                        ],
+                        if (property.furnishing.isNotEmpty) ...[
+                          _InfoTag(icon: Icons.chair_outlined, label: property.furnishing),
+                          const SizedBox(width: AppSpacing.sm),
+                        ],
                         if (property.isVerified)
                           const _InfoTag(icon: Icons.verified_outlined, label: 'Verified'),
                       ],
                     ),
-                    const Divider(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Property Highlights — floor / area / available from
+                    if (property.totalFloors > 0 || property.area > 0 || property.availableFrom != null) ...[
+                      _SectionCard(
+                        icon: Icons.apartment_rounded,
+                        title: 'Property Highlights',
+                        child: _HighlightsRow(property: property),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
 
 
                     // About — owner's description.
@@ -474,21 +476,18 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     // Property Details — possession, age, floor, facing, area, etc.
                     if (property.possessionStatus.isNotEmpty ||
                         property.ageOfPropertyYears >= 0 ||
-                        property.totalFloors > 0 ||
                         property.facing.isNotEmpty ||
-                        property.area > 0 ||
                         property.bathrooms > 0 ||
                         property.balconies > 0 ||
                         property.society.isNotEmpty ||
                         property.ownershipType.isNotEmpty ||
-                        property.availableFrom != null ||
                         property.securityDeposit > 0 ||
                         property.maintenanceCharges > 0 ||
                         property.preferredTenants.isNotEmpty ||
                         property.isPriceNegotiable) ...[
                       _SectionCard(
                         icon: Icons.home_work_outlined,
-                        title: 'Property Details',
+                        title: 'More Details',
                         child: _PropertyDetailsGrid(property: property),
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -507,20 +506,9 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     // Amenities
                     if (property.amenities.isNotEmpty) ...[
                       _SectionCard(
-                        icon: Icons.auto_awesome_outlined,
                         title: 'Amenities',
                         onViewAll: () => _viewAllAmenities(property),
-                        child: LayoutBuilder(builder: (context, c) {
-                          final itemW = (c.maxWidth - 3 * AppSpacing.sm) / 4;
-                          return Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.md,
-                            children: property.amenities
-                                .take(8)
-                                .map((a) => SizedBox(width: itemW, child: _AmenityTile(type: a)))
-                                .toList(),
-                          );
-                        }),
+                        child: _AmenitiesPager(amenities: property.amenities),
                       ),
                       const SizedBox(height: AppSpacing.md),
                     ],
@@ -537,19 +525,18 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
 
                     // Gallery — tap any photo to open the fullscreen viewer.
                     _SectionCard(
-                      icon: Icons.photo_library_outlined,
                       title: 'Gallery',
                       onViewAll: () => _openGallery(property, 0),
                       child: Builder(builder: (context) {
                         final images = property.galleryImages;
                         // Up to 4 slots; if there are more photos, the last
                         // slot becomes a "+N" overlay tile.
-                        const maxSlots = 4;
+                        const maxSlots = 3;
                         final showOverflow = images.length > maxSlots;
                         final visibleCount = showOverflow ? maxSlots - 1 : images.length;
                         final remaining = images.length - visibleCount;
                         return SizedBox(
-                          height: 76,
+                          height: 96,
                           child: Row(
                             children: [
                               for (int i = 0; i < visibleCount; i++) ...[
@@ -595,7 +582,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     // uploaded a walkthrough video for this listing.
                     if (property.videoTourUrl != null) ...[
                       _SectionCard(
-                        icon: Icons.play_circle_fill_rounded,
                         title: 'Video Tour',
                         child: VideoTourCard(
                           videoUrl: property.videoTourUrl!,
@@ -676,32 +662,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Material(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                        onTap: () => _requestAgreement(property),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  'Request Agreement',
-                                  textAlign: TextAlign.center,
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right, color: AppColors.primary),
-                            ],
-                          ),
-                        ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _requestAgreement(property),
+                        icon: const Icon(Icons.description_outlined, size: 20),
+                        label: const Text('Request Agreement'),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
@@ -717,7 +683,22 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Similar Properties', style: AppTextStyles.h3),
+                          Row(
+                            children: [
+                              Expanded(child: Text('Similar Properties', style: AppTextStyles.h3)),
+                              InkWell(
+                                onTap: () => context.push(RouteNames.search),
+                                child: Text(
+                                  'View all',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    fontSize: 13,
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             'Based on location, type & budget',
@@ -872,7 +853,7 @@ class _InfoTag extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -982,28 +963,10 @@ class _AmenityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.secondary, AppColors.primary],
-            ),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg - 4),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Icon(_icon, size: 22, color: Colors.white),
-        ),
-        const SizedBox(height: 6),
+        Icon(_icon, size: 28, color: AppColors.primary),
+        const SizedBox(height: 8),
         Text(
           _label,
           textAlign: TextAlign.center,
@@ -1011,13 +974,136 @@ class _AmenityTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.caption.copyWith(
             color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
     );
   }
 }
+
+/// Amenities shown 5 per page with thin dividers and page dots.
+class _AmenitiesPager extends StatefulWidget {
+  final List<String> amenities;
+  const _AmenitiesPager({required this.amenities});
+
+  @override
+  State<_AmenitiesPager> createState() => _AmenitiesPagerState();
+}
+
+class _AmenitiesPagerState extends State<_AmenitiesPager> {
+  static const _perPage = 5;
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.amenities;
+    final pages = (items.length / _perPage).ceil();
+    return Column(
+      children: [
+        SizedBox(
+          height: 78,
+          child: PageView.builder(
+            itemCount: pages,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (context, pageIndex) {
+              final slice = items.skip(pageIndex * _perPage).take(_perPage).toList();
+              return Row(
+                children: [
+                  for (int i = 0; i < _perPage; i++) ...[
+                    Expanded(
+                      child: i < slice.length ? _AmenityTile(type: slice[i]) : const SizedBox.shrink(),
+                    ),
+                    if (i != _perPage - 1)
+                      Container(width: 1, height: 36, color: AppColors.border),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+        if (pages > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(pages, (i) {
+              final active = i == _page;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 6,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.primary : AppColors.border,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Floor / Area / Available-from in one row, separated by thin dividers.
+class _HighlightsRow extends StatelessWidget {
+  final Property property;
+  const _HighlightsRow({required this.property});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = property;
+    final items = <(IconData, String, String)>[
+      if (p.totalFloors > 0)
+        (Icons.stairs_outlined, 'Floor', '${p.floorNumber == 0 ? 'Ground' : p.floorNumber} of ${p.totalFloors}'),
+      if (p.area > 0) (Icons.square_foot_outlined, 'Area', '${p.area.toStringAsFixed(0)} sq.ft'),
+      if (p.availableFrom != null)
+        (
+          Icons.calendar_today_outlined,
+          'Available From',
+          '${p.availableFrom!.day} ${_mon[p.availableFrom!.month - 1]} ${p.availableFrom!.year}',
+        ),
+    ];
+    return IntrinsicHeight(
+      child: Row(
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(items[i].$1, size: 22, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(items[i].$2, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 2),
+                        Text(
+                          items[i].$3,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (i != items.length - 1) Container(width: 1, color: AppColors.border),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+const _mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /// 2-column grid of key facts: possession, age of construction, floor,
 /// facing, and carpet/plot area.
@@ -1042,24 +1128,11 @@ class _PropertyDetailsGrid extends StatelessWidget {
           'Age of Property',
           property.ageOfPropertyYears == 0 ? 'New Construction' : '${property.ageOfPropertyYears} yrs old',
         ),
-      if (property.totalFloors > 0)
-        (
-          Icons.stairs_outlined,
-          'Floor',
-          '${property.floorNumber == 0 ? 'Ground' : property.floorNumber} of ${property.totalFloors}',
-        ),
       if (property.facing.isNotEmpty) (Icons.explore_outlined, 'Facing', property.facing),
-      if (property.area > 0) (Icons.square_foot_outlined, 'Area', '${property.area.toStringAsFixed(0)} sqft'),
       if (property.bathrooms > 0) (Icons.bathtub_outlined, 'Bathrooms', '${property.bathrooms}'),
       if (property.balconies > 0) (Icons.balcony_outlined, 'Balconies', '${property.balconies}'),
       if (property.society.isNotEmpty) (Icons.apartment_outlined, 'Society', property.society),
       if (property.ownershipType.isNotEmpty) (Icons.gavel_outlined, 'Ownership', property.ownershipType),
-      if (property.availableFrom != null)
-        (
-          Icons.event_outlined,
-          'Available From',
-          '${property.availableFrom!.day}/${property.availableFrom!.month}/${property.availableFrom!.year}',
-        ),
       if (property.securityDeposit > 0)
         (Icons.savings_outlined, 'Security Deposit', '₹${property.securityDeposit.toStringAsFixed(0)}'),
       if (property.maintenanceCharges > 0)
@@ -1292,13 +1365,13 @@ class _NearbyLandmarksSection extends StatelessWidget {
 /// White rounded card with an icon + title header and an optional
 /// "View all >" link. Used for Amenities, Gallery and Video Tour.
 class _SectionCard extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String title;
   final VoidCallback? onViewAll;
   final Widget child;
 
   const _SectionCard({
-    required this.icon,
+    this.icon,
     required this.title,
     required this.child,
     this.onViewAll,
@@ -1312,12 +1385,11 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.14),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -1326,13 +1398,15 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                child: Icon(icon, size: 15, color: Colors.white),
-              ),
-              const SizedBox(width: AppSpacing.sm),
+              if (icon != null) ...[
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                  child: Icon(icon, size: 15, color: Colors.white),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Expanded(
                 child: Text(
                   title,

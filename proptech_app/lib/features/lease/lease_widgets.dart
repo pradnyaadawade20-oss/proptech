@@ -112,12 +112,12 @@ Future<bool> runGuarded(BuildContext context, Future<void> Function() action, {S
 Future<bool> confirmDialog(BuildContext context, String title, String body, {String yes = 'Yes'}) async {
   final r = await showDialog<bool>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(body),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, true), child: Text(yes)),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(yes)),
       ],
     ),
   );
@@ -135,7 +135,7 @@ Future<String?> askText(
   final c = TextEditingController();
   return showDialog<String>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (ctx) => AlertDialog(
       title: Text(title),
       content: TextField(
         controller: c,
@@ -145,11 +145,11 @@ Future<String?> askText(
         decoration: InputDecoration(hintText: hint),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () {
             if (c.text.trim().length < minLength) return;
-            Navigator.pop(context, c.text.trim());
+            Navigator.pop(ctx, c.text.trim());
           },
           child: Text(button),
         ),

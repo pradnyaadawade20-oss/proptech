@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import 'agreement.dart';
@@ -58,6 +60,28 @@ class AgreementService {
       return list.map((e) => Agreement.fromJson(e as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
       throw _toException(e);
+    }
+  }
+
+  /// PDF of a fully signed agreement (server refuses until both have signed).
+  Future<Uint8List> downloadPdf(String id) async {
+    try {
+      final r = await _dio.get<List<int>>('/api/agreements/$id/pdf',
+          options: Options(responseType: ResponseType.bytes));
+      return Uint8List.fromList(r.data ?? const []);
+    } on DioException catch (e) {
+      final d = e.response?.data;
+      if (d is List<int>) {
+        try {
+          final m = String.fromCharCodes(d);
+          if (m.contains('"error"')) {
+            throw Exception(RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(m)?.group(1) ?? 'Could not load the PDF.');
+          }
+        } on FormatException {
+          // fall through
+        }
+      }
+      throw Exception(e.message ?? 'Could not load the PDF.');
     }
   }
 

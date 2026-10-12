@@ -123,13 +123,27 @@ class _LeaseRentTabState extends State<LeaseRentTab> {
                   padding: const EdgeInsets.all(24),
                   child: Center(child: Text('No rent schedule yet.', style: GoogleFonts.inter(color: AppColors.textSecondary))),
                 ),
-              ...payments.map(_card),
+              if (payments.any((p) => p.status != 'paid')) ...[
+                _heading('Due & upcoming'),
+                ...payments.where((p) => p.status != 'paid').map(_card),
+              ],
+              if (payments.any((p) => p.status == 'paid')) ...[
+                _heading('Payment history'),
+                ...(payments.where((p) => p.status == 'paid').toList()
+                      ..sort((a, b) => (b.paidAt ?? DateTime(1970)).compareTo(a.paidAt ?? DateTime(1970))))
+                    .map(_card),
+              ],
             ],
           ),
         );
       },
     );
   }
+
+  Widget _heading(String t) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+        child: Text(t, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
+      );
 
   Widget _stat(String label, String value, Color c) => Expanded(
         child: Column(children: [

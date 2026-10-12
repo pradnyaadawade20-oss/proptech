@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"proptech-backend/internal/mail"
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
+	"proptech-backend/internal/receipt"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -410,4 +412,91 @@ func notifyOtherParty(a *models.Agreement, actorID, title, body string) {
 		target = a.TenantID
 	}
 	notify.SendRoute(target, "agreement", title, body, "/agreement/"+a.ID+"/status")
+}
+
+func pdfStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func pdfFloat(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func pdfInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func pdfIST(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.In(time.FixedZone("IST", 5*3600+1800)).Format("2 Jan 2006, 3:04 PM")
+}
+
+// GET /api/agreements/:id/pdf   -> application/pdf
+// Only the two parties, and only once both have signed.
+func (h *AgreementHandler) DownloadPDF(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	a, err := h.repo.GetByID(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agreement not found"})
+		return
+	}
+	if a.OwnerID != userID && a.TenantID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you're not a party on this agreement"})
+		return
+	}
+	if a.Status != "completed" {
+		c.JSON(http.StatusConflict, gin.H{"error": "the PDF is available once both parties have signed"})
+		return
+	}
+
+	start, end := "", ""
+	months := pdfInt(a.DurationMonths)
+	if a.StartDate != nil && len(*a.StartDate) >= 10 {
+		st := models.ParseDate((*a.StartDate)[:10])
+		if !st.IsZero() {
+			start = st.Format("2 Jan 2006")
+			if months > 0 {
+				end = models.AddMonthsClamped(st, months).AddDate(0, 0, -1).Format("2 Jan 2006")
+			}
+		}
+	}
+
+	pdf := receipt.BuildAgreement(receipt.AgreementData{
+		AgreementID:      a.ID,
+		PropertyTitle:    a.PropertyTitle,
+		PropertyAddress:  pdfStr(a.PropertyAddress),
+		OwnerName:        a.OwnerName,
+		TenantName:       a.TenantName,
+		MonthlyRent:      pdfFloat(a.MonthlyRent),
+		SecurityDeposit:  pdfFloat(a.SecurityDeposit),
+		StartDate:        start,
+		EndDate:          end,
+		DurationMonths:   months,
+		RentDueDay:       pdfInt(a.RentDueDay),
+		NoticePeriodDays: pdfInt(a.NoticePeriodDays),
+		Terms:            pdfStr(a.Terms),
+		OwnerSignType:    a.OwnerSignatureType,
+		OwnerSignData:    a.OwnerSignatureData,
+		OwnerSignedAt:    pdfIST(a.OwnerSignedAt),
+		TenantSignType:   a.TenantSignatureType,
+		TenantSignData:   a.TenantSignatureData,
+		TenantSignedAt:   pdfIST(a.TenantSignedAt),
+	})
+	c.Header("Content-Disposition", `inline; filename="rental-agreement.pdf"`)
+	c.Data(http.StatusOK, "application/pdf", pdf)
 }

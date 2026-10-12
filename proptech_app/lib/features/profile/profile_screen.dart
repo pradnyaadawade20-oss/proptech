@@ -296,6 +296,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () => context.push(RouteNames.myVisits),
                       ),
                       _ProfileMenuTile(
+                        icon: Icons.description_outlined,
+                        title: 'My Agreements',
+                        onTap: () => context.push(RouteNames.agreements),
+                      ),
+                      _ProfileMenuTile(
                         icon: Icons.vpn_key_outlined,
                         title: 'My Leases & Rent',
                         onTap: () => context.push(RouteNames.leases),
@@ -308,16 +313,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () => editOwnerUpi(context),
                       ),
                       _ProfileMenuTile(
-                        icon: Icons.favorite_border,
-                        title: 'Favorites',
-                        onTap: () => context.push(RouteNames.favorites),
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.mode_comment_outlined,
-                        title: 'Chats',
-                        onTap: () => context.go(RouteNames.chatList),
-                      ),
-                      _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',
                         onTap: () => context.push(RouteNames.kycVerification),
@@ -327,11 +322,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 20),
                   _MenuGroup(
                     children: [
-                      _ProfileMenuTile(
-                        icon: Icons.settings_outlined,
-                        title: 'Settings',
-                        onTap: () => context.push(RouteNames.settings),
-                      ),
                       _ProfileMenuTile(
                         icon: Icons.help_outline,
                         title: 'Help & Support',
@@ -373,7 +363,7 @@ class _MenuGroup extends StatelessWidget {
       items.add(children[i]);
       if (i != children.length - 1) {
         items.add(const Padding(
-          padding: EdgeInsets.only(left: 68, right: 16),
+          padding: EdgeInsets.only(left: 61, right: 16),
           child: Divider(height: 1, thickness: 1, color: _Ui.divider),
         ));
       }
@@ -421,22 +411,22 @@ class _ProfileMenuTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
           children: [
-            Icon(icon, size: 28, color: iconColor ?? _Ui.ink),
-            const SizedBox(width: 20),
+            Icon(icon, size: 25, color: iconColor ?? _Ui.ink),
+            const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
                 style: TextStyle(
                   color: textColor ?? _Ui.ink,
-                  fontSize: 18,
+                  fontSize: 16.5,
                   fontWeight: FontWeight.w400,
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right, size: 26, color: _Ui.chevron),
+            const Icon(Icons.chevron_right, size: 24, color: _Ui.chevron),
           ],
         ),
       ),
