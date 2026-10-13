@@ -1,10 +1,9 @@
 ﻿package main
 
 import (
+	"context"
 	"log"
 	"net/http"
-       "os"
-	"context"
 
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
@@ -28,9 +27,6 @@ func main() {
 	if cfg.AppEnv == "production" && (cfg.DevSkipOTP || cfg.DevLogOTP) {
 		log.Fatal("DEV_SKIP_OTP / DEV_LOG_OTP must be off when APP_ENV=production")
 	}
-	if cfg.AppEnv == "production" && os.Getenv("DEV_FIXED_SIGN_OTP") == "true" {
-	log.Fatal("DEV_FIXED_SIGN_OTP must be off when APP_ENV=production")
-}
 	middleware.MustInit()
 	log.Println("Email OTP:", cfg.EmailTransport())
 	if cfg.DevSkipOTP {
@@ -162,7 +158,6 @@ func main() {
 	startLeaseJobs(context.Background(), leaseRepo)
 
 	// Online payments (Cashfree sandbox/production). Secret keys are read from env vars only.
-	
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {

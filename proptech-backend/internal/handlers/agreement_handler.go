@@ -7,7 +7,6 @@ import (
 	"log"
 	"math/big"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -262,7 +261,8 @@ func (h *AgreementHandler) SignAgreement(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"agreement": signed})
 }
 
-// SendSignOTP emails a 6-digit code to the signer; must be verified before signing.
+// SendSignOTP creates a 6-digit signing code and delivers it inside the app
+// (to the owner); it must be verified before signing. Never emailed or texted.
 func (h *AgreementHandler) SendSignOTP(c *gin.Context) {
 	id := c.Param("id")
 	userID, err := middleware.GetUserID(c)
@@ -295,38 +295,45 @@ func (h *AgreementHandler) SendSignOTP(c *gin.Context) {
 		writeStateError(c, repository.ErrAgreementBadState)
 		return
 	}
-	email, err := h.repo.PartyEmail(c.Request.Context(), id, req.SignerRole)
-	if err != nil || email == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no email on your account to send the OTP"})
-		return
-	}
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate OTP"})
 		return
 	}
 	code := fmt.Sprintf("%06d", n.Int64())
-	// TESTING ONLY: DEV_FIXED_SIGN_OTP=true makes the signing OTP always 123456
-	// and skips the email. main.go refuses to start with it in production.
-	devOTP := os.Getenv("DEV_FIXED_SIGN_OTP") == "true"
-	if devOTP {
-		code = "123456"
-	}
 	if err := h.repo.SetOTP(c.Request.Context(), id, req.SignerRole, code); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create OTP"})
 		return
 	}
-	if devOTP {
-		log.Printf("DEV_FIXED_SIGN_OTP on: fixed OTP used for agreement %s", id)
-		c.JSON(http.StatusOK, gin.H{"message": "OTP sent"})
+
+	// The signing OTP is never emailed or texted. It is delivered inside the
+	// app, to the property owner:
+	//   - tenant signs  -> the owner gets an in-app notification with the code
+	//                      and gives it to the tenant;
+	//   - owner signs   -> the code is returned to the owner's own app screen.
+	if req.SignerRole == "tenant" {
+		tenantName := notify.UserName(userID)
+		if tenantName == "" {
+			tenantName = "The tenant"
+		}
+		notify.SendRoute(ag.OwnerID, "agreement",
+			"Signing code: "+code,
+			fmt.Sprintf("%s wants to sign the agreement for %s. Share this code with them: %s (valid for 10 minutes).",
+				tenantName, ag.PropertyTitle, code),
+			"/agreement/"+id+"/status")
+		c.JSON(http.StatusOK, gin.H{
+			"message":            "OTP sent to the owner in the app",
+			"delivered_to":       "owner",
+			"expires_in_minutes": 10,
+		})
 		return
 	}
-	if err := h.mailer.SendOTP(c.Request.Context(), email, code); err != nil {
-		log.Printf("agreement otp mail failed: %v", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "could not send OTP email, try again"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "OTP sent"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":            "OTP generated",
+		"delivered_to":       "self",
+		"otp":                code,
+		"expires_in_minutes": 10,
+	})
 }
 
 // VerifySignOTP checks the code; after this the party can call /sign.
