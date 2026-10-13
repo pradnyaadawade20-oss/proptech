@@ -7,6 +7,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/widgets/property_card.dart';
 import '../notifications/notification_bell.dart';
+import '../tour/app_tour.dart';
 import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
@@ -25,6 +26,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   String _homeQuery = '';
   bool _showHomeSuggestions = false;
+
+  // ---- App tour targets ----
+  final GlobalKey _tourHeroKey = GlobalKey();
+  final GlobalKey _tourCategoriesKey = GlobalKey();
+  final GlobalKey _tourSearchKey = GlobalKey();
+  final GlobalKey _tourActionsKey = GlobalKey();
+  final GlobalKey _tourChipsKey = GlobalKey();
+  final GlobalKey _tourBannerKey = GlobalKey();
+  final GlobalKey _tourRecommendedKey = GlobalKey();
 
   final PageController _listBannerController = PageController();
   int _listBannerIndex = 0;
@@ -52,10 +62,102 @@ class _HomeScreenState extends State<HomeScreen> {
     properties = List.of(PropertyStore.instance.all);
     RecentlyViewedStore.instance.load();
     WidgetsBinding.instance.addPostFrameCallback((_) => PropertyStore.instance.load());
+    AppTourStore.instance.replayTick.addListener(_startTour);
+    _maybeStartTourFirstTime();
+  }
+
+  Future<void> _maybeStartTourFirstTime() async {
+    if (await AppTourStore.instance.hasSeen()) return;
+    // Let the home screen finish laying out (and the splash transition end).
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (mounted) _startTour();
+  }
+
+  /// Rect of one bottom-nav tab (the bar has 5 equal-width items).
+  Rect? _navTabRect(int index) {
+    final box = AppTourKeys.bottomNav.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached) return null;
+    final origin = box.localToGlobal(Offset.zero);
+    final w = box.size.width / 5;
+    return Rect.fromLTWH(origin.dx + w * index, origin.dy, w, box.size.height);
+  }
+
+  void _startTour() {
+    if (!mounted || AppTour.isRunning) return;
+    _searchFocusNode.unfocus();
+    AppTour.start(context, [
+      const AppTourStep(
+        icon: Icons.waving_hand_outlined,
+        title: 'Welcome to PropTech',
+        description:
+            'Buy, rent or sell verified properties with confidence. Take a quick 30-second tour to see where everything is.',
+      ),
+      AppTourStep(
+        targetKey: _tourActionsKey,
+        icon: Icons.favorite_border,
+        title: 'Saved & notifications',
+        description:
+            'Tap the heart to open your saved properties. The bell shows visit updates, messages and agreement alerts.',
+      ),
+      AppTourStep(
+        targetKey: _tourSearchKey,
+        icon: Icons.search,
+        title: 'Search any location',
+        description:
+            'Type a city or area to find properties. Use the blue filter button to narrow by budget, BHK, furnishing and more.',
+      ),
+      AppTourStep(
+        targetKey: _tourCategoriesKey,
+        icon: Icons.grid_view_rounded,
+        title: 'Browse by category',
+        description:
+            'Jump straight to Buy, Rent, Commercial, Plot/Land or PG listings. Tap "Post" to list your own property.',
+      ),
+      AppTourStep(
+        targetKey: _tourChipsKey,
+        icon: Icons.bolt_outlined,
+        title: 'Quick picks',
+        description: 'Popular searches like 1 BHK, 2 BHK, PG, Farmhouse and Villa are just one tap away.',
+      ),
+      AppTourStep(
+        targetKey: _tourBannerKey,
+        icon: Icons.add_home_work_outlined,
+        title: 'List your property',
+        description:
+            'Are you an owner or broker? Tap "List Now" to post your property and reach verified buyers and tenants.',
+      ),
+      AppTourStep(
+        targetKey: _tourRecommendedKey,
+        icon: Icons.recommend_outlined,
+        title: 'Recommended for you',
+        description:
+            'Hand-picked properties based on what is available near you. Tap any card to see photos, 360° views and video tours.',
+      ),
+      AppTourStep(
+        rectBuilder: () => _navTabRect(1),
+        icon: Icons.map_outlined,
+        title: 'Search & map view',
+        description: 'Open full search to apply filters, compare properties and explore listings on a map.',
+      ),
+      AppTourStep(
+        rectBuilder: () => _navTabRect(3),
+        icon: Icons.chat_bubble_outline,
+        title: 'Chat with owners',
+        description: 'Message owners and brokers directly, ask questions and schedule property visits.',
+      ),
+      AppTourStep(
+        rectBuilder: () => _navTabRect(4),
+        icon: Icons.person_outline,
+        title: 'Your profile',
+        description:
+            'Manage your KYC, agreements, rent and settings here. You can replay this tour anytime from Profile > Take App Tour.',
+      ),
+    ]);
   }
 
   @override
   void dispose() {
+    AppTourStore.instance.replayTick.removeListener(_startTour);
     _searchController.dispose();
     _searchFocusNode.dispose();
     _listBannerController.dispose();
@@ -183,11 +285,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           
-          IconButton(
-            icon: const Icon(Icons.favorite_border),
-            onPressed: () => context.push(RouteNames.favorites),
+          Row(
+            key: _tourActionsKey,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.favorite_border),
+                onPressed: () => context.push(RouteNames.favorites),
+              ),
+              const NotificationBell(),
+            ],
           ),
-          const NotificationBell(),
         ],
       ),
       body: RefreshIndicator(
@@ -274,6 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Quick-action icons row — plain background, light-blue filled circles
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
+            key: _tourCategoriesKey,
             height: 92,
             child: ListView(
               scrollDirection: Axis.horizontal,
@@ -293,6 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Search bar with filter icon
           Container(
+            key: _tourSearchKey,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -380,7 +490,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Category chips
           SizedBox(
-            height: 40,     
+            key: _tourChipsKey,
+            height: 40,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -401,6 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // List your property banner (swipeable carousel)
           SizedBox(
+            key: _tourBannerKey,
             height: 190,
             child: PageView.builder(
               controller: _listBannerController,
@@ -513,6 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Recommended header
           Row(
+            key: _tourRecommendedKey,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Recommended for you', style: AppTextStyles.h3),

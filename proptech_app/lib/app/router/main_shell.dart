@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../../features/tour/app_tour.dart';
 
 class MainShell extends StatelessWidget {
   final Widget child;
@@ -27,6 +28,7 @@ class MainShell extends StatelessWidget {
       child: Scaffold(
         body: child,
         bottomNavigationBar: BottomNavigationBar(
+          key: AppTourKeys.bottomNav,
           currentIndex: currentIndex,
           onTap: onTap,
           type: BottomNavigationBarType.fixed,

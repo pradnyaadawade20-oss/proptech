@@ -211,11 +211,14 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     if (goKyc == true && mounted) await context.push(RouteNames.kycVerification);
   }
 
-  /// Sends an OTP to the signer's email and asks for it. true = verified.
+  /// Generates a signing OTP and asks for it. The OTP is NOT emailed or texted:
+  /// the owner receives it inside the app (tenant asks the owner for it); when
+  /// the owner is signing, the code is shown right in the dialog. true = verified.
   Future<bool> _verifySignOtp() async {
     final role = _isOwner ? 'owner' : 'tenant';
+    String? ownCode; // only set when the owner is signing
     try {
-      await AgreementService.instance.sendSignOtp(id: widget.agreementId, signerRole: role);
+      ownCode = await AgreementService.instance.sendSignOtp(id: widget.agreementId, signerRole: role);
     } on KycRequiredException {
       await _promptKyc();
       return false;
@@ -229,6 +232,7 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     if (!mounted) return false;
 
     final codeController = TextEditingController();
+    final String? shownCode = ownCode;
     String? error;
     final ok = await showDialog<bool>(
       context: context,
@@ -239,7 +243,41 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('We emailed a 6-digit code to your account email.'),
+              if (shownCode != null) ...[
+                const Text('Your signing code (valid for 10 minutes):'),
+                const SizedBox(height: 10),
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => codeController.text = shownCode,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          shownCode,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 6,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text('Tap to fill', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else
+                const Text(
+                  'A 6-digit signing code has been sent to the property owner inside the PropTech app '
+                  '(Notifications). Ask the owner for the code and enter it below.',
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: codeController,

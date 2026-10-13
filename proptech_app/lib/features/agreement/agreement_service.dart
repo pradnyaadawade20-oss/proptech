@@ -143,10 +143,17 @@ class AgreementService {
     }
   }
 
-  /// Emails a 6-digit code to the signer. Must be verified before sign().
-  Future<void> sendSignOtp({required String id, required String signerRole}) async {
+  /// Creates a 6-digit signing code. It is never emailed/texted:
+  /// - tenant signing -> the code is sent to the OWNER inside the app
+  ///   (Notifications), the tenant asks the owner for it. Returns null.
+  /// - owner signing  -> the code comes back here and is shown on screen.
+  /// Must be verified (verifySignOtp) before sign().
+  Future<String?> sendSignOtp({required String id, required String signerRole}) async {
     try {
-      await _dio.post('/api/agreements/$id/sign/send-otp', data: {'signer_role': signerRole});
+      final response = await _dio.post('/api/agreements/$id/sign/send-otp', data: {'signer_role': signerRole});
+      final data = response.data;
+      if (data is Map && data['otp'] != null) return data['otp'].toString();
+      return null;
     } on DioException catch (e) {
       throw _toException(e);
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../tour/app_tour.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../app/router/route_names.dart';
 import '../../app/theme/app_spacing.dart';
@@ -136,7 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) context.go(RouteNames.login);
   }
 
-  //  header
+  // ---------------------------------------------------------------- header
 
   Widget _buildUserCard() {
     final profile = _profile;
@@ -313,11 +314,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () => editOwnerUpi(context),
                       ),
                       _ProfileMenuTile(
-                        icon: Icons.handshake_outlined,
-                        title: 'Broker invitations',
-                        onTap: () => context.push(RouteNames.landlordInvites),
-                      ),
-                      _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',
                         onTap: () => context.push(RouteNames.kycVerification),
@@ -327,6 +323,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 20),
                   _MenuGroup(
                     children: [
+                      _ProfileMenuTile(
+                        icon: Icons.tour_outlined,
+                        title: 'Take App Tour',
+                        onTap: () {
+                          context.go(RouteNames.home);
+                          Future<void>.delayed(const Duration(milliseconds: 500), AppTourStore.instance.requestReplay);
+                        },
+                      ),
                       _ProfileMenuTile(
                         icon: Icons.help_outline,
                         title: 'Help & Support',
