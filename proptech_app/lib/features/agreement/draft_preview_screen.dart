@@ -741,6 +741,10 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
           _partyRow('Owner', ' (Landlord)', a.ownerName),
           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: AppColors.border)),
           _partyRow('Tenant', '', a.tenantName),
+          if (a.agentName.isNotEmpty) ...[
+            const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: AppColors.border)),
+            _partyRow('Agent', ' (Broker)', a.agentName),
+          ],
         ],
       ),
     );

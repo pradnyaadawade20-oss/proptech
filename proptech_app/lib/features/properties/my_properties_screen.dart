@@ -152,18 +152,42 @@ class _PropertyManageCard extends StatelessWidget {
                   onSelected: (value) {
                     if (value == 'edit') {
                       context.push(RouteNames.editProperty, extra: property);
+                    } else if (value == 'owner') {
+                      context.push(RouteNames.propertyOwnerLink.replaceFirst(':id', property.id), extra: property.title);
                     } else if (value == 'delete') {
                       _confirmDelete(context);
                     }
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    if (property.postedBy == 'broker')
+                      const PopupMenuItem(value: 'owner', child: Text('Owner & agreement')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
+            if (property.postedBy == 'broker') ...[
+              // Agreements + rent need the REAL owner on the platform first.
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push(
+                    RouteNames.propertyOwnerLink.replaceFirst(':id', property.id),
+                    extra: property.title,
+                  ),
+                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                  label: const Text('Link owner for agreements'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             if (property.isVerified)
               const Row(
                 children: [

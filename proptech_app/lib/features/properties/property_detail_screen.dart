@@ -10,6 +10,7 @@ import '../../core/widgets/gallery_viewer_screen.dart';
 import '../../core/widgets/video_tour_player.dart';
 import '../../core/api/token_store.dart';
 import '../profile/profile_service.dart';
+import '../landlord/landlord_service.dart';
 import '../visits/visit_service.dart';
 import '../leads/lead_service.dart';
 import '../moderation/report_listing_sheet.dart';
@@ -38,9 +39,10 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     super.initState();
     // Record this view for the "Recently Viewed" section, after first frame
     // so it doesn't interfere with this screen's own build.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       RecentlyViewedStore.instance.markViewed(widget.propertyId);
-      _ensureLoaded();
+      await _ensureLoaded();
+      _loadAgreementEligibility();
     });
   }
 
@@ -51,6 +53,17 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
   }
 
   bool _notFound = false;
+
+  // Broker listings: online agreements open only once the real owner has accepted the broker's invite.
+  bool _agreementAvailable = false;
+
+  Future<void> _loadAgreementEligibility() async {
+    final p = PropertyStore.instance.byId(widget.propertyId);
+    if (p == null || p.postedBy != 'broker') return;
+    final ok = await LandlordService.instance.agreementAvailable(p.id);
+    if (!mounted) return;
+    setState(() => _agreementAvailable = ok);
+  }
 
   /// Property might not be cached yet (opened from a link / notification).
   Future<void> _ensureLoaded() async {
@@ -173,6 +186,13 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
   }
 
   Future<void> _requestAgreement(Property property) async {
+    // Broker listings: agreement + rent payment are not available yet.
+    if (property.postedBy == 'broker' && !_agreementAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The broker has not linked the property owner yet. Please contact the broker.')),
+      );
+      return;
+    }
     final tenantId = await TokenStore.instance.getUserId();
     if (!mounted) return;
     if (tenantId == null) {
@@ -193,7 +213,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
       extra: {
         'propertyTitle': property.title,
         'propertyImageUrl': property.imageUrl,
-        'counterpartyName': ownerName,
+        'counterpartyName': property.postedBy == 'broker' ? 'the property owner' : ownerName,
         'ownerId': property.ownerId,
         'tenantId': tenantId,
       },
@@ -656,20 +676,43 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                           child: ElevatedButton.icon(
                             onPressed: () => _contactOwner(property),
                             icon: const Icon(Icons.person_outline, size: 20),
-                            label: const Text('Contact Owner'),
+                            label: Text(property.postedBy == 'broker' ? 'Contact Broker' : 'Contact Owner'),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _requestAgreement(property),
-                        icon: const Icon(Icons.description_outlined, size: 20),
-                        label: const Text('Request Agreement'),
+                    if (property.postedBy == 'broker' && !_agreementAvailable)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSoft,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 20, color: AppColors.textSecondary),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'This listing is posted by a broker, and the real owner has not joined PropTech yet. Online agreement and rent payment open once the owner is linked. Please contact the broker.',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _requestAgreement(property),
+                          icon: const Icon(Icons.description_outlined, size: 20),
+                          label: const Text('Request Agreement'),
+                        ),
                       ),
-                    ),
                     const SizedBox(height: AppSpacing.xl),
 
                     // Reviews (public; writing needs a completed visit).

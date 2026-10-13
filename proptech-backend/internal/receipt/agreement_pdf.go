@@ -19,6 +19,7 @@ type AgreementData struct {
 	PropertyAddress string
 	OwnerName       string
 	TenantName      string
+	AgentName       string
 
 	MonthlyRent      float64
 	SecurityDeposit  float64
@@ -222,6 +223,9 @@ func BuildAgreement(a AgreementData) []byte {
 	d.section("Parties")
 	d.kv("Owner (Landlord)", a.OwnerName)
 	d.kv("Tenant", a.TenantName)
+	if a.AgentName != "" {
+		d.kv("Agent (Broker)", a.AgentName)
+	}
 
 	d.section("Property")
 	d.kv("Property", a.PropertyTitle)

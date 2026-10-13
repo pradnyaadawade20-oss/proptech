@@ -155,6 +155,10 @@ func main() {
 	leaseRepo := repository.NewLeaseRepository(dbPool)
 	leaseHandler := handlers.NewLeaseHandler(leaseRepo)
 	routes.RegisterLeaseRoutes(router, leaseHandler)
+
+	landlordInviteRepo := repository.NewLandlordInviteRepository(dbPool)
+	landlordInviteHandler := handlers.NewLandlordInviteHandler(landlordInviteRepo, kycRepo, leaseRepo)
+	routes.RegisterLandlordInviteRoutes(router, landlordInviteHandler)
 	startLeaseJobs(context.Background(), leaseRepo)
 
 	// Online payments (Cashfree sandbox/production). Secret keys are read from env vars only.

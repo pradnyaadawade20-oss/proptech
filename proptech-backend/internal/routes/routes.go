@@ -157,3 +157,23 @@ func RegisterPasswordResetRoutes(router *gin.Engine, h *handlers.PasswordResetHa
 		auth.POST("/reset-password", h.ResetPassword)
 	}
 }
+
+// RegisterLandlordInviteRoutes: broker -> real-owner invitations (Phase 1 of broker listings).
+func RegisterLandlordInviteRoutes(router *gin.Engine, h *handlers.LandlordInviteHandler) {
+	// Public: tells the app whether tenants can request an agreement (no private data).
+	router.GET("/api/properties/:id/agreement-eligibility", h.AgreementEligibility)
+
+	authed := router.Group("/api", middleware.AuthRequired())
+	{
+		// Broker
+		authed.POST("/properties/:id/landlord-invite", h.Create)
+		authed.GET("/properties/:id/landlord-invite", h.GetForProperty)
+		authed.DELETE("/properties/:id/landlord-invite", h.Cancel)
+
+		// Owner
+		authed.GET("/landlord-invites/mine", h.Mine)
+		authed.GET("/landlord-invites/by-code/:code", h.ByCode)
+		authed.POST("/landlord-invites/accept", h.Accept)
+		authed.POST("/landlord-invites/decline", h.Decline)
+	}
+}

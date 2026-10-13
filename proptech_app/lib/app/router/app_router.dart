@@ -40,6 +40,8 @@ import '../../features/compare/compare_screen.dart';
 import '../../features/lease/leases_screen.dart';
 import '../../features/lease/lease_detail_screen.dart';
 import '../../features/agreement/agreements_screen.dart';
+import '../../features/landlord/landlord_invites_screen.dart';
+import '../../features/landlord/property_owner_link_screen.dart';
 import 'main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -322,6 +324,17 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
     GoRoute(
       path: RouteNames.leaseDetail,
       builder: (context, state) => LeaseDetailScreen(leaseId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: RouteNames.propertyOwnerLink,
+      builder: (context, state) => PropertyOwnerLinkScreen(
+        propertyId: state.pathParameters['id']!,
+        propertyTitle: (state.extra as String?) ?? '',
+      ),
+    ),
+    GoRoute(
+      path: RouteNames.landlordInvites,
+      builder: (context, state) => const LandlordInvitesScreen(),
     ),
   ],
 );

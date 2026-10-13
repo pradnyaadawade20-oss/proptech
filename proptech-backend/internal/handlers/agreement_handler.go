@@ -80,12 +80,38 @@ func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.OwnerID != userID && req.TenantID != userID {
+	// Who is really on this deal? Owner-posted listing: the poster is the landlord.
+	// Broker listing: the landlord is the real owner linked through an accepted invite and
+	// the broker is only the agent. owner_id from the client is never trusted.
+	parties, err := h.repo.GetPropertyParties(c.Request.Context(), req.PropertyID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "property not found"})
+		return
+	}
+	landlordID := parties.OwnerID
+	agentID := ""
+	if parties.PostedBy == "broker" {
+		if parties.LandlordID == "" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "The broker has not linked the property owner yet, so online agreements are not available for this listing. Please contact the broker.",
+				"code":  "owner_not_linked",
+			})
+			return
+		}
+		landlordID = parties.LandlordID
+		agentID = parties.OwnerID
+	}
+	if userID != landlordID && userID != req.TenantID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you must be the owner or tenant on this agreement"})
 		return
 	}
+	if req.TenantID == landlordID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "the owner cannot be the tenant on the same agreement"})
+		return
+	}
+	req.OwnerID = landlordID
 
-	agreement, err := h.repo.Create(c.Request.Context(), req)
+	agreement, err := h.repo.Create(c.Request.Context(), req, agentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -482,6 +508,7 @@ func (h *AgreementHandler) DownloadPDF(c *gin.Context) {
 		PropertyAddress:  pdfStr(a.PropertyAddress),
 		OwnerName:        a.OwnerName,
 		TenantName:       a.TenantName,
+		AgentName:        a.AgentName,
 		MonthlyRent:      pdfFloat(a.MonthlyRent),
 		SecurityDeposit:  pdfFloat(a.SecurityDeposit),
 		StartDate:        start,

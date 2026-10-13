@@ -27,11 +27,13 @@ const agreementSelectQuery = `
 	       COALESCE(a.tenant_signature_type, ''), COALESCE(a.tenant_signature_data, ''), a.tenant_signed_at,
 	       COALESCE(a.final_pdf_url, ''), a.created_at, a.updated_at,
 	       a.expires_at, COALESCE(a.status_reason, ''), COALESCE(a.status_changed_by::text, ''), a.status_changed_at,
-	       a.property_address, a.notice_period_days, a.rent_due_day
+	       a.property_address, a.notice_period_days, a.rent_due_day,
+	       COALESCE(a.agent_id::text, ''), COALESCE(ag.name, '')
 	FROM agreements a
 	JOIN properties p ON p.id = a.property_id
 	JOIN users ou ON ou.id = a.owner_id
 	JOIN users tu ON tu.id = a.tenant_id
+	LEFT JOIN users ag ON ag.id = a.agent_id
 `
 
 func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement, error) {
@@ -46,6 +48,7 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 		&a.FinalPDFURL, &a.CreatedAt, &a.UpdatedAt,
 		&a.ExpiresAt, &a.StatusReason, &a.StatusChangedBy, &a.StatusChangedAt,
 		&a.PropertyAddress, &a.NoticePeriodDays, &a.RentDueDay,
+		&a.AgentID, &a.AgentName,
 	)
 	if err != nil {
 		return nil, err
@@ -57,13 +60,35 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 	return &a, nil
 }
 
-func (r *AgreementRepository) Create(ctx context.Context, req models.CreateAgreementRequest) (*models.Agreement, error) {
+// PropertyParties says who is behind a listing: the poster (OwnerID), whether it was
+// posted by an "owner" or a "broker", and for broker listings the real owner
+// (LandlordID, "" until the owner accepts the broker's invite).
+type PropertyParties struct {
+	OwnerID    string
+	PostedBy   string
+	LandlordID string
+}
+
+func (r *AgreementRepository) GetPropertyParties(ctx context.Context, propertyID string) (*PropertyParties, error) {
+	var p PropertyParties
+	err := r.db.QueryRow(ctx,
+		`SELECT COALESCE(owner_id::text, ''), COALESCE(posted_by, 'owner'), COALESCE(landlord_id::text, '') FROM properties WHERE id = $1`,
+		propertyID,
+	).Scan(&p.OwnerID, &p.PostedBy, &p.LandlordID)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// Create inserts a new agreement request. agentID is the broker for broker listings ("" otherwise).
+func (r *AgreementRepository) Create(ctx context.Context, req models.CreateAgreementRequest, agentID string) (*models.Agreement, error) {
 	var id string
 	err := r.db.QueryRow(ctx, `
-		INSERT INTO agreements (property_id, owner_id, tenant_id, status, expires_at)
-		VALUES ($1, $2, $3, 'requested', now() + make_interval(days => $4))
+		INSERT INTO agreements (property_id, owner_id, tenant_id, agent_id, status, expires_at)
+		VALUES ($1, $2, $3, NULLIF($5, '')::uuid, 'requested', now() + make_interval(days => $4))
 		RETURNING id
-	`, req.PropertyID, req.OwnerID, req.TenantID, models.AgreementExpiryDays).Scan(&id)
+	`, req.PropertyID, req.OwnerID, req.TenantID, models.AgreementExpiryDays, agentID).Scan(&id)
 	if err != nil {
 		return nil, err
 	}

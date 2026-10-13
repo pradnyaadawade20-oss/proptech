@@ -21,6 +21,8 @@ type Agreement struct {
 	OwnerName        string `json:"owner_name"`
 	TenantID         string `json:"tenant_id"`
 	TenantName       string `json:"tenant_name"`
+	AgentID          string `json:"agent_id,omitempty"`
+	AgentName        string `json:"agent_name,omitempty"`
 
 	Status string `json:"status"`
 

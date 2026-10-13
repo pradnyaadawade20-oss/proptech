@@ -60,4 +60,6 @@ class RouteNames {
  
   static const agreements = '/agreements';
   static const agreementStatus = '/agreement/:id/status';
+  static const propertyOwnerLink = '/property/:id/owner-link'; // broker: link a listing to its real owner
+  static const landlordInvites = '/landlord-invites'; // owner: invitations from brokers
 }

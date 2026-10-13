@@ -136,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) context.go(RouteNames.login);
   }
 
-  // ---------------------------------------------------------------- header
+  //  header
 
   Widget _buildUserCard() {
     final profile = _profile;
@@ -311,6 +311,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.account_balance_wallet_outlined,
                         title: 'My UPI ID (receive rent)',
                         onTap: () => editOwnerUpi(context),
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.handshake_outlined,
+                        title: 'Broker invitations',
+                        onTap: () => context.push(RouteNames.landlordInvites),
                       ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,

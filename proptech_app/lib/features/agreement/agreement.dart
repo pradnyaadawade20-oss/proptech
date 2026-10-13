@@ -102,6 +102,9 @@ class Agreement {
   final int? noticePeriodDays;
   final int? rentDueDay;
 
+  /// The broker who introduced the deal (broker listings only, '' otherwise). Not a signer.
+  final String agentName;
+
   final SignatureType? ownerSignatureType;
   final String? ownerSignatureData; // base64 PNG or typed name
   final DateTime? ownerSignedAt;
@@ -140,6 +143,7 @@ class Agreement {
     this.propertyAddress,
     this.noticePeriodDays,
     this.rentDueDay,
+    this.agentName = '',
     this.ownerSignatureType,
     this.ownerSignatureData,
     this.ownerSignedAt,
@@ -202,6 +206,7 @@ class Agreement {
       propertyAddress: json['property_address'] as String?,
       noticePeriodDays: (json['notice_period_days'] as num?)?.toInt(),
       rentDueDay: (json['rent_due_day'] as num?)?.toInt(),
+      agentName: json['agent_name'] as String? ?? '',
       ownerSignatureType: parseSigType(json['owner_signature_type'] as String?),
       ownerSignatureData: json['owner_signature_data'] as String?,
       ownerSignedAt: json['owner_signed_at'] != null ? DateTime.tryParse(json['owner_signed_at']) : null,
