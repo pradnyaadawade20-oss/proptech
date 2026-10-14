@@ -7,6 +7,7 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
+import '../profile/kyc_service.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
 import 'agreement_status_widgets.dart';
@@ -211,109 +212,21 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     if (goKyc == true && mounted) await context.push(RouteNames.kycVerification);
   }
 
-  /// Generates a signing OTP and asks for it. The OTP is NOT emailed or texted:
-  /// the owner receives it inside the app (tenant asks the owner for it); when
-  /// the owner is signing, the code is shown right in the dialog. true = verified.
-  Future<bool> _verifySignOtp() async {
-    final role = _isOwner ? 'owner' : 'tenant';
-    String? ownCode; // only set when the owner is signing
+  /// Signing needs verified Aadhaar KYC. Checked up front so the user does not draw a
+  /// signature for nothing. (If this check itself fails, the server still enforces KYC on sign.)
+  Future<bool> _checkKyc() async {
     try {
-      ownCode = await AgreementService.instance.sendSignOtp(id: widget.agreementId, signerRole: role);
-    } on KycRequiredException {
-      await _promptKyc();
-      return false;
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-      return false;
+      final st = await KycService.instance.getStatus();
+      if (st.isVerified) return true;
+    } catch (_) {
+      return true;
     }
-    if (!mounted) return false;
-
-    final codeController = TextEditingController();
-    final String? shownCode = ownCode;
-    String? error;
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Verify OTP'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (shownCode != null) ...[
-                const Text('Your signing code (valid for 10 minutes):'),
-                const SizedBox(height: 10),
-                InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => codeController.text = shownCode,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          shownCode,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 6,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text('Tap to fill', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                ),
-              ] else
-                const Text(
-                  'A 6-digit signing code has been sent to the property owner inside the PropTech app '
-                  '(Notifications). Ask the owner for the code and enter it below.',
-                ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: codeController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: InputDecoration(counterText: '', errorText: error, hintText: '------'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await AgreementService.instance.verifySignOtp(
-                    id: widget.agreementId,
-                    signerRole: role,
-                    code: codeController.text.trim(),
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx, true);
-                } catch (e) {
-                  setLocal(() => error = e.toString().replaceFirst('Exception: ', ''));
-                }
-              },
-              child: const Text('Verify'),
-            ),
-          ],
-        ),
-      ),
-    );
-    codeController.dispose();
-    return ok == true;
+    await _promptKyc();
+    return false;
   }
 
   Future<void> _openSignatureScreen() async {
-    if (!await _verifySignOtp()) return;
+    if (!await _checkKyc()) return;
     if (!mounted) return;
     final result = await Navigator.of(context).push<Map<String, String>>(
       MaterialPageRoute(
