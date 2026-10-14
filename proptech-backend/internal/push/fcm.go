@@ -3,6 +3,8 @@ package push
 import (
 	"context"
 	"log"
+	"strings"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
@@ -69,6 +71,25 @@ func (s *Sender) SendToTokens(ctx context.Context, tokens []string, title, body 
 				Aps: &messaging.Aps{Sound: "default"},
 			},
 		},
+	}
+
+	// Incoming call: send DATA-ONLY on Android so the app (even when killed) builds
+	// its own ringing full-screen notification. iOS still gets a normal alert.
+	if data["type"] == "call" && strings.HasPrefix(data["route"], "/call/") {
+		ttl := 45 * time.Second
+		callData := map[string]string{"title": title, "body": body}
+		for k, v := range data {
+			callData[k] = v
+		}
+		message.Notification = nil
+		message.Data = callData
+		message.Android = &messaging.AndroidConfig{Priority: "high", TTL: &ttl}
+		message.APNS = &messaging.APNSConfig{
+			Headers: map[string]string{"apns-priority": "10"},
+			Payload: &messaging.APNSPayload{
+				Aps: &messaging.Aps{Alert: &messaging.ApsAlert{Title: title, Body: body}, Sound: "default"},
+			},
+		}
 	}
 
 	response, err := s.client.SendEachForMulticast(ctx, message)
