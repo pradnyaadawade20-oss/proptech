@@ -28,7 +28,7 @@ import (
 // signaling (offer / answer / ICE) over a WebSocket, plus call state in the DB.
 //
 // Flow:
-//  1. caller  POST /api/calls {lead_id}  -> call row (ringing) + ICE servers;
+//  1. caller  POST /api/calls {lead_id | property_id[,peer_id]}  -> call row (ringing) + ICE servers;
 //     callee gets a WS "incoming" event AND a push (dedupe on call_id).
 //  2. callee  WS {type:"accept", call_id} -> caller gets "accepted".
 //  3. caller  WS {type:"offer", data}  -> callee;  callee WS "answer" -> caller;
@@ -187,11 +187,16 @@ func (h *CallHandler) Create(c *gin.Context) {
 		return
 	}
 	var req models.CreateCallRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lead_id is required"})
+	if err := c.ShouldBindJSON(&req); err != nil || (req.LeadID == "" && req.PropertyID == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send lead_id, or property_id (+ peer_id when you are the owner)"})
 		return
 	}
-	call, err := h.repo.Create(c.Request.Context(), req.LeadID, userID)
+	leadID, err := h.repo.ResolveLead(c.Request.Context(), userID, req.LeadID, req.PropertyID, req.PeerID)
+	if err != nil {
+		writeCallError(c, err)
+		return
+	}
+	call, err := h.repo.Create(c.Request.Context(), leadID, userID)
 	if err != nil {
 		writeCallError(c, err)
 		return

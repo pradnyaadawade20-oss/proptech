@@ -36,6 +36,58 @@ func scanCall(row pgx.Row) (*models.Call, error) {
 	return &c, nil
 }
 
+// ResolveLead turns a call request into a lead id (see models.CreateCallRequest).
+// A buyer calling from a listing gets a lead created on the fly (source "call");
+// an owner can only call a buyer who already has a lead on that listing.
+func (r *CallRepository) ResolveLead(ctx context.Context, callerID, leadID, propertyID, peerID string) (string, error) {
+	if leadID != "" {
+		return leadID, nil
+	}
+	if propertyID == "" {
+		return "", ErrCallForbidden
+	}
+
+	var ownerID *string
+	err := r.db.QueryRow(ctx, `SELECT owner_id::text FROM properties WHERE id = $1::uuid`, propertyID).Scan(&ownerID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrCallNotFound
+		}
+		return "", err
+	}
+	if ownerID == nil {
+		return "", ErrCallForbidden
+	}
+
+	var id string
+	if *ownerID == callerID { // owner calling a buyer
+		if peerID == "" {
+			return "", ErrCallForbidden
+		}
+		err = r.db.QueryRow(ctx,
+			`SELECT id::text FROM leads WHERE property_id = $1::uuid AND buyer_id = $2::uuid`, propertyID, peerID).Scan(&id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", ErrCallForbidden
+			}
+			return "", err
+		}
+		return id, nil
+	}
+
+	// buyer calling the owner
+	err = r.db.QueryRow(ctx, `
+		INSERT INTO leads (property_id, owner_id, buyer_id, name, phone, source)
+		SELECT $1::uuid, $2::uuid, u.id, COALESCE(u.name, ''), COALESCE(u.phone, ''), 'call'
+		FROM users u WHERE u.id = $3::uuid
+		ON CONFLICT (property_id, buyer_id) DO UPDATE SET updated_at = now()
+		RETURNING id::text`, propertyID, *ownerID, callerID).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // Create starts a ringing call. The caller must be the buyer or the owner of
 // the lead; the other person becomes the callee.
 func (r *CallRepository) Create(ctx context.Context, leadID, callerID string) (*models.Call, error) {

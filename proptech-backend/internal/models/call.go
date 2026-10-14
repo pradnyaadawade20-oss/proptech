@@ -27,6 +27,12 @@ func (c *Call) FillDuration() {
 	}
 }
 
+// CreateCallRequest identifies who to call. Send ONE of:
+//   - lead_id                          (chat / leads screens)
+//   - property_id                      (buyer on a listing: the lead is created if missing)
+//   - property_id + peer_id            (owner calling a buyer who enquired on that listing)
 type CreateCallRequest struct {
-	LeadID string `json:"lead_id" binding:"required"`
+	LeadID     string `json:"lead_id"`
+	PropertyID string `json:"property_id"`
+	PeerID     string `json:"peer_id"`
 }
