@@ -187,8 +187,8 @@ func (h *CallHandler) Create(c *gin.Context) {
 		return
 	}
 	var req models.CreateCallRequest
-	if err := c.ShouldBindJSON(&req); err != nil || (req.LeadID == "" && req.PropertyID == "") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "send lead_id, or property_id (+ peer_id when you are the owner)"})
+	if err := c.ShouldBindJSON(&req); err != nil || (req.LeadID == "" && req.PropertyID == "" && req.PeerID == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send lead_id, property_id (+ peer_id when you are the owner), or peer_id"})
 		return
 	}
 	leadID, err := h.repo.ResolveLead(c.Request.Context(), userID, req.LeadID, req.PropertyID, req.PeerID)

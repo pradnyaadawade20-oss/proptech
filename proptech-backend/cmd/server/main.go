@@ -157,6 +157,11 @@ func main() {
 	routes.RegisterLandlordInviteRoutes(router, landlordInviteHandler)
 	startLeaseJobs(context.Background(), leaseRepo)
 
+	// In-app peer-to-peer audio calls (WebRTC signaling over WebSocket)
+	callRepo := repository.NewCallRepository(dbPool)
+	callHandler := handlers.NewCallHandler(callRepo)
+	routes.RegisterCallRoutes(router, callHandler)
+
 	// Online payments (Cashfree sandbox/production). Secret keys are read from env vars only.
 
 	log.Println("Server starting on port " + cfg.Port + "...")

@@ -44,7 +44,23 @@ func (r *CallRepository) ResolveLead(ctx context.Context, callerID, leadID, prop
 		return leadID, nil
 	}
 	if propertyID == "" {
-		return "", ErrCallForbidden
+		// Chat screen without a listing: use the latest lead between these two people.
+		if peerID == "" {
+			return "", ErrCallForbidden
+		}
+		var id string
+		err := r.db.QueryRow(ctx, `
+			SELECT id::text FROM leads
+			WHERE (buyer_id = $1::uuid AND owner_id = $2::uuid)
+			   OR (owner_id = $1::uuid AND buyer_id = $2::uuid)
+			ORDER BY updated_at DESC LIMIT 1`, callerID, peerID).Scan(&id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", ErrCallForbidden
+			}
+			return "", err
+		}
+		return id, nil
 	}
 
 	var ownerID *string

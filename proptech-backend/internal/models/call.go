@@ -27,7 +27,7 @@ func (c *Call) FillDuration() {
 	}
 }
 
-// CreateCallRequest identifies who to call. Send ONE of:
+// CreateCallRequest identifies who to call. Send ONE of (peer_id alone = latest lead with that person):
 //   - lead_id                          (chat / leads screens)
 //   - property_id                      (buyer on a listing: the lead is created if missing)
 //   - property_id + peer_id            (owner calling a buyer who enquired on that listing)
