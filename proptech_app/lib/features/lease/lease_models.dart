@@ -184,6 +184,7 @@ class Deposit {
   // pending | submitted | held | inspection | settlement | disputed | refund_due | refunded | carried_forward
   final String status, paymentMethod, reference, tenantNote, adminNote, refundMethod, refundReference;
   final List<Deduction> deductions;
+  final DateTime? receivedAt;
 
   const Deposit({
     required this.id,
@@ -200,6 +201,7 @@ class Deposit {
     required this.refundMethod,
     required this.refundReference,
     required this.deductions,
+    this.receivedAt,
   });
 
   factory Deposit.fromJson(Map<String, dynamic> j) => Deposit(
@@ -216,6 +218,7 @@ class Deposit {
         adminNote: _s(j['admin_note']),
         refundMethod: _s(j['refund_method']),
         refundReference: _s(j['refund_reference']),
+        receivedAt: _dt(j['received_at']),
         deductions: ((j['deductions'] as List?) ?? const [])
             .map((e) => Deduction.fromJson(e as Map<String, dynamic>))
             .toList(),

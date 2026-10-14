@@ -3,6 +3,11 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cferrorresponse/cferrorresponse.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfwebcheckoutpayment.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
+import 'package:flutter_cashfree_pg_sdk/utils/cfenums.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/theme/app_colors.dart';
@@ -11,13 +16,21 @@ import 'lease_widgets.dart';
 
 /// What the server gives us to open Cashfree's payment page.
 class CheckoutInfo {
-  final String orderId, checkoutUrl;
+  final String orderId, checkoutUrl, paymentSessionId, env; // env: sandbox | production
   final double amount;
-  const CheckoutInfo({required this.orderId, required this.checkoutUrl, required this.amount});
+  const CheckoutInfo({
+    required this.orderId,
+    required this.checkoutUrl,
+    required this.amount,
+    this.paymentSessionId = '',
+    this.env = 'sandbox',
+  });
 
   factory CheckoutInfo.fromJson(Map<String, dynamic> j) => CheckoutInfo(
         orderId: j['order_id']?.toString() ?? '',
         checkoutUrl: j['checkout_url']?.toString() ?? '',
+        paymentSessionId: j['payment_session_id']?.toString() ?? '',
+        env: j['env']?.toString() ?? 'sandbox',
         amount: (j['amount'] as num?)?.toDouble() ?? 0,
       );
 }
@@ -69,8 +82,9 @@ class PaymentService {
   }
 }
 
-/// "Pay" button flow: create order -> open Cashfree page (UPI / card / netbanking) -> wait for result.
-/// Returns true when the payment succeeded.
+/// "Pay" button flow: create order -> Cashfree checkout INSIDE the app (UPI / card / netbanking,
+/// like Razorpay) -> confirm with our server (the webhook-verified status is the source of truth).
+/// The browser page is only a fallback if the SDK cannot start. Returns true when the payment succeeded.
 Future<bool> payOnline(
   BuildContext context, {
   required Future<CheckoutInfo> Function() start,
@@ -82,6 +96,31 @@ Future<bool> payOnline(
     if (context.mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
     return false;
   }
+
+  // 1) In-app checkout.
+  if (info.paymentSessionId.isNotEmpty) {
+    final result = await _openInApp(info);
+    if (!context.mounted) return false;
+    if (result != null) {
+      if (!result.ok) {
+        // Cancelled or failed - but the money may still have gone through, so ask the server once.
+        final s = await _statusOnce(info.orderId);
+        if (s == 'paid' || s == 'duplicate') return true;
+        if (context.mounted) {
+          snack(context, result.message.isEmpty ? 'Payment was not completed. No money is taken.' : result.message, error: true);
+        }
+        return false;
+      }
+      final paid = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _WaitDialog(info: info, inApp: true),
+      );
+      return paid ?? false;
+    }
+  }
+
+  // 2) Fallback: Cashfree's hosted page in the browser.
   if (!await _open(info.checkoutUrl)) {
     if (context.mounted) snack(context, 'Could not open the payment page.', error: true);
     return false;
@@ -95,6 +134,79 @@ Future<bool> payOnline(
   return paid ?? false;
 }
 
+class _CfResult {
+  final bool ok;
+  final String message;
+  const _CfResult(this.ok, [this.message = '']);
+}
+
+final CFPaymentGatewayService _cf = CFPaymentGatewayService();
+Completer<_CfResult>? _cfDone;
+
+void _cfVerify(String orderId) {
+  final d = _cfDone;
+  if (d != null && !d.isCompleted) d.complete(const _CfResult(true));
+}
+
+void _cfError(CFErrorResponse e, String orderId) {
+  final d = _cfDone;
+  if (d != null && !d.isCompleted) d.complete(_CfResult(false, '${e.getMessage()}'));
+}
+
+/// Notices when the SDK's checkout screen closes and returns to our app.
+class _CfLifecycle with WidgetsBindingObserver {
+  final void Function() onReturn;
+  _CfLifecycle(this.onReturn);
+  bool _wentToBackground = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) _wentToBackground = true;
+    if (state == AppLifecycleState.resumed && _wentToBackground) {
+      _wentToBackground = false;
+      onReturn();
+    }
+  }
+}
+
+/// Opens Cashfree's checkout inside the app. null = the SDK could not start (use the browser fallback).
+Future<_CfResult?> _openInApp(CheckoutInfo info) async {
+  final done = Completer<_CfResult>();
+  final watcher = _CfLifecycle(() {
+    // The checkout screen closed. Give the SDK callback a moment; if none came, treat it as cancelled.
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!done.isCompleted) done.complete(const _CfResult(false));
+    });
+  });
+  try {
+    final env = info.env == 'production' ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
+    final session = CFSessionBuilder().setEnvironment(env).setOrderId(info.orderId).setPaymentSessionId(info.paymentSessionId).build();
+    final payment = CFWebCheckoutPaymentBuilder().setSession(session!).build();
+
+    _cfDone = done;
+    _cf.setCallback(_cfVerify, _cfError);
+    WidgetsBinding.instance.addObserver(watcher);
+    _cf.doPayment(payment);
+    return await done.future.timeout(
+      const Duration(minutes: 20),
+      onTimeout: () => const _CfResult(false, 'The payment session timed out.'),
+    );
+  } catch (_) {
+    return null;
+  } finally {
+    WidgetsBinding.instance.removeObserver(watcher);
+    if (identical(_cfDone, done)) _cfDone = null;
+  }
+}
+
+Future<String> _statusOnce(String orderId) async {
+  try {
+    return (await PaymentService.instance.status(orderId)).status;
+  } catch (_) {
+    return 'pending';
+  }
+}
+
 Future<bool> _open(String url) async {
   try {
     return await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -105,7 +217,8 @@ Future<bool> _open(String url) async {
 
 class _WaitDialog extends StatefulWidget {
   final CheckoutInfo info;
-  const _WaitDialog({required this.info});
+  final bool inApp; // true: the in-app checkout already closed, we are only confirming with the server
+  const _WaitDialog({required this.info, this.inApp = false});
 
   @override
   State<_WaitDialog> createState() => _WaitDialogState();
@@ -199,15 +312,21 @@ class _WaitDialogState extends State<_WaitDialog> with WidgetsBindingObserver {
         break;
       default:
         icon = const SizedBox(width: 44, height: 44, child: CircularProgressIndicator(strokeWidth: 3));
-        title = 'Waiting for payment';
-        body = 'Complete the payment of ${inr(widget.info.amount)} on the Cashfree page (UPI, card or net banking), then come back here.';
-        actions.addAll([
-          TextButton(
-            onPressed: () => _open(widget.info.checkoutUrl),
-            child: const Text('Reopen payment page'),
-          ),
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Close')),
-        ]);
+        if (widget.inApp) {
+          title = 'Confirming your payment';
+          body = 'Checking your payment of ${inr(widget.info.amount)} with the bank. This takes a few seconds.';
+          actions.add(TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Close')));
+        } else {
+          title = 'Waiting for payment';
+          body = 'Complete the payment of ${inr(widget.info.amount)} on the Cashfree page (UPI, card or net banking), then come back here.';
+          actions.addAll([
+            TextButton(
+              onPressed: () => _open(widget.info.checkoutUrl),
+              child: const Text('Reopen payment page'),
+            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Close')),
+          ]);
+        }
     }
 
     return AlertDialog(

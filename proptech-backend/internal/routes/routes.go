@@ -102,8 +102,6 @@ func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 		agreements.GET("/:id/pdf", h.DownloadPDF)
 		agreements.POST("", h.CreateAgreement)
 		agreements.PUT("/:id/draft", h.UpdateDraft)
-		agreements.POST("/:id/sign/send-otp", h.SendSignOTP)
-		agreements.POST("/:id/sign/verify-otp", h.VerifySignOTP)
 		agreements.POST("/:id/sign", h.SignAgreement)
 		agreements.PATCH("/:id/status", h.UpdateStatus)
 	}

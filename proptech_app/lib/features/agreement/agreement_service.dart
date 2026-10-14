@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import 'agreement.dart';
 
-/// Thrown when the server refuses to sign/send a signing OTP because the
+/// Thrown when the server refuses to sign because the
 /// user hasn't completed KYC (HTTP 403, code "kyc_required").
 class KycRequiredException implements Exception {
   final String message;
@@ -124,7 +124,6 @@ class AgreementService {
   }
 
   /// Step 3: either party signs — draw (base64 PNG) or type (name text).
-  /// Needs a verified OTP first (sendSignOtp -> verifySignOtp).
   Future<Agreement> sign({
     required String id,
     required String signerRole, // 'owner' | 'tenant'
@@ -138,37 +137,6 @@ class AgreementService {
         'signature_data': signatureData,
       });
       return Agreement.fromJson(response.data['agreement'] as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw _toException(e);
-    }
-  }
-
-  /// Creates a 6-digit signing code. It is never emailed/texted:
-  /// - tenant signing -> the code is sent to the OWNER inside the app
-  ///   (Notifications), the tenant asks the owner for it. Returns null.
-  /// - owner signing  -> the code comes back here and is shown on screen.
-  /// Must be verified (verifySignOtp) before sign().
-  Future<String?> sendSignOtp({required String id, required String signerRole}) async {
-    try {
-      final response = await _dio.post('/api/agreements/$id/sign/send-otp', data: {'signer_role': signerRole});
-      final data = response.data;
-      if (data is Map && data['otp'] != null) return data['otp'].toString();
-      return null;
-    } on DioException catch (e) {
-      throw _toException(e);
-    }
-  }
-
-  Future<void> verifySignOtp({
-    required String id,
-    required String signerRole,
-    required String code,
-  }) async {
-    try {
-      await _dio.post('/api/agreements/$id/sign/verify-otp', data: {
-        'signer_role': signerRole,
-        'code': code,
-      });
     } on DioException catch (e) {
       throw _toException(e);
     }

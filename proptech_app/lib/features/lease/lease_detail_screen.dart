@@ -5,15 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/safe_network_image.dart';
-import 'lease_activity_tab.dart';
 import 'lease_deposit_tab.dart';
 import 'lease_models.dart';
-import 'lease_photos_tab.dart';
+import 'lease_receipts_tab.dart';
 import 'lease_rent_tab.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
+import 'upi_pay_sheet.dart';
 
-/// One lease: Overview / Rent / Deposit / Photos / Activity.
+/// One lease: Overview / Rent / Deposit / Receipts.
 /// Route: /lease/:id (also the target of lease/rent/deposit push notifications).
 class LeaseDetailScreen extends StatefulWidget {
   final String leaseId;
@@ -73,7 +73,7 @@ class _LeaseDetailScreenState extends State<LeaseDetailScreen> {
     }
 
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(lease.propertyTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -84,8 +84,7 @@ class _LeaseDetailScreenState extends State<LeaseDetailScreen> {
               Tab(text: 'Overview'),
               Tab(text: 'Rent'),
               Tab(text: 'Deposit'),
-              Tab(text: 'Photos'),
-              Tab(text: 'Activity'),
+              Tab(text: 'Receipts'),
             ],
           ),
         ),
@@ -94,8 +93,7 @@ class _LeaseDetailScreenState extends State<LeaseDetailScreen> {
             _OverviewTab(lease: lease, role: _role, onChanged: _load),
             LeaseRentTab(key: ValueKey('rent$_rev'), lease: lease, role: _role, onChanged: _load),
             LeaseDepositTab(key: ValueKey('dep$_rev'), lease: lease, role: _role, onChanged: _load),
-            LeasePhotosTab(key: ValueKey('pho$_rev'), lease: lease, role: _role, onChanged: _load),
-            LeaseActivityTab(key: ValueKey('act$_rev'), lease: lease),
+            LeaseReceiptsTab(key: ValueKey('rcp$_rev'), lease: lease),
           ],
         ),
       ),
@@ -140,21 +138,6 @@ class _OverviewTab extends StatelessWidget {
     if (!await confirmDialog(context, 'Give notice', 'Tell ${lease.ownerName} you will move out on ${fmtDate(date)}?', yes: 'Give notice')) return;
     if (!context.mounted) return;
     if (await runGuarded(context, () => LeaseService.instance.giveNotice(lease.id, date), success: 'Notice sent')) {
-      await onChanged();
-    }
-  }
-
-  Future<void> _confirmMoveIn(BuildContext context) async {
-    if (!await confirmDialog(
-      context,
-      'Confirm move-in',
-      'This locks the move-in photos. They will be used to compare the condition when you move out. Continue?',
-      yes: 'Confirm',
-    )) {
-      return;
-    }
-    if (!context.mounted) return;
-    if (await runGuarded(context, () => LeaseService.instance.confirmMoveIn(lease.id), success: 'Move-in confirmed')) {
       await onChanged();
     }
   }
@@ -220,6 +203,18 @@ class _OverviewTab extends StatelessWidget {
           ]),
           const SizedBox(height: AppSpacing.md),
 
+          if (_owner)
+            SectionCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
+                title: const Text('Your UPI ID'),
+                subtitle: const Text('Tenants pay rent and deposit to this UPI ID'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => editOwnerUpi(context),
+              ),
+            ),
+
           // ---- banners
           if (lease.overdueCount > 0)
             InfoBanner('${lease.overdueCount} rent payment${lease.overdueCount > 1 ? 's are' : ' is'} overdue. Check the Rent tab.',
@@ -235,8 +230,6 @@ class _OverviewTab extends StatelessWidget {
             const InfoBanner('Renewal was declined. Please plan the move-out.', color: AppColors.error, icon: Icons.event_busy),
           if (lease.renewalStatus == 'renew_accepted')
             const InfoBanner('Renewal accepted. A new agreement has been created for signing.', color: AppColors.success, icon: Icons.verified_outlined),
-          if (_tenant && lease.status == 'active' && lease.moveInConfirmedAt == null)
-            const InfoBanner('Review the move-in photos (Photos tab) and confirm the condition of the property.', icon: Icons.photo_camera_outlined),
 
           // ---- terms
           SectionCard(
@@ -291,9 +284,6 @@ class _OverviewTab extends StatelessWidget {
         );
 
     if (_tenant) {
-      if (lease.status == 'active' && lease.moveInConfirmedAt == null) {
-        out.add(btn('Confirm move-in condition', () => _confirmMoveIn(context)));
-      }
       if (lease.status == 'active' && (lease.renewalStatus == 'none' || lease.renewalStatus == 'renew_declined')) {
         if (lease.daysToExpiry <= 90) {
           if (lease.renewalStatus == 'none') out.add(btn('Request renewal', () => _requestRenewal(context)));

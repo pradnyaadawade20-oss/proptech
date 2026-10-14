@@ -41,6 +41,7 @@ dependencies:
 
   # Phone dialer / external links
   url_launcher: ^6.3.0
+  flutter_cashfree_pg_sdk: 2.4.0+52
 
   # Real 360° equirectangular panorama viewer (drag/gyro rotate,
   # like the phone's Panorama/Photo Sphere capture)

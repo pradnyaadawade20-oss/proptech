@@ -202,7 +202,7 @@ func (r *AgreementRepository) VerifyOTP(ctx context.Context, id, role, code stri
 }
 
 // Sign records a signature for owner or tenant. Requires: draft is final
-// (not "requested"), the party's OTP is verified, party hasn't signed yet.
+// (not "requested"), party hasn't signed yet. (KYC is checked in the handler.)
 // Status is computed in the same atomic UPDATE. Both signed -> completed.
 func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.SignAgreementRequest) (*models.Agreement, error) {
 	current, err := r.GetByID(ctx, id)
@@ -218,7 +218,6 @@ func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.Si
 		return nil, ErrAgreementBadState
 	}
 
-	var verified bool
 	col := "tenant"
 	if req.SignerRole == "owner" {
 		col = "owner"
@@ -227,12 +226,6 @@ func (r *AgreementRepository) Sign(ctx context.Context, id string, req models.Si
 		}
 	} else if current.TenantSignedAt != nil {
 		return nil, ErrAlreadySigned
-	}
-	if err := r.db.QueryRow(ctx, `SELECT `+col+`_otp_verified FROM agreements WHERE id=$1`, id).Scan(&verified); err != nil {
-		return nil, err
-	}
-	if !verified {
-		return nil, ErrOTPNotVerified
 	}
 
 	otherSigned := current.TenantSignedAt != nil
