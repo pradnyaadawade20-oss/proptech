@@ -1,4 +1,4 @@
-package models
+﻿package models
 
 import (
 	"fmt"
@@ -46,6 +46,7 @@ type Property struct {
 	PostedBy           string     `json:"posted_by"`          // owner | broker
 	Latitude           float64    `json:"latitude"`           // 0,0 = not set
 	Longitude          float64    `json:"longitude"`
+	Address            string     `json:"address"` // full street address shown on the listing
 
 	// Filled by PropertyRepository.AttachMedia (not columns on properties).
 	AdditionalImageURLs []string `json:"additional_image_urls"`
@@ -105,6 +106,7 @@ type PropertyDetailsInput struct {
 	ContactPreference  string   `json:"contact_preference"`
 	Latitude           float64  `json:"latitude"` // 0,0 = not provided
 	Longitude          float64  `json:"longitude"`
+	Address            string   `json:"address"` // full street address
 }
 
 // ValidateGeo rejects impossible coordinates.

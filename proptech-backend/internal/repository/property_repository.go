@@ -14,7 +14,7 @@ type PropertyRepository struct {
 
 // propertyColumns is the single source of truth for the property SELECT /
 // RETURNING list; its order must match propertyDests below.
-const propertyColumns = "id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by, latitude, longitude"
+const propertyColumns = "id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by, latitude, longitude, address"
 
 func NewPropertyRepository(db *pgxpool.Pool) *PropertyRepository {
 	return &PropertyRepository{db: db}
@@ -159,19 +159,19 @@ func (r *PropertyRepository) Create(ctx context.Context, req models.CreateProper
 			area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode,
 			security_deposit, maintenance_charges, preferred_tenants, available_from, description,
 			property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by,
-			latitude, longitude
+			latitude, longitude, address
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15, $16, $17, $18, $19,
 			$20, $21, $22, $23, $24,
 			$25, $26, $27, $28, $29, $30,
-			$31, $32)
+			$31, $32, BTRIM($33))
 		RETURNING `+propertyColumns+`
 	`, req.OwnerID, req.Title, req.ImageURL, req.Price, req.PriceUnit, req.BHK, req.Furnishing, req.Location, req.Category, req.Amenities,
 		req.Area, req.Bathrooms, req.Balconies, req.FloorNumber, req.TotalFloors, req.City, req.Locality, req.Society, req.Pincode,
 		req.SecurityDeposit, req.MaintenanceCharges, req.TenantsOrEmpty(), availableFrom, req.Description,
 		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.PostedByOrDefault(),
-		req.Latitude, req.Longitude).
+		req.Latitude, req.Longitude, req.Address).
 		Scan(propertyDests(&p)...)
 	if err != nil {
 		return nil, err
@@ -194,14 +194,15 @@ func (r *PropertyRepository) Update(ctx context.Context, id string, req models.U
 			security_deposit = $19, maintenance_charges = $20, preferred_tenants = $21, available_from = $22, description = $23,
 			property_age_years = $24, facing = $25, ownership_type = $26, is_price_negotiable = $27, contact_preference = $28,
 			latitude  = CASE WHEN $29::float8 <> 0 OR $30::float8 <> 0 THEN $29::float8 ELSE latitude END,
-			longitude = CASE WHEN $29::float8 <> 0 OR $30::float8 <> 0 THEN $30::float8 ELSE longitude END
+			longitude = CASE WHEN $29::float8 <> 0 OR $30::float8 <> 0 THEN $30::float8 ELSE longitude END,
+			address = CASE WHEN BTRIM($32) <> '' THEN BTRIM($32) ELSE address END
 		WHERE id = $31
 		RETURNING `+propertyColumns+`
 	`, req.Title, req.ImageURL, req.Price, req.PriceUnit, req.BHK, req.Furnishing, req.Location, req.Category, req.Amenities,
 		req.Area, req.Bathrooms, req.Balconies, req.FloorNumber, req.TotalFloors,
 		req.City, req.Locality, req.Society, req.Pincode,
 		req.SecurityDeposit, req.MaintenanceCharges, req.TenantsOrEmpty(), availableFrom, req.Description,
-		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.Latitude, req.Longitude, id).
+		req.AgeOrUnknown(), req.Facing, req.OwnershipType, req.IsPriceNegotiable, req.ContactPreferenceOrDefault(), req.Latitude, req.Longitude, id, req.Address).
 		Scan(propertyDests(&p)...)
 	if err != nil {
 		return nil, err
@@ -283,6 +284,6 @@ func propertyDests(p *models.Property) []any {
 		&p.Area, &p.Bathrooms, &p.Balconies, &p.FloorNumber, &p.TotalFloors, &p.City, &p.Locality, &p.Society, &p.Pincode,
 		&p.SecurityDeposit, &p.MaintenanceCharges, &p.PreferredTenants, &p.AvailableFrom, &p.Description,
 		&p.PropertyAgeYears, &p.Facing, &p.OwnershipType, &p.IsPriceNegotiable, &p.ContactPreference, &p.PostedBy,
-		&p.Latitude, &p.Longitude,
+		&p.Latitude, &p.Longitude, &p.Address,
 	}
 }
