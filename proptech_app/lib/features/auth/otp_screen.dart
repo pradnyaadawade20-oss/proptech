@@ -7,6 +7,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../core/utils/phone_mask.dart';
 import 'auth_service.dart';
 
 /// Email-OTP screen. The OTP was already emailed by the login screen
@@ -173,8 +174,8 @@ class _OtpScreenState extends State<OtpScreen> {
             const SizedBox(height: AppSpacing.xs),
             Text(
               _emailSent
-                  ? 'We sent a 6-digit code to ${widget.email}. Check your spam folder if you don\'t see it.'
-                  : 'We could not send the code to ${widget.email} right now. You can skip verification for now.',
+                  ? 'We sent a 6-digit code to ${maskEmail(widget.email)}. Check your spam folder if you don\'t see it.'
+                  : 'We could not send the code to ${maskEmail(widget.email)} right now. You can skip verification for now.',
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xl),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app/app.dart';
 import 'core/api/token_store.dart';
+import 'features/call/call_service.dart';
 import 'features/notifications/push_notification_service.dart';
 import 'features/properties/property_store.dart';
 void main() async {
@@ -22,6 +23,7 @@ void main() async {
 
   _initPush();
   _loadProperties();
+  _initCalls();
 }
 
 /// Fetches real listings from the backend right after the UI appears.
@@ -33,6 +35,15 @@ Future<void> _loadProperties() async {
     await PropertyStore.instance.load().timeout(const Duration(seconds: 60));
   } catch (e) {
     debugPrint('Failed to load properties from backend: $e');
+  }
+}
+
+/// Opens the call socket when a saved login exists (login/logout handle the rest).
+Future<void> _initCalls() async {
+  try {
+    if (await TokenStore.instance.isLoggedIn()) await CallService.instance.connect();
+  } catch (e) {
+    debugPrint('Call socket not started: $e');
   }
 }
 

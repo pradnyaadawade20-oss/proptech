@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../profile/profile_service.dart';
 import '../properties/property.dart';
+import '../../core/utils/phone_mask.dart';
+import '../call/call_service.dart';
 import 'lead.dart';
 import 'lead_service.dart';
 
@@ -97,12 +98,9 @@ class _ContactOwnerSheetState extends State<_ContactOwnerSheet> {
     }
   }
 
-  Future<void> _call(String phone) async {
-    final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
-    final ok = await launchUrl(uri);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open dialer for $phone')));
-    }
+  /// In-app (peer-to-peer) call to the owner - never opens the phone dialer.
+  Future<void> _call(String ownerName) {
+    return CallService.dial(context, propertyId: widget.property.id, peerName: ownerName);
   }
 
   void _chat() {
@@ -187,14 +185,14 @@ class _ContactOwnerSheetState extends State<_ContactOwnerSheet> {
         ),
         if (hasPhone) ...[
           const SizedBox(height: AppSpacing.md),
-          Text(r.ownerPhone, style: AppTextStyles.h3),
+          Text(maskPhone(r.ownerPhone), style: AppTextStyles.h3),
         ],
         const SizedBox(height: AppSpacing.md),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: hasPhone ? () => _call(r.ownerPhone) : null,
+                onPressed: () => _call(r.ownerName),
                 icon: const Icon(Icons.call_outlined, size: 20),
                 label: const Text('Call'),
               ),

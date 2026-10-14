@@ -730,7 +730,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                             children: [
                               Expanded(child: Text('Similar Properties', style: AppTextStyles.h3)),
                               InkWell(
-                                onTap: () => context.push(RouteNames.search),
+                                onTap: () => context.push(RouteNames.searchStandalone,
+                                    extra: property.city.isNotEmpty ? property.city : null),
                                 child: Text(
                                   'View all',
                                   style: AppTextStyles.bodySmall.copyWith(

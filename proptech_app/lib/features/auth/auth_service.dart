@@ -2,6 +2,7 @@
 import '../../core/api/api_client.dart';
 import '../../core/api/token_store.dart';
 import '../properties/property_store.dart';
+import '../call/call_service.dart';
 import '../notifications/push_notification_service.dart';
 import '../../core/session/user_session.dart';
 import '../favorites/favorite_service.dart';
@@ -136,6 +137,7 @@ class AuthService {
     await TokenStore.instance.saveUserId(user['id'] as String);
     await PropertyStore.instance.load();
     PushNotificationService.instance.registerForCurrentUser();
+    CallService.instance.connect(); // in-app calls: start listening for incoming calls
 
     final roles = <UserRole>{
       for (final r in (user['roles'] as List? ?? const []))
@@ -187,5 +189,8 @@ class AuthService {
     return e.message ?? 'Something went wrong. Please try again.';
   }
 
-  Future<void> logout() => TokenStore.instance.clear();
+  Future<void> logout() async {
+    await CallService.instance.disconnect();
+    await TokenStore.instance.clear();
+  }
 }

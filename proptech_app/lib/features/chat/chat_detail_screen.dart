@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/phone_mask.dart';
+import '../call/call_service.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -154,21 +155,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  Future<void> _callOther() async {
-    final phone = _other?.phone ?? '';
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone number not available.')),
-      );
-      return;
-    }
-    final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final launched = await launchUrl(Uri(scheme: 'tel', path: clean));
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open dialer for $phone')),
-      );
-    }
+  /// In-app (peer-to-peer) call - never opens the phone dialer.
+  Future<void> _callOther() {
+    return CallService.dial(
+      context,
+      propertyId: widget.propertyId,
+      peerId: widget.chatId,
+      peerName: _other?.name ?? '',
+    );
   }
 
   void _copyMessage(String text) {
@@ -203,7 +197,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           style: AppTextStyles.h3.copyWith(fontSize: 16),
                         ),
                         if (other.phone.isNotEmpty)
-                          Text(other.phone, style: AppTextStyles.caption),
+                          Text(maskPhone(other.phone), style: AppTextStyles.caption),
                       ],
                     ),
                   ),

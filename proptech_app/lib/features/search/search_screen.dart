@@ -387,10 +387,14 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
       criteria: _criteria.copyWith(query: _query),
       createdAt: DateTime.now(),
     );
-    await SavedSearchStore.instance.add(search);
+    final ok = await SavedSearchStore.instance.add(search);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('"$name" saved. You\'ll be alerted when a new matching property is listed.')),
+      SnackBar(
+        content: Text(ok
+            ? '"$name" saved. You\'ll be alerted when a new matching property is listed.'
+            : 'Could not save "$name" permanently. Try again.'),
+      ),
     );
   }
 
@@ -1079,24 +1083,6 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
                               Text(formatDistance(km),
                                   style: AppTextStyles.caption
                                       .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                        card,
-                      ],
-                    );
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.near_me, size: 14, color: AppColors.primary),
-                              const SizedBox(width: 4),
-                              Text(formatDistance(km),
-                                  style: AppTextStyles.caption.copyWith(
-                                      color: AppColors.primary, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),

@@ -61,6 +61,11 @@ dependencies:
 
   google_sign_in: ^6.2.2
 
+  # In-app peer-to-peer audio calls (WebRTC media + WebSocket signaling)
+  flutter_webrtc: ^1.5.2
+  audioplayers: ^6.1.0 # ringtone for incoming calls
+  web_socket_channel: ^3.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -72,7 +77,7 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/icons/
+    - assets/audio/
 
 flutter_launcher_icons:
   android: true

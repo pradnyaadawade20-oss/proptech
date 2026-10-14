@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
+import '../../core/utils/phone_mask.dart';
+import '../call/call_service.dart';
 import 'lead.dart';
 import 'lead_service.dart';
 
@@ -113,13 +114,8 @@ class _LeadsScreenState extends State<LeadsScreen> with SingleTickerProviderStat
   }
 
   Future<void> _call(Lead lead) async {
-    if (lead.phone.isEmpty) return;
-    final uri = Uri(scheme: 'tel', path: lead.phone.replaceAll(RegExp(r'[^0-9+]'), ''));
-    final ok = await launchUrl(uri);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open dialer for ${lead.phone}')));
-      return;
-    }
+    // In-app (peer-to-peer) call - never opens the phone dialer.
+    await CallService.dial(context, leadId: lead.id, peerName: lead.name);
     if (lead.status == 'new') _setStatus(lead, 'contacted');
   }
 
@@ -284,7 +280,7 @@ class _LeadCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(name, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
-                    if (lead.phone.isNotEmpty) Text(lead.phone, style: AppTextStyles.bodySmall),
+                    if (lead.phone.isNotEmpty) Text(maskPhone(lead.phone), style: AppTextStyles.bodySmall),
                   ],
                 ),
               ),
@@ -342,7 +338,7 @@ class _LeadCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: lead.phone.isEmpty ? null : onCall,
+                  onPressed: onCall, // in-app call: no number needed,
                   icon: const Icon(Icons.call_outlined, size: 18),
                   label: const Text('Call'),
                 ),

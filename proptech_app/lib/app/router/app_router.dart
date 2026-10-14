@@ -42,6 +42,7 @@ import '../../features/lease/lease_detail_screen.dart';
 import '../../features/agreement/agreements_screen.dart';
 import '../../features/landlord/landlord_invites_screen.dart';
 import '../../features/landlord/property_owner_link_screen.dart';
+import '../../features/call/in_app_call_screen.dart';
 import 'main_shell.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -174,6 +175,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const AllCategoriesScreen(),
     ),
     GoRoute(
+      path: RouteNames.searchStandalone,
+      builder: (context, state) => SearchScreen(initialQuery: state.extra as String?),
+    ),
+    GoRoute(
       path: '/map-search',
       builder: (context, state) => const MapSearchScreen(),
     ),
@@ -237,6 +242,10 @@ final GoRouter appRouter = GoRouter(
         chatId: state.pathParameters['id']!,
         propertyId: state.uri.queryParameters['propertyId'],
       ),
+    ),
+    GoRoute(
+      path: RouteNames.call,
+      builder: (context, state) => CallScreen(callId: state.pathParameters['id']!),
     ),
     GoRoute(
       path: RouteNames.settings,

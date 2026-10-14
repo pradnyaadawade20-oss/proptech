@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../call/call_service.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -51,6 +51,20 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
       _listedCount = results[1] as int?;
       _loading = false;
     });
+  }
+
+  /// In-app (peer-to-peer) call - never opens the phone dialer.
+  Future<void> _callOwner(String ownerName) async {
+    if (property.ownerId.isEmpty) return;
+    final myId = await TokenStore.instance.getUserId();
+    if (!mounted) return;
+    if (myId == property.ownerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This is your own listing.')),
+      );
+      return;
+    }
+    await CallService.dial(context, propertyId: property.id, peerName: ownerName);
   }
 
   Future<void> _messageOwner() async {
@@ -287,12 +301,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
                   'Call',
                   style: AppTextStyles.button.copyWith(color: AppColors.primary),
                 ),
-                onPressed: ownerPhone.isEmpty
-                    ? null
-                    : () {
-                        LeadService.instance.track(property.id, 'call');
-                        _callOwner(context, ownerPhone);
-                      },
+                onPressed: property.ownerId.isEmpty ? null : () => _callOwner(ownerName),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -306,17 +315,6 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
           ],
         ),
       ],
-    );
-  }
-}
-
-Future<void> _callOwner(BuildContext context, String phone) async {
-  final cleanNumber = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-  final uri = Uri(scheme: 'tel', path: cleanNumber);
-  final launched = await launchUrl(uri);
-  if (!launched && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not open dialer for $phone')),
     );
   }
 }

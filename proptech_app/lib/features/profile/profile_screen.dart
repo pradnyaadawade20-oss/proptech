@@ -7,6 +7,7 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/session/user_session.dart';
+import '../../core/utils/phone_mask.dart';
 import '../auth/auth_service.dart';
 import 'profile_avatar.dart';
 import 'profile_service.dart';
@@ -186,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  profile.email.isNotEmpty ? profile.email : 'Add your email',
+                  profile.email.isNotEmpty ? maskEmail(profile.email) : 'Add your email',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: _Ui.mutedOnNavy, fontSize: 14),
@@ -194,7 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (profile.phone.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    profile.phone,
+                    maskPhone(profile.phone),
                     style: const TextStyle(color: _Ui.mutedOnNavy, fontSize: 14),
                   ),
                 ],

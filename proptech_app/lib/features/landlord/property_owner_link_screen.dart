@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
+import '../../core/utils/phone_mask.dart';
 import '../../core/widgets/app_button.dart';
 import 'landlord_service.dart';
 
@@ -286,7 +287,7 @@ class _PropertyOwnerLinkScreenState extends State<PropertyOwnerLinkScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                [if (inv.landlordPhone.isNotEmpty) inv.landlordPhone, if (inv.landlordEmail.isNotEmpty) inv.landlordEmail].join('  |  '),
+                [if (inv.landlordPhone.isNotEmpty) maskPhone(inv.landlordPhone), if (inv.landlordEmail.isNotEmpty) maskEmail(inv.landlordEmail)].join('  |  '),
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.md),

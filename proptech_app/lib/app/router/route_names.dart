@@ -20,11 +20,15 @@ class RouteNames {
 
   static const chatList = '/chats';
   static const chatDetail = '/chats/:id';
+  static const call = '/call/:id'; // in-app audio call (also the target of call pushes)
   // Standalone copy of the chat list, used when pushing on top of a
   // non-shell screen (e.g. Owner/Broker Dashboard). Pushing the shell's
   // own `chatList` branch route reuses a GlobalKey that's already mounted
   // in the shell below, which crashes with a duplicate-GlobalKey assertion.
   static const chatListStandalone = '/chats-view';
+  // Standalone copy of search, used when pushing from a non-shell screen
+  // (e.g. Property Detail "View all") to avoid the duplicate-key crash.
+  static const searchStandalone = '/search-view';
 
   static const settings = '/settings';
   static const helpSupport = '/help-support';

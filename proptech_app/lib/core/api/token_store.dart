@@ -23,8 +23,30 @@ class TokenStore {
   static const _activeRoleKey = 'auth_active_role';
   static const _installedFlag = 'proptech_installed_once';
 
-  Future<void> saveToken(String token) => _storage.write(key: _tokenKey, value: token);
-  Future<String?> getToken() => _storage.read(key: _tokenKey);
+  // In-memory copy so a slow/flaky Keystore read can't log the user out
+  // mid-session. Persisted copy in secure storage survives app restarts.
+  String? _cachedToken;
+
+  Future<void> saveToken(String token) async {
+    _cachedToken = token;
+    await _storage.write(key: _tokenKey, value: token);
+  }
+
+  Future<String?> getToken() async {
+    if (_cachedToken != null) return _cachedToken;
+    // Android Keystore can be slow / fail transiently right after launch,
+    // so retry once before giving up.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final t = await _storage.read(key: _tokenKey).timeout(const Duration(seconds: 8));
+        _cachedToken = t;
+        return t;
+      } on TimeoutException {
+        if (attempt == 1) rethrow;
+      }
+    }
+    return null;
+  }
 
   Future<void> saveUserId(String userId) => _storage.write(key: _userIdKey, value: userId);
   Future<String?> getUserId() => _storage.read(key: _userIdKey);
@@ -35,8 +57,8 @@ class TokenStore {
   /// out and wipe the unreadable data so the next login works cleanly.
   Future<bool> isLoggedIn() async {
     try {
-      final token = await getToken().timeout(const Duration(seconds: 5));
-      return token != null;
+      final token = await getToken();
+      return token != null && token.isNotEmpty;
     } on TimeoutException {
       debugPrint('TokenStore: secure storage read timed out');
       return false;
@@ -71,6 +93,7 @@ class TokenStore {
   }
 
   Future<void> clear() async {
+    _cachedToken = null;
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _rolesKey);

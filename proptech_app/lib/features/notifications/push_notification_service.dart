@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../app/router/app_router.dart';
 import '../../app/router/route_names.dart';
 import '../../core/api/token_store.dart';
+import '../call/call_service.dart';
 import 'device_token_service.dart';
 import 'notification_service.dart';
 
@@ -16,9 +17,11 @@ import 'notification_service.dart';
 /// killed or in the background.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Nothing to do here for now: when the app is backgrounded/killed, FCM
-  // shows the notification itself using the payload's `notification` block.
-  // Hook DB writes or badge updates here later if needed.
+  // Incoming calls are sent data-only (no `notification` block) so WE show a
+  // ringing, full-screen-intent notification. Everything else is shown by FCM.
+  if (PushNotificationService.isIncomingCall(message.data)) {
+    await PushNotificationService.showIncomingCallNotification(message.data);
+  }
 }
 
 /// Sets up Firebase Cloud Messaging: permission prompt, token registration
@@ -41,6 +44,71 @@ class PushNotificationService {
     enableVibration: true, // vibrate mode -> vibrates (silent mode stays silent)
     showBadge: true,
   );
+
+  /// Rings like a phone call (device ringtone, loops until answered/dismissed).
+  static const _callChannel = AndroidNotificationChannel(
+    'proptech_calls',
+    'Incoming calls',
+    description: 'Rings when someone calls you in the app.',
+    importance: Importance.max,
+    playSound: true,
+    sound: UriAndroidNotificationSound('content://settings/system/ringtone'),
+    audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+    enableVibration: true,
+  );
+
+  static bool isIncomingCall(Map<String, dynamic> d) =>
+      d['type'] == 'call' && ((d['route'] as String?) ?? '').startsWith('/call/');
+
+  static int _callNotifId(String route) => route.hashCode & 0x7fffffff;
+
+  /// Works from the background isolate too (creates its own plugin instance).
+  static Future<void> showIncomingCallNotification(Map<String, dynamic> data) async {
+    final route = (data['route'] as String?) ?? '';
+    if (!route.startsWith('/call/')) return;
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
+    await plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_callChannel);
+    await plugin.show(
+      _callNotifId(route),
+      (data['title'] as String?) ?? 'Incoming call',
+      (data['body'] as String?) ?? 'Someone is calling you',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _callChannel.id,
+          _callChannel.name,
+          channelDescription: _callChannel.description,
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.call,
+          fullScreenIntent: true,
+          ongoing: true,
+          autoCancel: true,
+          timeoutAfter: 45000, // same as the server's ring timeout
+          playSound: true,
+          sound: const UriAndroidNotificationSound('content://settings/system/ringtone'),
+          audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+          additionalFlags: Int32List.fromList(<int>[4]), // FLAG_INSISTENT: keep ringing
+          visibility: NotificationVisibility.public,
+        ),
+        iOS: const DarwinNotificationDetails(presentSound: true),
+      ),
+      payload: route,
+    );
+  }
+
+  /// Stops the ringing notification once the call is answered / ended.
+  Future<void> cancelCallNotification(String? callId) async {
+    if (callId == null) return;
+    try {
+      await _localNotifications.cancel(_callNotifId('/call/$callId'));
+    } catch (_) {}
+  }
 
   bool _initialized = false;
 
@@ -96,7 +164,13 @@ class PushNotificationService {
     // prompt, which can block for a long time.
     try {
       final initial = await _messaging.getInitialMessage();
-      completeLaunchRoute(initial == null ? null : _routeFrom(initial.data));
+      // Data-only call push: the app was opened by tapping our local notification.
+      String? localRoute;
+      try {
+        final d = await _localNotifications.getNotificationAppLaunchDetails();
+        if (d?.didNotificationLaunchApp == true) localRoute = d!.notificationResponse?.payload;
+      } catch (_) {}
+      completeLaunchRoute(initial == null ? localRoute : (_routeFrom(initial.data) ?? localRoute));
     } catch (_) {
       completeLaunchRoute();
     }
@@ -109,6 +183,9 @@ class PushNotificationService {
     await _localNotifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_channel);
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_callChannel);
 
     await _localNotifications.initialize(
       const InitializationSettings(
@@ -131,6 +208,12 @@ class PushNotificationService {
 
   void _showForegroundNotification(RemoteMessage message) {
     NotificationService.instance.refreshUnread(); // bell badge
+    // Incoming call: if the call socket is up it already opened the call screen;
+    // otherwise show the ringing call notification.
+    if (isIncomingCall(message.data)) {
+      if (!CallService.instance.isConnected) showIncomingCallNotification(message.data);
+      return;
+    }
     final notification = message.notification;
     if (notification == null) return;
 
