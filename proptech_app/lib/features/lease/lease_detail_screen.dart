@@ -12,7 +12,6 @@ import 'lease_photos_tab.dart';
 import 'lease_rent_tab.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
-import 'upi_pay_sheet.dart';
 
 /// One lease: Overview / Rent / Deposit / Photos / Activity.
 /// Route: /lease/:id (also the target of lease/rent/deposit push notifications).
@@ -220,18 +219,6 @@ class _OverviewTab extends StatelessWidget {
             StatusPill.status(lease.status),
           ]),
           const SizedBox(height: AppSpacing.md),
-
-          if (_owner)
-            SectionCard(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
-                title: const Text('Your UPI ID'),
-                subtitle: const Text('Tenants pay rent and deposit to this UPI ID'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => editOwnerUpi(context),
-              ),
-            ),
 
           // ---- banners
           if (lease.overdueCount > 0)

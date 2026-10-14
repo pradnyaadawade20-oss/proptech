@@ -9,8 +9,7 @@ import 'landlord_service.dart';
 
 /// Broker side: link a broker-posted listing to its REAL owner.
 /// The broker enters the owner's details and shares an invite code. The owner accepts from
-/// their own account (after Aadhaar KYC + their own UPI ID), so rent and deposit go straight
-/// to the owner and the agreement names them as the landlord.
+/// their own account (after Aadhaar KYC), and the agreement names them as the landlord.
 class PropertyOwnerLinkScreen extends StatefulWidget {
   final String propertyId;
   final String propertyTitle;
@@ -208,7 +207,7 @@ class _PropertyOwnerLinkScreenState extends State<PropertyOwnerLinkScreen> {
             Expanded(
               child: Text(
                 'Tenants can request an online agreement only after the real owner joins. '
-                'The owner signs the agreement, and rent and deposit are paid straight to the owner\'s own UPI ID. '
+                'The owner signs the agreement, and rent and deposit are paid online through the app. '
                 'You stay on the agreement as the agent.',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
               ),
@@ -367,7 +366,7 @@ class _PropertyOwnerLinkScreenState extends State<PropertyOwnerLinkScreen> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Tenants can now request an online agreement for this listing. The owner signs it, and rent and deposit '
-            "are paid directly to the owner's UPI ID. You appear on the agreement as the agent.",
+            "are paid online through the app. You appear on the agreement as the agent.",
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
         ],

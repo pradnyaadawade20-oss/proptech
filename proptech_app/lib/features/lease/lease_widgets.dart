@@ -169,7 +169,6 @@ Future<String?> askDate(BuildContext context, {required DateTime first, required
 // ------------------------------------------------------------ payment sheet
 
 const paymentMethods = {
-  'upi': 'UPI',
   'bank_transfer': 'Bank transfer',
   'cash': 'Cash',
   'cheque': 'Cheque',
@@ -201,7 +200,7 @@ class _PaymentSheet extends StatefulWidget {
 }
 
 class _PaymentSheetState extends State<_PaymentSheet> {
-  String _method = 'upi';
+  String _method = 'bank_transfer';
   final _ref = TextEditingController();
   String? _error;
 

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"proptech-backend/internal/cashfree"
 	"proptech-backend/internal/config"
 	"proptech-backend/internal/handlers"
 	"proptech-backend/internal/kyc"
@@ -163,6 +164,16 @@ func main() {
 	routes.RegisterCallRoutes(router, callHandler)
 
 	// Online payments (Cashfree sandbox/production). Secret keys are read from env vars only.
+
+	cfClient := cashfree.FromEnv()
+	if cfClient.Configured() {
+		log.Println("Cashfree payments enabled (" + cfClient.Env + ")")
+	} else {
+		log.Println("WARNING: CASHFREE_APP_ID / CASHFREE_SECRET_KEY not set - online payments disabled")
+	}
+	paymentHandler := handlers.NewPaymentHandler(leaseHandler, cfClient)
+	routes.RegisterPaymentRoutes(router, paymentHandler)
+	paymentHandler.StartSweeper(context.Background()) // catches payments even without the webhook
 
 	log.Println("Server starting on port " + cfg.Port + "...")
 	if err := router.Run(":" + cfg.Port); err != nil {

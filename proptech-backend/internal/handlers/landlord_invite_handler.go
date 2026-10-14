@@ -15,8 +15,7 @@ import (
 )
 
 // LandlordInviteHandler links a broker's listing to the REAL owner. The owner accepts
-// from their own account (Aadhaar KYC + their own UPI ID), so rent and deposit are
-// paid straight to them and the agreement names them as the landlord.
+// from their own account (Aadhaar KYC), and the agreement names them as the landlord.
 type LandlordInviteHandler struct {
 	repo   *repository.LandlordInviteRepository
 	kyc    *repository.KYCRepository
@@ -184,8 +183,7 @@ type inviteActionRequest struct {
 }
 
 // POST /api/landlord-invites/accept  (owner)
-// The owner must have verified KYC and their own UPI ID first: they are the landlord on
-// the agreement and the person rent/deposit is paid to.
+// The owner must have verified KYC first: they are the landlord on the agreement.
 func (h *LandlordInviteHandler) Accept(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -210,19 +208,6 @@ func (h *LandlordInviteHandler) Accept(c *gin.Context) {
 		})
 		return
 	}
-	upi, err := h.leases.GetOwnerUPI(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check your UPI ID"})
-		return
-	}
-	if strings.TrimSpace(upi) == "" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "add your UPI ID first, rent and deposit will be paid to it",
-			"code":  "upi_required",
-		})
-		return
-	}
-
 	invite, err := h.repo.Accept(c.Request.Context(), userID, req.InviteID, req.Code)
 	if err != nil {
 		if writeInviteError(c, err) {

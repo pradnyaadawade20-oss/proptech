@@ -11,7 +11,6 @@ import '../auth/auth_service.dart';
 import 'profile_avatar.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
-import '../lease/upi_pay_sheet.dart';
 import '../notifications/push_notification_service.dart';
 
 class _Ui {
@@ -305,13 +304,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.vpn_key_outlined,
                         title: 'My Leases & Rent',
                         onTap: () => context.push(RouteNames.leases),
-                      ),
-                      // Anyone who posts a property (owner or broker) adds the UPI ID
-                      // that receives rent and deposit here.
-                      _ProfileMenuTile(
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'My UPI ID (receive rent)',
-                        onTap: () => editOwnerUpi(context),
                       ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,

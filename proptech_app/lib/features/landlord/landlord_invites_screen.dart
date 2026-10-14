@@ -5,12 +5,10 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
-import '../lease/upi_pay_sheet.dart';
 import 'landlord_service.dart';
 
 /// Owner side: invitations from brokers who want to list your property.
-/// Accepting makes YOU the landlord: you sign the agreement and rent/deposit are paid to your own UPI ID.
-/// Needs Aadhaar KYC and a saved UPI ID first.
+/// Accepting makes YOU the landlord: you sign the agreement. Needs Aadhaar KYC first.
 class LandlordInvitesScreen extends StatefulWidget {
   const LandlordInvitesScreen({super.key});
 
@@ -111,7 +109,7 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
           title: const Text('You are now the owner'),
           content: Text(
             '"${inv.propertyTitle}" is linked to your account. Tenants can now request an agreement, you sign it, '
-            'and rent and deposit are paid directly to your UPI ID.',
+            'and rent and deposit are paid online through the app.',
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
         ),
@@ -121,8 +119,6 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
       setState(() => _busyId = null);
       if (e.code == 'kyc_required') {
         await _needKyc();
-      } else if (e.code == 'upi_required' && !retried) {
-        await _needUpi(inv, code);
       } else {
         _toast(e.message);
       }
@@ -149,24 +145,6 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
       ),
     );
     if (go == true && mounted) await context.push(RouteNames.kycVerification);
-  }
-
-  Future<void> _needUpi(LandlordInvite inv, String? code) async {
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add your UPI ID'),
-        content: const Text('Rent and deposit are paid straight to your UPI ID, so add it before accepting.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add UPI ID')),
-        ],
-      ),
-    );
-    if (go != true || !mounted) return;
-    await editOwnerUpi(context);
-    if (!mounted) return;
-    await _accept(inv, code: code, retried: true); // one retry after they saved it
   }
 
   Future<void> _decline(LandlordInvite inv, {String? code}) async {
@@ -218,8 +196,8 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
             children: [
               Text(
                 'A broker may want to list your property on PropTech. If you accept, you become the landlord: '
-                'you sign the agreement and rent and deposit are paid directly to your own UPI ID. '
-                'You need Aadhaar KYC and a saved UPI ID.',
+                'you sign the agreement and rent and deposit are paid online through the app. '
+                'You need Aadhaar KYC.',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -318,7 +296,7 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
           const SizedBox(height: 4),
           Text(
             'If you accept: tenants can request an agreement, you are the landlord and sign it, and rent and deposit '
-            'are paid directly to your UPI ID. Any commission is settled between you and the broker.',
+            'are paid online through the app. Any commission is settled between you and the broker.',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.md),

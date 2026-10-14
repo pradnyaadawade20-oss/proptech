@@ -95,6 +95,12 @@ class LeaseService {
         return Uint8List.fromList(r.data ?? const []);
       });
 
+  Future<Uint8List> depositReceiptPdf(String leaseId) => _run(() async {
+        final r = await _dio.get<List<int>>('/api/leases/$leaseId/deposit/receipt',
+            options: Options(responseType: ResponseType.bytes));
+        return Uint8List.fromList(r.data ?? const []);
+      });
+
   // ---------------- renewal / move in-out ----------------
 
   Future<void> requestRenewal(String leaseId) =>

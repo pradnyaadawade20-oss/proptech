@@ -462,8 +462,8 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
       _Clause(
         'Payment of Rent',
         'Rent shall be paid in advance on or before $dueText.',
-        'The Tenant shall pay $rentText in advance on or before $dueText. Rent is paid directly to the Owner '
-            'by UPI, and the payment proof (UTR and screenshot) is recorded on the platform for both parties.',
+        'The Tenant shall pay $rentText in advance on or before $dueText. Rent is paid online through the platform '
+            '(UPI, card or net banking), and the payment record and receipt are available to both parties.',
       ),
       const _Clause(
         'Maintenance & Utilities',
