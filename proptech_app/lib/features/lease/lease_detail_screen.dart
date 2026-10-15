@@ -5,13 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../core/widgets/safe_network_image.dart';
+import 'commission_card.dart';
 import 'lease_deposit_tab.dart';
 import 'lease_models.dart';
 import 'lease_receipts_tab.dart';
 import 'lease_rent_tab.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
-import 'upi_pay_sheet.dart';
 
 /// One lease: Overview / Rent / Deposit / Receipts.
 /// Route: /lease/:id (also the target of lease/rent/deposit push notifications).
@@ -203,18 +203,13 @@ class _OverviewTab extends StatelessWidget {
           ]),
           const SizedBox(height: AppSpacing.md),
 
-          if (_owner)
-            SectionCard(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
-                title: const Text('Your UPI ID'),
-                subtitle: const Text('Tenants pay rent and deposit to this UPI ID'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => editOwnerUpi(context),
-              ),
+          if (_tenant)
+            CommissionCard(
+              agreementId: lease.agreementId,
+              propertyTitle: lease.propertyTitle,
+              tenantName: lease.tenantName,
+              onChanged: onChanged,
             ),
-
           // ---- banners
           if (lease.overdueCount > 0)
             InfoBanner('${lease.overdueCount} rent payment${lease.overdueCount > 1 ? 's are' : ' is'} overdue. Check the Rent tab.',

@@ -7,6 +7,7 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
+import '../lease/commission_card.dart';
 import '../profile/kyc_service.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
@@ -405,6 +406,11 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
             'it shall be subject to the jurisdiction of the courts of the city where the property is located.',
       ),
     ];
+    final agent = _agreement?.agentName ?? '';
+    if (agent.isNotEmpty) {
+      final t = 'This agreement was arranged through the agent $agent. Any brokerage is settled separately between the Tenant and the Agent and is not part of this agreement.';
+      list.add(_Clause('Agent', t, t));
+    }
     if (_extraTerms.isNotEmpty) {
       list.add(_Clause('Additional Terms', _extraTerms, _extraTerms));
     }
@@ -464,6 +470,12 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                               if (_waitingForOwner) _waitingBanner(),
                               _headerCard(),
                               if (_isDraftEditable) _editCard(),
+                              if (!_isOwner)
+                                CommissionCard(
+                                  agreementId: widget.agreementId,
+                                  propertyTitle: _agreement!.propertyTitle,
+                                  tenantName: _agreement!.tenantName,
+                                ),
                               _summaryCard(),
                               _keyTermsCard(),
                               _signatureCard(),

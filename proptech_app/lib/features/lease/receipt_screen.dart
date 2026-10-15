@@ -15,14 +15,14 @@ class ReceiptData {
   final double amount;
   final DateTime? paidAt;
   final List<(String, String)> rows;
-  final Future<Uint8List> Function() loadPdf;
+  final Future<Uint8List> Function()? loadPdf; // null = no PDF (button hidden)
   const ReceiptData({
     required this.title,
     required this.receiptNo,
     required this.amount,
     required this.paidAt,
     required this.rows,
-    required this.loadPdf,
+    this.loadPdf,
   });
 }
 
@@ -41,7 +41,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   Future<void> _sharePdf() async {
     setState(() => _busy = true);
     try {
-      final bytes = await widget.data.loadPdf();
+      final bytes = await widget.data.loadPdf!();
       final no = widget.data.receiptNo;
       final name = '${no.isEmpty ? 'receipt' : no}.pdf';
       await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: name)], fileNameOverrides: [name]);
@@ -97,6 +97,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ]),
           ),
           const SizedBox(height: AppSpacing.md),
+          if (d.loadPdf != null)
           ElevatedButton.icon(
             onPressed: _busy ? null : _sharePdf,
             icon: _busy

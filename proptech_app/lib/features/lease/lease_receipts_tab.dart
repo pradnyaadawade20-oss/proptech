@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
+import 'commission_service.dart';
 import 'lease_models.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
@@ -76,6 +77,15 @@ class _LeaseReceiptsTabState extends State<LeaseReceiptsTab> {
         ],
       ));
     }
+    // Agent commission (only the tenant and the agent can read it; for the owner this just throws and is skipped).
+    try {
+      final cv = await CommissionService.instance.get(l.agreementId);
+      final c = cv.commission;
+      if (cv.role == 'tenant' && c != null && c.paid) {
+        out.add(commissionReceipt(c: c, property: l.propertyTitle, paidBy: l.tenantName, receivedBy: cv.agentName));
+      }
+    } catch (_) {}
+
     out.sort((a, b) {
       final x = a.paidAt, y = b.paidAt;
       if (x == null && y == null) return 0;

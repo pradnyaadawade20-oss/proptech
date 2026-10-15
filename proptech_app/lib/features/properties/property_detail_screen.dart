@@ -390,6 +390,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (property.postedBy == 'broker') ...[const AgentBadge(), const SizedBox(height: 8)],
                     // Title + price
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

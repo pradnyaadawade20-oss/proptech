@@ -63,7 +63,7 @@ func (r *LeaseRepository) OpenOrder(ctx context.Context, kind, targetID string) 
 	if kind == "rent" {
 		q += `kind = 'rent' AND rent_payment_id = $1`
 	} else {
-		q += `kind = 'deposit' AND lease_id = $1`
+		q += `kind = '` + kind + `' AND lease_id = $1` // kind is only ever "deposit" or "commission" (from our code)
 	}
 	o, err := scanOrder(r.db.QueryRow(ctx, q+` ORDER BY created_at DESC LIMIT 1`, targetID))
 	if errors.Is(err, ErrLeaseNotFound) {
@@ -81,7 +81,7 @@ func (r *LeaseRepository) SupersedeOpen(ctx context.Context, kind, targetID stri
 			WHERE status = 'created' AND kind = 'rent' AND rent_payment_id = $1`, targetID)
 	} else {
 		_, err = r.db.Exec(ctx, `UPDATE payment_orders SET status = 'superseded', updated_at = now()
-			WHERE status = 'created' AND kind = 'deposit' AND lease_id = $1`, targetID)
+			WHERE status = 'created' AND kind = $2 AND lease_id = $1`, targetID, kind)
 	}
 	return err
 }
@@ -171,6 +171,18 @@ func (r *LeaseRepository) FinalizeOrder(ctx context.Context, orderID, cfPaymentI
 			    payment_method = $2, reference = $3, late_days = $4, late_fee = $5, reject_reason = NULL,
 			    receipt_no = `+receiptNoSQL+`
 			WHERE id = $1 AND status <> 'paid'`, *o.RentPaymentID, method, cfPaymentID, o.LateDays, o.LateFee)
+		if e != nil {
+			return nil, false, false, e
+		}
+		settled = tag.RowsAffected() > 0
+	} else if o.Kind == "commission" {
+		tag, e := tx.Exec(ctx, `
+			UPDATE lease_commissions
+			SET status = 'paid', paid_at = now(), payment_method = $2, reference = $3, updated_at = now(),
+			    receipt_no = 'CM-' || to_char(now(), 'YYMMDD') || '-' || upper(left(id::text, 6))
+			WHERE agreement_id = (SELECT agreement_id FROM leases WHERE id = $1)
+			  AND status = 'accepted' AND abs(amount - $4) < 0.01`,
+			o.LeaseID, method, cfPaymentID, o.Amount)
 		if e != nil {
 			return nil, false, false, e
 		}

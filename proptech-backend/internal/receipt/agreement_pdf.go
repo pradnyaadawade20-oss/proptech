@@ -225,7 +225,7 @@ func BuildAgreement(a AgreementData) []byte {
 	d.kv("Tenant", a.TenantName)
 	if a.AgentName != "" {
 		d.kv("Agent (Broker)", a.AgentName)
-	}
+	}d.kv("Brokerage", "Settled separately between the Tenant and the Agent; not part of this agreement")
 
 	d.section("Property")
 	d.kv("Property", a.PropertyTitle)

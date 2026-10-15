@@ -118,8 +118,11 @@ func (h *PaymentHandler) startCheckout(c *gin.Context, s orderSpec) {
 
 	name, phone, email, _ := h.repo.UserContact(ctx, s.payerID)
 	prefix := "RENT"
-	if s.kind == "deposit" {
+	switch s.kind {
+	case "deposit":
 		prefix = "DEP"
+	case "commission":
+		prefix = "COM"
 	}
 	// Cashfree order_id: max 50 chars (4 + 1 + 32 + 1 + 10 = 48).
 	orderID := fmt.Sprintf("%s-%s-%d", prefix, strings.ReplaceAll(s.targetID, "-", ""), time.Now().Unix())
@@ -235,6 +238,14 @@ func (h *PaymentHandler) afterPaid(ctx context.Context, o *repository.PaymentOrd
 		return
 	}
 	via := "online (" + o.PaymentMethod + ")"
+	if o.Kind == "commission" {
+		h.repo.LogEvent(ctx, l.ID, o.PayerID, "commission_paid_online", "Agent commission "+rupees(o.Amount)+" paid "+via)
+		notify.SendRoute(l.TenantID, "commission", "Commission paid",
+			fmt.Sprintf("Your agent commission of %s for %s is paid. Receipt is ready.", rupees(o.Amount), l.PropertyTitle), leaseRoute(l.ID))
+		notify.Send(o.OwnerID, "commission", "Commission received",
+			fmt.Sprintf("%s paid your commission of %s for %s.", l.TenantName, rupees(o.Amount), l.PropertyTitle))
+		return
+	}
 	if o.Kind == "rent" && o.RentPaymentID != nil {
 		label := "rent"
 		if p, err := h.repo.GetPayment(ctx, *o.RentPaymentID); err == nil {

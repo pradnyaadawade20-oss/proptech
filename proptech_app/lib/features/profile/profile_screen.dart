@@ -13,6 +13,7 @@ import 'profile_avatar.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
+import '../lease/agent_commissions_screen.dart';
 
 class _Ui {
   _Ui._();
@@ -306,6 +307,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'My Leases & Rent',
                         onTap: () => context.push(RouteNames.leases),
                       ),
+                      if (UserSession.instance.currentRole.value == UserRole.broker)
+  _ProfileMenuTile(
+    icon: Icons.payments_outlined,
+    title: 'Agent commissions',
+    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AgentCommissionsScreen())),
+  ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',
