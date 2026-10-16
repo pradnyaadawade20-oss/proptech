@@ -48,6 +48,10 @@ type Property struct {
 	Longitude          float64    `json:"longitude"`
 	Address            string     `json:"address"` // full street address shown on the listing
 
+	// IsLive is false for a broker listing whose real owner has not approved it yet.
+	// Such a listing is visible only to the broker who posted it.
+	IsLive bool `json:"is_live"`
+
 	// Filled by PropertyRepository.AttachMedia (not columns on properties).
 	AdditionalImageURLs []string `json:"additional_image_urls"`
 	VideoTourURL        *string  `json:"video_tour_url,omitempty"`

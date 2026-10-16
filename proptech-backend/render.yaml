@@ -35,6 +35,20 @@ services:
         value: 544072846065-o5b43q1sd2jbk0hkea2sg408htpkfpc1.apps.googleusercontent.com
       - key: DEV_SKIP_OTP
         value: "true"
+      # Owner share link (https://<PUBLIC_BASE_URL>/o/<token>)
+      - key: PUBLIC_BASE_URL
+        value: https://proptech-ozo0.onrender.com
+      - key: ANDROID_PACKAGE
+        value: com.example.proptech_app
+      # SHA-256 fingerprint(s) of the app signing key, comma separated (Play Console > App signing,
+      # and/or `./gradlew signingReport`). Needed for the link to open the app directly.
+      - key: ANDROID_SHA256_CERT_FINGERPRINTS
+        sync: false
+      # "Install the app" button on the link page. Set one of the two.
+      - key: PLAY_STORE_URL
+        sync: false
+      - key: APK_DOWNLOAD_URL
+        sync: false
       
 
 databases:

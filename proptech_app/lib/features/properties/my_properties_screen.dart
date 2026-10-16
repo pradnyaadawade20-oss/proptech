@@ -161,15 +161,36 @@ class _PropertyManageCard extends StatelessWidget {
                   itemBuilder: (context) => [
                     const PopupMenuItem(value: 'edit', child: Text('Edit')),
                     if (property.postedBy == 'broker')
-                      const PopupMenuItem(value: 'owner', child: Text('Owner & agreement')),
+                      const PopupMenuItem(value: 'owner', child: Text('Owner approval')),
                     const PopupMenuItem(value: 'delete', child: Text('Delete')),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            if (property.postedBy == 'broker') ...[
-              // Agreements + rent need the REAL owner on the platform first.
+            if (property.postedBy == 'broker' && !property.isLive) ...[
+              // Broker listings go live only after the real owner approves. Until then only the broker sees them.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.hourglass_top, size: 16, color: AppColors.warning),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Not live. Waiting for the owner to approve. Only you can see this listing.',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -177,14 +198,24 @@ class _PropertyManageCard extends StatelessWidget {
                     RouteNames.propertyOwnerLink.replaceFirst(':id', property.id),
                     extra: property.title,
                   ),
-                  icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                  label: const Text('Link owner for agreements'),
+                  icon: const Icon(Icons.send_outlined, size: 18),
+                  label: const Text('Send link to owner'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                 ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ] else if (property.postedBy == 'broker') ...[
+              const Row(
+                children: [
+                  Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                  SizedBox(width: 4),
+                  Text('Live. Approved by the owner.',
+                      style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm),
             ],

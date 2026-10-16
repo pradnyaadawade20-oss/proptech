@@ -97,6 +97,22 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
+// OptionalUserID returns the caller's user id when a valid Bearer token is sent,
+// and "" for anonymous callers. It never rejects the request: use it on public
+// endpoints that show a bit more to the logged-in owner of a listing.
+func OptionalUserID(c *gin.Context) string {
+	header := c.GetHeader("Authorization")
+	if !strings.HasPrefix(header, "Bearer ") {
+		return ""
+	}
+	claims, err := ParseToken(strings.TrimPrefix(header, "Bearer "))
+	if err != nil {
+		return ""
+	}
+	id, _ := claims["user_id"].(string)
+	return id
+}
+
 func GetUserID(c *gin.Context) (string, error) {
 	v, exists := c.Get("user_id")
 	if !exists {

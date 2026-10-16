@@ -161,6 +161,10 @@ func RegisterLandlordInviteRoutes(router *gin.Engine, h *handlers.LandlordInvite
 	// Public: tells the app whether tenants can request an agreement (no private data).
 	router.GET("/api/properties/:id/agreement-eligibility", h.AgreementEligibility)
 
+	// Share link the broker sends to the owner, plus the file Android needs to open it in the app.
+	router.GET("/o/:token", h.InviteLandingPage)
+	router.GET("/.well-known/assetlinks.json", handlers.AssetLinks)
+
 	authed := router.Group("/api", middleware.AuthRequired())
 	{
 		// Broker
@@ -170,7 +174,7 @@ func RegisterLandlordInviteRoutes(router *gin.Engine, h *handlers.LandlordInvite
 
 		// Owner
 		authed.GET("/landlord-invites/mine", h.Mine)
-		authed.GET("/landlord-invites/by-code/:code", h.ByCode)
+		authed.GET("/landlord-invites/by-token/:token", h.ByToken)
 		authed.POST("/landlord-invites/accept", h.Accept)
 		authed.POST("/landlord-invites/decline", h.Decline)
 	}

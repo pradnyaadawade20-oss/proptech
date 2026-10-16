@@ -8,6 +8,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import '../../core/services/place_autocomplete_service.dart';
+import '../../app/router/route_names.dart';
 import '../../core/session/user_session.dart';
 import '../../core/widgets/app_button.dart';
 import 'property.dart';
@@ -510,10 +511,23 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       PropertyStore.instance.add(created);
 
       if (!mounted) return;
+      final isBroker = UserSession.instance.currentRole.value == UserRole.broker;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mediaWarning ?? 'Property listed successfully!')),
+        SnackBar(
+          content: Text(isBroker
+              ? (mediaWarning ?? 'Saved. Now send the link to the owner. It goes live after they approve.')
+              : (mediaWarning ?? 'Property listed successfully!')),
+        ),
       );
-      context.pop();
+      if (isBroker) {
+        // Not live yet: the real owner has to approve it first. Next step = send the owner the link.
+        context.pushReplacement(
+          RouteNames.propertyOwnerLink.replaceFirst(':id', created.id),
+          extra: created.title,
+        );
+      } else {
+        context.pop();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);

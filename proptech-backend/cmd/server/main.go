@@ -154,7 +154,7 @@ func main() {
 	routes.RegisterLeaseRoutes(router, leaseHandler)
 
 	landlordInviteRepo := repository.NewLandlordInviteRepository(dbPool)
-	landlordInviteHandler := handlers.NewLandlordInviteHandler(landlordInviteRepo, kycRepo, leaseRepo)
+	landlordInviteHandler := handlers.NewLandlordInviteHandler(landlordInviteRepo, kycRepo, leaseRepo, propertyRepo)
 	routes.RegisterLandlordInviteRoutes(router, landlordInviteHandler)
 	startLeaseJobs(context.Background(), leaseRepo)
 

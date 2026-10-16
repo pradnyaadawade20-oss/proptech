@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
+import '../properties/property.dart';
 
 /// A broker's invitation to the real owner of a listing.
 class LandlordInvite {
@@ -8,7 +9,7 @@ class LandlordInvite {
   final String propertyTitle;
   final String brokerId;
   final String brokerName;
-  final String code; // only filled for the broker who created it
+  final String shareUrl; // the link to send the owner; only filled for the broker who created it
   final String landlordName;
   final String landlordPhone;
   final String landlordEmail;
@@ -22,7 +23,7 @@ class LandlordInvite {
     required this.propertyTitle,
     required this.brokerId,
     required this.brokerName,
-    required this.code,
+    required this.shareUrl,
     required this.landlordName,
     required this.landlordPhone,
     required this.landlordEmail,
@@ -37,7 +38,7 @@ class LandlordInvite {
         propertyTitle: j['property_title'] as String? ?? '',
         brokerId: j['broker_id'] as String? ?? '',
         brokerName: j['broker_name'] as String? ?? '',
-        code: j['code'] as String? ?? '',
+        shareUrl: j['share_url'] as String? ?? '',
         landlordName: j['landlord_name'] as String? ?? '',
         landlordPhone: j['landlord_phone'] as String? ?? '',
         landlordEmail: j['landlord_email'] as String? ?? '',
@@ -48,6 +49,13 @@ class LandlordInvite {
 
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
+}
+
+/// What the owner sees after opening the share link: the invitation and the full listing.
+class InviteView {
+  final LandlordInvite invite;
+  final Property property;
+  const InviteView(this.invite, this.property);
 }
 
 /// Server error with the machine-readable `code` (kyc_required / upi_required / ...).
@@ -120,21 +128,27 @@ class LandlordService {
     }
   }
 
-  Future<LandlordInvite> byCode(String code) async {
+  /// Owner opened the share link (logged in): fetch the invitation + listing to review.
+  Future<InviteView> byToken(String token) async {
     try {
-      final r = await _dio.get('/api/landlord-invites/by-code/${Uri.encodeComponent(code.trim())}');
-      return LandlordInvite.fromJson(r.data['invite'] as Map<String, dynamic>);
+      final r = await _dio.get('/api/landlord-invites/by-token/${Uri.encodeComponent(token.trim())}');
+      final data = r.data as Map<String, dynamic>;
+      return InviteView(
+        LandlordInvite.fromJson(data['invite'] as Map<String, dynamic>),
+        Property.fromJson(data['property'] as Map<String, dynamic>),
+      );
     } on DioException catch (e) {
       throw _toException(e);
     }
   }
 
-  /// Pass the invite id (invites sent to my email/phone) or the code the broker shared.
-  Future<LandlordInvite> accept({String? inviteId, String? code}) async {
+  /// APPROVE. Pass the link token (opened from the share link) or the invite id (invite listed for my email/phone).
+  /// The listing goes live for tenants only after this succeeds.
+  Future<LandlordInvite> accept({String? inviteId, String? token}) async {
     try {
       final r = await _dio.post('/api/landlord-invites/accept', data: {
         if (inviteId != null) 'invite_id': inviteId,
-        if (code != null) 'code': code,
+        if (token != null) 'token': token,
       });
       return LandlordInvite.fromJson(r.data['invite'] as Map<String, dynamic>);
     } on DioException catch (e) {
@@ -142,11 +156,11 @@ class LandlordService {
     }
   }
 
-  Future<void> decline({String? inviteId, String? code}) async {
+  Future<void> decline({String? inviteId, String? token}) async {
     try {
       await _dio.post('/api/landlord-invites/decline', data: {
         if (inviteId != null) 'invite_id': inviteId,
-        if (code != null) 'code': code,
+        if (token != null) 'token': token,
       });
     } on DioException catch (e) {
       throw _toException(e);

@@ -4,9 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"errors"
-	"math/big"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -24,9 +23,6 @@ var (
 
 const inviteValidDays = 14
 
-// No 0/O/1/I so the code is easy to read out over a call.
-const inviteAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
 type LandlordInviteRepository struct {
 	db *pgxpool.Pool
 }
@@ -40,7 +36,7 @@ type inviteQuerier interface {
 }
 
 const inviteSelect = `
-	SELECT i.id, i.property_id, p.title, i.broker_id, bu.name, i.code,
+	SELECT i.id, i.property_id, p.title, i.broker_id, bu.name, i.token,
 	       i.landlord_name, COALESCE(i.landlord_phone, ''), COALESCE(i.landlord_email, ''),
 	       COALESCE(i.landlord_user_id::text, ''), COALESCE(lu.name, ''),
 	       i.status, i.expires_at, i.created_at, i.responded_at
@@ -64,7 +60,7 @@ const inviteAddressedToMe = `
 func scanInvite(row interface{ Scan(dest ...any) error }) (*models.LandlordInvite, error) {
 	var v models.LandlordInvite
 	err := row.Scan(
-		&v.ID, &v.PropertyID, &v.PropertyTitle, &v.BrokerID, &v.BrokerName, &v.Code,
+		&v.ID, &v.PropertyID, &v.PropertyTitle, &v.BrokerID, &v.BrokerName, &v.Token,
 		&v.LandlordName, &v.LandlordPhone, &v.LandlordEmail,
 		&v.LandlordUserID, &v.LandlordUserName,
 		&v.Status, &v.ExpiresAt, &v.CreatedAt, &v.RespondedAt,
@@ -78,24 +74,28 @@ func scanInvite(row interface{ Scan(dest ...any) error }) (*models.LandlordInvit
 	return &v, nil
 }
 
-func newInviteCode() (string, error) {
-	out := make([]byte, 8)
-	max := big.NewInt(int64(len(inviteAlphabet)))
-	for i := range out {
-		n, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		out[i] = inviteAlphabet[n.Int64()]
+// newInviteToken returns 192 random bits, URL-safe (32 chars). It is the secret inside the share link.
+func newInviteToken() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
 	}
-	return string(out), nil
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-// NormalizeInviteCode upper-cases and strips spaces/dashes ("abcd-2345" -> "ABCD2345").
-func NormalizeInviteCode(code string) string {
-	code = strings.ToUpper(strings.TrimSpace(code))
-	code = strings.ReplaceAll(code, "-", "")
-	return strings.ReplaceAll(code, " ", "")
+// ValidInviteToken is a cheap shape check so junk never reaches the database.
+func ValidInviteToken(t string) bool {
+	if len(t) < 32 || len(t) > 64 {
+		return false
+	}
+	for _, r := range t {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Create makes a new pending invite for a broker listing (cancelling any older pending one).
@@ -144,32 +144,18 @@ func (r *LandlordInviteRepository) Create(ctx context.Context, propertyID, broke
 		return nil, err
 	}
 
-	var code string
-	for attempt := 0; attempt < 5; attempt++ {
-		c, err := newInviteCode()
-		if err != nil {
-			return nil, err
-		}
-		var taken bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM landlord_invites WHERE code = $1)`, c).Scan(&taken); err != nil {
-			return nil, err
-		}
-		if !taken {
-			code = c
-			break
-		}
-	}
-	if code == "" {
-		return nil, errors.New("could not generate an invite code, please try again")
+	token, err := newInviteToken()
+	if err != nil {
+		return nil, err
 	}
 
 	var id string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO landlord_invites
-			(property_id, broker_id, code, landlord_name, landlord_phone, landlord_email, landlord_user_id, expires_at)
+			(property_id, broker_id, token, landlord_name, landlord_phone, landlord_email, landlord_user_id, expires_at)
 		VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), $7, now() + make_interval(days => $8))
 		RETURNING id`,
-		propertyID, brokerID, code, name, phone, email, matchedUser, inviteValidDays,
+		propertyID, brokerID, token, name, phone, email, matchedUser, inviteValidDays,
 	).Scan(&id)
 	if err != nil {
 		return nil, err
@@ -180,7 +166,7 @@ func (r *LandlordInviteRepository) Create(ctx context.Context, propertyID, broke
 	return scanInvite(r.db.QueryRow(ctx, inviteSelect+` WHERE i.id = $1`, id))
 }
 
-// LatestForProperty is the broker's view (code included). nil when never invited.
+// LatestForProperty is the broker's view (token included, so the handler can build the share link). nil when never invited.
 func (r *LandlordInviteRepository) LatestForProperty(ctx context.Context, propertyID, brokerID string) (*models.LandlordInvite, error) {
 	inv, err := scanInvite(r.db.QueryRow(ctx,
 		inviteSelect+` WHERE i.property_id = $1 AND i.broker_id = $2 ORDER BY i.created_at DESC LIMIT 1`,
@@ -219,23 +205,26 @@ func (r *LandlordInviteRepository) ListMine(ctx context.Context, userID string) 
 		if err != nil {
 			return nil, err
 		}
-		inv.Code = ""
+		inv.Token = ""
 		out = append(out, *inv)
 	}
 	return out, rows.Err()
 }
 
-// GetByCode looks up an open invite by its code (the code is never echoed back).
-func (r *LandlordInviteRepository) GetByCode(ctx context.Context, code string) (*models.LandlordInvite, error) {
-	inv, err := scanInvite(r.db.QueryRow(ctx,
-		inviteSelect+` WHERE i.code = $1 AND i.status = 'pending' AND i.expires_at > now()`, NormalizeInviteCode(code)))
+// GetByToken looks an invite up by the secret in the share link. Any status is returned
+// (pending, accepted, declined, expired...) so the app can explain what happened; the token is never echoed back.
+func (r *LandlordInviteRepository) GetByToken(ctx context.Context, token string) (*models.LandlordInvite, error) {
+	if !ValidInviteToken(token) {
+		return nil, ErrInviteNotFound
+	}
+	inv, err := scanInvite(r.db.QueryRow(ctx, inviteSelect+` WHERE i.token = $1`, token))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrInviteNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	inv.Code = ""
+	inv.Token = ""
 	return inv, nil
 }
 
@@ -250,23 +239,25 @@ func (r *LandlordInviteRepository) userIsAddressed(ctx context.Context, q invite
 	return ok, err
 }
 
-// lockOpenInvite finds the invite (by id, or by code when id is empty) and locks it.
-func (r *LandlordInviteRepository) lockOpenInvite(ctx context.Context, tx pgx.Tx, userID, inviteID, code string) (id, propertyID string, err error) {
-	var brokerID, status, storedCode string
+// lockOpenInvite finds the invite (by id, or by link token when id is empty) and locks it.
+func (r *LandlordInviteRepository) lockOpenInvite(ctx context.Context, tx pgx.Tx, userID, inviteID, token string) (id, propertyID string, err error) {
+	var brokerID, status, storedToken string
 	var expires time.Time
-	code = NormalizeInviteCode(code)
 
 	switch {
 	case inviteID != "":
 		err = tx.QueryRow(ctx,
-			`SELECT id::text, property_id::text, broker_id::text, status, code, expires_at
+			`SELECT id::text, property_id::text, broker_id::text, status, token, expires_at
 			 FROM landlord_invites WHERE id = $1::uuid FOR UPDATE`, inviteID,
-		).Scan(&id, &propertyID, &brokerID, &status, &storedCode, &expires)
-	case code != "":
+		).Scan(&id, &propertyID, &brokerID, &status, &storedToken, &expires)
+	case token != "":
+		if !ValidInviteToken(token) {
+			return "", "", ErrInviteNotFound
+		}
 		err = tx.QueryRow(ctx,
-			`SELECT id::text, property_id::text, broker_id::text, status, code, expires_at
-			 FROM landlord_invites WHERE code = $1 FOR UPDATE`, code,
-		).Scan(&id, &propertyID, &brokerID, &status, &storedCode, &expires)
+			`SELECT id::text, property_id::text, broker_id::text, status, token, expires_at
+			 FROM landlord_invites WHERE token = $1 FOR UPDATE`, token,
+		).Scan(&id, &propertyID, &brokerID, &status, &storedToken, &expires)
 	default:
 		return "", "", ErrInviteNotFound
 	}
@@ -283,8 +274,8 @@ func (r *LandlordInviteRepository) lockOpenInvite(ctx context.Context, tx pgx.Tx
 		return "", "", ErrInviteSelf
 	}
 
-	// Allowed if the user holds the secret code, or the invite was sent to their email/phone.
-	if code != "" && subtle.ConstantTimeCompare([]byte(code), []byte(storedCode)) == 1 {
+	// Allowed if the user holds the secret link token, or the invite was sent to their email/phone.
+	if token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(storedToken)) == 1 {
 		return id, propertyID, nil
 	}
 	ok, err := r.userIsAddressed(ctx, tx, id, userID)
@@ -297,15 +288,16 @@ func (r *LandlordInviteRepository) lockOpenInvite(ctx context.Context, tx pgx.Tx
 	return id, propertyID, nil
 }
 
-// Accept links the property to this user as its real owner (landlord).
-func (r *LandlordInviteRepository) Accept(ctx context.Context, userID, inviteID, code string) (*models.LandlordInvite, error) {
+// Accept is the owner's approval: it links the property to them as the real landlord,
+// and from this moment the listing is public (see LiveCondition).
+func (r *LandlordInviteRepository) Accept(ctx context.Context, userID, inviteID, token string) (*models.LandlordInvite, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	id, propertyID, err := r.lockOpenInvite(ctx, tx, userID, inviteID, code)
+	id, propertyID, err := r.lockOpenInvite(ctx, tx, userID, inviteID, token)
 	if err != nil {
 		return nil, err
 	}
@@ -331,19 +323,19 @@ func (r *LandlordInviteRepository) Accept(ctx context.Context, userID, inviteID,
 	if err != nil {
 		return nil, err
 	}
-	inv.Code = ""
+	inv.Token = ""
 	return inv, nil
 }
 
 // Decline marks the invite declined; the property stays unlinked.
-func (r *LandlordInviteRepository) Decline(ctx context.Context, userID, inviteID, code string) (*models.LandlordInvite, error) {
+func (r *LandlordInviteRepository) Decline(ctx context.Context, userID, inviteID, token string) (*models.LandlordInvite, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	id, _, err := r.lockOpenInvite(ctx, tx, userID, inviteID, code)
+	id, _, err := r.lockOpenInvite(ctx, tx, userID, inviteID, token)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +351,7 @@ func (r *LandlordInviteRepository) Decline(ctx context.Context, userID, inviteID
 	if err != nil {
 		return nil, err
 	}
-	inv.Code = ""
+	inv.Token = ""
 	return inv, nil
 }
 
@@ -382,3 +374,8 @@ func (r *LandlordInviteRepository) AgreementEligibility(ctx context.Context, pro
 	}
 	return false, "owner_not_linked", nil
 }
+
+// LiveCondition is the SQL fragment that decides whether a listing is public.
+// Owner-posted listings are always live. A broker listing goes live only after the real
+// owner approves it, which sets properties.landlord_id.
+const LiveCondition = `(posted_by <> 'broker' OR landlord_id IS NOT NULL)`

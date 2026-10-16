@@ -9,7 +9,8 @@ type LandlordInvite struct {
 	PropertyTitle    string     `json:"property_title"`
 	BrokerID         string     `json:"broker_id"`
 	BrokerName       string     `json:"broker_name"`
-	Code             string     `json:"code,omitempty"` // only shown to the broker who created it
+	Token            string     `json:"-"`                    // secret carried in the share link, never serialized
+	ShareURL         string     `json:"share_url,omitempty"` // only filled for the broker who created it
 	LandlordName     string     `json:"landlord_name"`
 	LandlordPhone    string     `json:"landlord_phone"`
 	LandlordEmail    string     `json:"landlord_email"`
@@ -25,4 +26,11 @@ type CreateLandlordInviteRequest struct {
 	Name  string `json:"name" binding:"required"`
 	Phone string `json:"phone"`
 	Email string `json:"email"`
+}
+
+// LandlordInviteView is what the owner sees when they open the share link:
+// the invitation plus the full listing they are asked to approve.
+type LandlordInviteView struct {
+	Invite   *LandlordInvite `json:"invite"`
+	Property *Property       `json:"property"`
 }

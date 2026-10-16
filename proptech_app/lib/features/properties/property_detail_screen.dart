@@ -18,6 +18,7 @@ import '../../app/router/route_names.dart';
 import '../compare/compare_store.dart';
 import '../reviews/property_reviews_section.dart';
 import 'property.dart';
+import 'agent_badge.dart';
 import 'property_store.dart';
 import 'recently_viewed_store.dart';
 import '../../core/utils/price_format.dart';

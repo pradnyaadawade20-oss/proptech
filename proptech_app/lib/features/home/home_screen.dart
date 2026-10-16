@@ -12,6 +12,7 @@ import '../properties/property.dart';
 import '../properties/property_store.dart';
 import '../properties/recently_viewed_store.dart';
 import '../../core/utils/price_format.dart';
+import '../landlord/invite_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -304,6 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
+           const InviteBanner(),
           // Greeting heading + hero banner (gradient-fade image, like "List your property" banner)
           ClipRRect(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),

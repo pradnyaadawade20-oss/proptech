@@ -9,6 +9,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../core/utils/phone_mask.dart';
 import 'auth_service.dart';
+import '../landlord/pending_invite_store.dart';
 
 /// Email-OTP screen. The OTP was already emailed by the login screen
 /// (send-otp succeeded before we got here); this screen collects the code and
@@ -136,7 +137,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _loading = false);
 
     if (result.success) {
-      context.go(RouteNames.home);
+      goHomeAfterAuth(context);
     } else {
       setState(() => _errorText = result.errorMessage);
     }
@@ -155,7 +156,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _loading = false);
 
     if (result.success) {
-     context.go(RouteNames.home);
+     goHomeAfterAuth(context);
     } else {
       setState(() => _errorText = result.errorMessage);
     }

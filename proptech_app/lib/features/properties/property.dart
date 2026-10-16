@@ -51,6 +51,8 @@ class Property {
   final String contactPreference;
   /// 'owner' | 'broker' — who posted the listing (search filter).
   final String postedBy;
+  /// false = broker listing still waiting for the real owner's approval (only the broker sees it).
+  final bool isLive;
 
   // --- Map search fields ---
   final double latitude;
@@ -129,6 +131,7 @@ class Property {
     this.ownershipType = '',
     this.contactPreference = 'both',
     this.postedBy = 'owner',
+    this.isLive = true,
     this.latitude = 0,
     this.longitude = 0,
     this.additionalImageUrls = const [],
@@ -199,6 +202,7 @@ class Property {
       ownershipType: json['ownership_type'] as String? ?? '',
       contactPreference: json['contact_preference'] as String? ?? 'both',
       postedBy: json['posted_by'] == 'broker' ? 'broker' : 'owner',
+      isLive: json['is_live'] as bool? ?? true,
       latitude: num_('latitude'),
       longitude: num_('longitude'),
       additionalImageUrls: gallery,
@@ -251,6 +255,7 @@ class Property {
       ownershipType: ownershipType,
       contactPreference: contactPreference,
       postedBy: postedBy,
+      isLive: isLive,
       latitude: latitude,
       longitude: longitude,
       additionalImageUrls: additionalImageUrls ?? this.additionalImageUrls,

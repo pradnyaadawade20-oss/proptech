@@ -10,7 +10,7 @@ import (
 
 // GET /p/:id  — public share page (WhatsApp/Telegram preview ke liye OG tags)
 func (h *PropertyHandler) SharePage(c *gin.Context) {
-	p, err := h.repo.GetByID(c.Request.Context(), c.Param("id"))
+	p, err := h.repo.GetByIDForViewer(c.Request.Context(), c.Param("id"), "")
 	if err != nil {
 		c.String(http.StatusNotFound, "Listing not found")
 		return

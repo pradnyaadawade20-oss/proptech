@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
@@ -8,7 +7,8 @@ import '../../app/theme/app_text_styles.dart';
 import 'landlord_service.dart';
 
 /// Owner side: invitations from brokers who want to list your property.
-/// Accepting makes YOU the landlord: you sign the agreement. Needs Aadhaar KYC first.
+/// (Owners who open the broker's share link go to OwnerApproveScreen; this list is for invitations
+/// that match your account's email / phone.) Approving needs Aadhaar KYC first.
 class LandlordInvitesScreen extends StatefulWidget {
   const LandlordInvitesScreen({super.key});
 
@@ -17,13 +17,8 @@ class LandlordInvitesScreen extends StatefulWidget {
 }
 
 class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
-  final _codeController = TextEditingController();
-
   List<LandlordInvite> _invites = const [];
-  LandlordInvite? _byCode; // invite found with a code (not listed in "mine")
-  String? _byCodeValue;
   bool _loading = true;
-  bool _lookingUp = false;
   String? _busyId;
   String? _error;
 
@@ -31,12 +26,6 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
   }
 
   void _toast(String msg) {
@@ -66,50 +55,21 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
     }
   }
 
-  Future<void> _lookUpCode() async {
-    final code = _codeController.text.trim();
-    if (code.length < 6) {
-      _toast('Enter the invite code the broker shared with you.');
-      return;
-    }
-    setState(() => _lookingUp = true);
-    try {
-      final inv = await LandlordService.instance.byCode(code);
-      if (!mounted) return;
-      setState(() {
-        _byCode = inv;
-        _byCodeValue = code;
-        _lookingUp = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _byCode = null;
-        _lookingUp = false;
-      });
-      _toast(e.toString());
-    }
-  }
-
-  Future<void> _accept(LandlordInvite inv, {String? code, bool retried = false}) async {
+  Future<void> _accept(LandlordInvite inv) async {
     setState(() => _busyId = inv.id);
     try {
-      await LandlordService.instance.accept(inviteId: code == null ? inv.id : null, code: code);
+      await LandlordService.instance.accept(inviteId: inv.id);
       if (!mounted) return;
-      setState(() {
-        _busyId = null;
-        _byCode = null;
-        _codeController.clear();
-      });
+      setState(() => _busyId = null);
       await _load();
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('You are now the owner'),
+          title: const Text('Approved'),
           content: Text(
-            '"${inv.propertyTitle}" is linked to your account. Tenants can now request an agreement, you sign it, '
-            'and rent and deposit are paid online through the app.',
+            '"${inv.propertyTitle}" is now live and linked to your account. Tenants can request an agreement, '
+            'you sign it, and rent and deposit are paid online through the app.',
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
         ),
@@ -136,7 +96,7 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
         title: const Text('KYC required'),
         content: const Text(
           'As the owner you are the landlord on the agreement, so Aadhaar KYC is needed first. '
-          'After it is verified, come back here and tap Accept again.',
+          'After it is verified, come back here and tap Approve again.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
@@ -147,12 +107,12 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
     if (go == true && mounted) await context.push(RouteNames.kycVerification);
   }
 
-  Future<void> _decline(LandlordInvite inv, {String? code}) async {
+  Future<void> _decline(LandlordInvite inv) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Decline invitation?'),
-        content: Text('${inv.brokerName} will be told you declined.'),
+        content: Text('${inv.brokerName.isEmpty ? 'The broker' : inv.brokerName} will be told you declined.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Back')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Decline')),
@@ -162,13 +122,9 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
     if (ok != true) return;
     setState(() => _busyId = inv.id);
     try {
-      await LandlordService.instance.decline(inviteId: code == null ? inv.id : null, code: code);
+      await LandlordService.instance.decline(inviteId: inv.id);
       if (!mounted) return;
-      setState(() {
-        _busyId = null;
-        _byCode = null;
-        _codeController.clear();
-      });
+      setState(() => _busyId = null);
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -195,24 +151,19 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
               Text(
-                'A broker may want to list your property on PropTech. If you accept, you become the landlord: '
-                'you sign the agreement and rent and deposit are paid online through the app. '
-                'You need Aadhaar KYC.',
+                'A broker may want to list your property on PropTech. The listing goes live for tenants only '
+                'after you approve it. If you approve, you become the landlord: you sign the agreement, and rent and '
+                'deposit are paid online through the app. You need Aadhaar KYC.',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.md),
-              _codeBox(),
-              if (_byCode != null) _inviteCard(_byCode!, code: _byCodeValue),
-              const SizedBox(height: AppSpacing.sm),
-              Text('Invitations for you', style: AppTextStyles.h3.copyWith(fontSize: 16)),
-              const SizedBox(height: AppSpacing.sm),
               if (_loading)
                 const Padding(padding: EdgeInsets.all(AppSpacing.lg), child: Center(child: CircularProgressIndicator()))
               else if (_error != null)
                 Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))
               else if (_invites.isEmpty)
                 Text(
-                  'No invitations right now. If a broker gave you a code, enter it above.',
+                  'No invitations right now. If a broker sent you a link, just open it and this app will show the property.',
                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                 )
               else
@@ -224,48 +175,7 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
     );
   }
 
-  Widget _codeBox() {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Have an invite code?', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _codeController,
-                  textCapitalization: TextCapitalization.characters,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9 -]')),
-                    LengthLimitingTextInputFormatter(12),
-                  ],
-                  decoration: const InputDecoration(hintText: 'e.g. K7M2Q9XA', isDense: true),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              ElevatedButton(
-                onPressed: _lookingUp ? null : _lookUpCode,
-                child: _lookingUp
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Find'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _inviteCard(LandlordInvite inv, {String? code}) {
+  Widget _inviteCard(LandlordInvite inv) {
     final busy = _busyId == inv.id;
     return Container(
       width: double.infinity,
@@ -295,26 +205,34 @@ class _LandlordInvitesScreenState extends State<LandlordInvitesScreen> {
           Text(inv.propertyTitle, style: AppTextStyles.h3.copyWith(fontSize: 15)),
           const SizedBox(height: 4),
           Text(
-            'If you accept: tenants can request an agreement, you are the landlord and sign it, and rent and deposit '
-            'are paid online through the app. Any commission is settled between you and the broker.',
+            'If you approve: the listing goes live, tenants can request an agreement, you are the landlord and sign it, '
+            'and rent and deposit are paid online through the app. Any commission is settled between you and the broker.',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
-          const SizedBox(height: AppSpacing.md),
+          if (inv.propertyId.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextButton.icon(
+              onPressed: () => context.push('/property/${inv.propertyId}'),
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('View property details'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: busy ? null : () => _decline(inv, code: code),
+                  onPressed: busy ? null : () => _decline(inv),
                   child: const Text('Decline'),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: busy ? null : () => _accept(inv, code: code),
+                  onPressed: busy ? null : () => _accept(inv),
                   child: busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Accept'),
+                      : const Text('Approve'),
                 ),
               ),
             ],

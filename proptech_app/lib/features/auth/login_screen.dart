@@ -9,6 +9,7 @@ import '../../../app/router/route_names.dart';
 import '../../../app/theme/app_colors.dart';
 import 'auth_service.dart';
 import 'google_auth.dart';
+import '../landlord/pending_invite_store.dart';
 
 // â”€â”€ Design tokens taken from the login mock-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const _teal = Color(0xFF15558A); // matches AppColors.primary (navy blue)
@@ -165,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _snack(result.errorMessage ?? 'Google sign-in failed');
       return;
     }
-    context.go(RouteNames.home);
+    await goHomeAfterAuth(context);
   }
 
   @override

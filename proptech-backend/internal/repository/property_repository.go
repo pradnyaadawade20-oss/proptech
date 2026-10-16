@@ -14,7 +14,7 @@ type PropertyRepository struct {
 
 // propertyColumns is the single source of truth for the property SELECT /
 // RETURNING list; its order must match propertyDests below.
-const propertyColumns = "id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by, latitude, longitude, address"
+const propertyColumns = "id, owner_id, title, image_url, price, price_unit, bhk, furnishing, location, is_verified, rating, review_count, category, amenities, listing_status, created_at, area_sqft, bathrooms, balconies, floor_number, total_floors, city, locality, society, pincode, security_deposit, maintenance_charges, preferred_tenants, available_from, description, property_age_years, facing, ownership_type, is_price_negotiable, contact_preference, posted_by, latitude, longitude, address, (posted_by <> 'broker' OR landlord_id IS NOT NULL) AS is_live"
 
 func NewPropertyRepository(db *pgxpool.Pool) *PropertyRepository {
 	return &PropertyRepository{db: db}
@@ -284,6 +284,6 @@ func propertyDests(p *models.Property) []any {
 		&p.Area, &p.Bathrooms, &p.Balconies, &p.FloorNumber, &p.TotalFloors, &p.City, &p.Locality, &p.Society, &p.Pincode,
 		&p.SecurityDeposit, &p.MaintenanceCharges, &p.PreferredTenants, &p.AvailableFrom, &p.Description,
 		&p.PropertyAgeYears, &p.Facing, &p.OwnershipType, &p.IsPriceNegotiable, &p.ContactPreference, &p.PostedBy,
-		&p.Latitude, &p.Longitude, &p.Address,
+		&p.Latitude, &p.Longitude, &p.Address, &p.IsLive,
 	}
 }

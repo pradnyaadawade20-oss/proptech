@@ -66,4 +66,5 @@ class RouteNames {
   static const agreementStatus = '/agreement/:id/status';
   static const propertyOwnerLink = '/property/:id/owner-link'; // broker: link a listing to its real owner
   static const landlordInvites = '/landlord-invites'; // owner: invitations from brokers
+  static const ownerApprove = '/o/:token'; // owner: the share link a broker sent (opens the app via App Links)
 }

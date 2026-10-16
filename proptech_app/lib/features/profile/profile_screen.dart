@@ -307,12 +307,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'My Leases & Rent',
                         onTap: () => context.push(RouteNames.leases),
                       ),
+                      // Owners get the invite from a broker, so everyone can open this.
+                      _ProfileMenuTile(
+                        icon: Icons.handshake_outlined,
+                        title: 'Broker invitations',
+                        onTap: () => context.push(RouteNames.landlordInvites),
+                      ),
+                      // Only brokers set / track commissions.
                       if (UserSession.instance.currentRole.value == UserRole.broker)
-  _ProfileMenuTile(
-    icon: Icons.payments_outlined,
-    title: 'Agent commissions',
-    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AgentCommissionsScreen())),
-  ),
+                        _ProfileMenuTile(
+                          icon: Icons.payments_outlined,
+                          title: 'Agent commissions',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AgentCommissionsScreen()),
+                          ),
+                        ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',

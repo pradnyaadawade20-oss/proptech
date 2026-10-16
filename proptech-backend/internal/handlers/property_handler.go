@@ -102,7 +102,7 @@ func (h *PropertyHandler) GetAllProperties(c *gin.Context) {
 		return
 	}
 
-	properties, total, err := h.repo.Search(c.Request.Context(), filter)
+	properties, total, err := h.repo.SearchForViewer(c.Request.Context(), filter, middleware.OptionalUserID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -132,7 +132,8 @@ func (h *PropertyHandler) GetAllProperties(c *gin.Context) {
 
 func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
 	id := c.Param("id")
-	property, err := h.repo.GetByID(c.Request.Context(), id)
+	// A broker listing the owner has not approved yet is a 404 for everyone except that broker.
+	property, err := h.repo.GetByIDForViewer(c.Request.Context(), id, middleware.OptionalUserID(c))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 		return
@@ -152,7 +153,7 @@ func (h *PropertyHandler) GetMyProperties(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "owner_id is required"})
 		return
 	}
-	properties, err := h.repo.GetByOwnerID(c.Request.Context(), ownerID)
+	properties, err := h.repo.GetByOwnerIDForViewer(c.Request.Context(), ownerID, middleware.OptionalUserID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -196,19 +197,28 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 	if property.OwnerID != nil {
 		ownerID := *property.OwnerID
 		propRoute := "/property/" + property.ID
-		notify.SendRoute(ownerID, "property", "Property listed",
-			fmt.Sprintf("Your property \"%s\" is now live.", property.Title), propRoute)
 
-		if os.Getenv("NOTIFY_NEW_LISTINGS") != "false" {
-			title, location := property.Title, property.Location
-			go func() {
-				who := notify.UserName(ownerID)
-				if who == "" {
-					who = "Someone"
-				}
-				notify.BroadcastExcept(ownerID, "property", "New property listed",
-					fmt.Sprintf("%s added %s in %s", who, title, location), propRoute)
-			}()
+		if property.PostedBy == "broker" {
+			// Not live yet: the real owner must approve it first. The "new listing" broadcast
+			// is sent from the invite handler at the moment of approval.
+			notify.SendRoute(ownerID, "property", "Listing saved",
+				fmt.Sprintf("\"%s\" is saved. Share the link with the property owner; it goes live only after they approve.", property.Title),
+				"/property/"+property.ID+"/owner-link")
+		} else {
+			notify.SendRoute(ownerID, "property", "Property listed",
+				fmt.Sprintf("Your property \"%s\" is now live.", property.Title), propRoute)
+
+			if os.Getenv("NOTIFY_NEW_LISTINGS") != "false" {
+				title, location := property.Title, property.Location
+				go func() {
+					who := notify.UserName(ownerID)
+					if who == "" {
+						who = "Someone"
+					}
+					notify.BroadcastExcept(ownerID, "property", "New property listed",
+						fmt.Sprintf("%s added %s in %s", who, title, location), propRoute)
+				}()
+			}
 		}
 	}
 
