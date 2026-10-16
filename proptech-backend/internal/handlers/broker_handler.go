@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"proptech-backend/internal/middleware"
+	"proptech-backend/internal/models"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
@@ -17,23 +18,64 @@ func NewBrokerHandler(subscriptionRepo *repository.BrokerSubscriptionRepository)
 	return &BrokerHandler{subscriptionRepo: subscriptionRepo}
 }
 
-func (h *BrokerHandler) GetSubscription(c *gin.Context) {
+// own returns the logged-in user id if it matches :id, else writes the error.
+func (h *BrokerHandler) own(c *gin.Context) (string, bool) {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
+		return "", false
 	}
-	brokerID := c.Param("id")
-	if brokerID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only view your own subscription"})
-		return
+	if c.Param("id") != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only access your own subscription"})
+		return "", false
 	}
+	return userID, true
+}
 
-	subscription, err := h.subscriptionRepo.GetByBrokerID(c.Request.Context(), brokerID)
+// GetSubscription: GET /api/broker/:id/subscription
+// Returns the broker's current plan plus the purchasable plans.
+func (h *BrokerHandler) GetSubscription(c *gin.Context) {
+	brokerID, ok := h.own(c)
+	if !ok {
+		return
+	}
+	sub, err := h.subscriptionRepo.GetByBrokerID(c.Request.Context(), brokerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"subscription": sub, "plans": models.SubscriptionPlans})
+}
 
-	c.JSON(http.StatusOK, gin.H{"subscription": subscription})
+type subscribeRequest struct {
+	Plan       string `json:"plan" binding:"required,oneof=monthly yearly"`
+	PaymentRef string `json:"payment_ref"`
+}
+
+// Subscribe: POST /api/broker/:id/subscription/subscribe  {"plan":"monthly|yearly"}
+//
+// TODO(payments): verify the payment (Cashfree order / UPI ref) BEFORE
+// calling repo.Subscribe — right now the plan is activated directly.
+func (h *BrokerHandler) Subscribe(c *gin.Context) {
+	brokerID, ok := h.own(c)
+	if !ok {
+		return
+	}
+	var req subscribeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plan must be 'monthly' or 'yearly'"})
+		return
+	}
+	plan, found := models.FindPlan(req.Plan)
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown plan"})
+		return
+	}
+
+	sub, err := h.subscriptionRepo.Subscribe(c.Request.Context(), brokerID, plan, req.PaymentRef)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscription": sub, "plans": models.SubscriptionPlans})
 }

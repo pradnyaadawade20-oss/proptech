@@ -7,6 +7,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../owner/dashboard_service.dart';
 import '../owner/owner_stats.dart';
 import '../profile/profile_service.dart';
+import 'broker_subscription_service.dart';
 
 /// Broker's home screen. Structurally mirrors OwnerDashboardScreen since
 /// a broker manages listings the same way an owner does — the difference
@@ -21,12 +22,14 @@ class BrokerDashboardScreen extends StatefulWidget {
 
 class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
   late Future<OwnerStats> _statsFuture;
+  late Future<BrokerSubscriptionData> _subFuture;
   String _name = '';
 
   @override
   void initState() {
     super.initState();
     _statsFuture = DashboardService.instance.getDashboardStats();
+    _subFuture = BrokerSubscriptionService.instance.getMine();
     ProfileService.instance.getMyProfile().then((profile) {
       if (mounted) setState(() => _name = profile.name);
     }).catchError((_) {});
@@ -34,6 +37,16 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
 
   void _retry() {
     setState(() {
+      _statsFuture = DashboardService.instance.getDashboardStats();
+      _subFuture = BrokerSubscriptionService.instance.getMine();
+    });
+  }
+
+  Future<void> _openPlans() async {
+    await context.push(RouteNames.brokerSubscription);
+    if (!mounted) return;
+    setState(() {
+      _subFuture = BrokerSubscriptionService.instance.getMine();
       _statsFuture = DashboardService.instance.getDashboardStats();
     });
   }
@@ -190,54 +203,10 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // ---------------- Free Plan banner ----------------
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(color: Color(0xFFE8D39A), shape: BoxShape.circle),
-                  child: const Icon(Icons.workspace_premium_outlined, color: AppColors.primaryDark, size: 20),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Free Plan', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
-                      Text('3 of 3 listings used', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    'Unlock more features & grow your business.',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                ElevatedButton(
-                  onPressed: () {
-                    // Placeholder — wire to a subscription/upgrade screen later.
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-                  ),
-                  child: const Text('Upgrade Plan'),
-                ),
-              ],
-            ),
+          // ---------------- Plan banner ----------------
+          FutureBuilder<BrokerSubscriptionData>(
+            future: _subFuture,
+            builder: (context, snap) => _PlanBanner(sub: snap.data?.subscription, onUpgrade: _openPlans),
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -417,9 +386,7 @@ class _BrokerDashboardScreenState extends State<BrokerDashboardScreen> {
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 ElevatedButton(
-                  onPressed: () {
-                    // Placeholder — wire to a subscription/upgrade screen later.
-                  },
+                  onPressed: _openPlans,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryDark,
                     foregroundColor: Colors.white,
@@ -692,6 +659,80 @@ class _ActionGridTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PlanBanner extends StatelessWidget {
+  final BrokerSubscription? sub;
+  final VoidCallback onUpgrade;
+  const _PlanBanner({required this.sub, required this.onUpgrade});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = sub;
+    final title = s?.planName ?? 'Free Plan';
+    final subtitle = s == null
+        ? 'Loading plan…'
+        : s.isActive
+            ? '${s.usageLabel} • till ${s.expiryLabel}'
+            : s.expired
+                ? 'Plan expired • ${s.listingsUsed} listings'
+                : s.usageLabel;
+    final hint = s == null
+        ? ''
+        : s.isActive
+            ? 'Unlimited listings are active.'
+            : s.canAddListing
+                ? 'Subscribe monthly or yearly after ${s.listingsLimit} listings.'
+                : 'Limit reached — subscribe to add more listings.';
+    final limitHit = s != null && !s.isActive && !s.canAddListing;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: limitHit ? AppColors.error : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(color: Color(0xFFE8D39A), shape: BoxShape.circle),
+            child: const Icon(Icons.workspace_premium_outlined, color: AppColors.primaryDark, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+                Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              hint,
+              style: AppTextStyles.caption.copyWith(color: limitHit ? AppColors.error : AppColors.textSecondary),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          ElevatedButton(
+            onPressed: onUpgrade,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+            ),
+            child: Text(s != null && s.isActive ? 'Manage' : 'Upgrade Plan'),
+          ),
+        ],
       ),
     );
   }

@@ -56,6 +56,7 @@ class RouteNames {
 
   // Broker
   static const brokerDashboard = '/broker';
+  static const brokerSubscription = '/broker/subscription';
 
   // Agreement
   static const agreementRequest = '/property/:id/agreement/request';

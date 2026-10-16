@@ -14,6 +14,7 @@ import '../../features/auth/otp_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/owner/owner_dashboard_screen.dart';
 import '../../features/broker/broker_dashboard_screen.dart';
+import '../../features/broker/subscription_plans_screen.dart';
 import '../../features/visits/visits_screen.dart';
 import '../../features/leads/leads_screen.dart';
 import '../../features/properties/my_properties_screen.dart';
@@ -275,6 +276,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.brokerDashboard,
       builder: (context, state) => const BrokerDashboardScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.brokerSubscription,
+      builder: (context, state) => const SubscriptionPlansScreen(),
     ),
     GoRoute(
       path: RouteNames.addProperty,

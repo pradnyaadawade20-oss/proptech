@@ -146,6 +146,12 @@ func (r *PropertyRepository) GetByOwnerID(ctx context.Context, ownerID string) (
 	return properties, nil
 }
 
+// BrokerSubscription returns the broker's plan + live listing count; used to
+// block a 4th listing on the free plan.
+func (r *PropertyRepository) BrokerSubscription(ctx context.Context, userID string) (*models.BrokerSubscription, error) {
+	return NewBrokerSubscriptionRepository(r.db).GetByBrokerID(ctx, userID)
+}
+
 func (r *PropertyRepository) Create(ctx context.Context, req models.CreatePropertyRequest) (*models.Property, error) {
 	availableFrom, err := req.ParsedAvailableFrom()
 	if err != nil {

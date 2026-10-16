@@ -188,6 +188,25 @@ func (h *PropertyHandler) CreateProperty(c *gin.Context) {
 		return
 	}
 
+	// Brokers: first 3 listings free, then an active monthly/yearly plan.
+	if req.PostedByOrDefault() == "broker" {
+		sub, err := h.repo.BrokerSubscription(c.Request.Context(), userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !sub.CanAddListing {
+			c.JSON(http.StatusPaymentRequired, gin.H{
+				"error":          "Free limit of 3 listings reached. Subscribe to a monthly or yearly plan to add more.",
+				"code":           "subscription_required",
+				"listings_used":  sub.ListingsUsed,
+				"listings_limit": sub.ListingsLimit,
+				"expired":        sub.Expired,
+			})
+			return
+		}
+	}
+
 	property, err := h.repo.Create(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

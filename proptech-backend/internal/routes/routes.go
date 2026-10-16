@@ -112,6 +112,7 @@ func RegisterBrokerRoutes(router *gin.Engine, h *handlers.BrokerHandler) {
 	broker.Use(middleware.AuthRequired())
 	{
 		broker.GET("/:id/subscription", h.GetSubscription)
+		broker.POST("/:id/subscription/subscribe", h.Subscribe)
 	}
 }
 
