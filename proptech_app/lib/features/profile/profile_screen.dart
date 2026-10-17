@@ -13,6 +13,7 @@ import 'profile_avatar.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
+import '../broker/broker_subscription_service.dart';
 
 class _Ui {
   _Ui._();
@@ -43,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _uploadingAvatar = false;
   String? _error;
+  Future<BrokerSubscriptionData>? _subFuture; // brokers only (Plan tile)
 
   @override
   void initState() {
@@ -63,6 +65,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  /// Loaded lazily, so only brokers ever hit the subscription endpoint.
+  Future<BrokerSubscriptionData> get _plan =>
+      _subFuture ??= BrokerSubscriptionService.instance.getMine();
+
+  Future<void> _openPlans() async {
+    await context.push(RouteNames.brokerSubscription);
+    if (!mounted) return;
+    // Refresh "X of 3 listings used" after the broker comes back (may have subscribed).
+    setState(() => _subFuture = BrokerSubscriptionService.instance.getMine());
+  }
+
+  String _planSubtitle(BrokerSubscription s) {
+    if (s.isActive) {
+      final till = s.expiryLabel;
+      return till == null ? s.usageLabel : '${s.usageLabel} • till $till';
+    }
+    if (s.expired) return 'Plan expired • ${s.listingsUsed} listings';
+    return s.usageLabel;
   }
 
   Future<void> _editProfile() async {
@@ -199,6 +221,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: const TextStyle(color: _Ui.mutedOnNavy, fontSize: 14),
                   ),
                 ],
+                const SizedBox(height: 8),
+                ValueListenableBuilder<UserRole?>(
+                  valueListenable: UserSession.instance.currentRole,
+                  builder: (context, role, _) => _RoleBadge(role: role),
+                ),
               ],
             ),
           ),
@@ -284,7 +311,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  _MenuGroup(
+                  // Rebuild when the user switches role (Profile tab stays alive in the shell).
+                  ValueListenableBuilder<UserRole?>(
+                    valueListenable: UserSession.instance.currentRole,
+                    builder: (context, role, _) => _MenuGroup(
                     children: [
                       _ProfileMenuTile(
                         icon: Icons.home_outlined,
@@ -318,12 +348,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Commission agreements',
                         onTap: () => context.push(RouteNames.commissionAgreements),
                       ),
+                      if (role == UserRole.broker)
+                        FutureBuilder<BrokerSubscriptionData>(
+                          future: _plan,
+                          builder: (context, snap) {
+                            final sub = snap.data?.subscription;
+                            return _ProfileMenuTile(
+                              icon: Icons.workspace_premium_outlined,
+                              title: 'My Plan / Subscription',
+                              subtitle: sub == null
+                                  ? (snap.hasError ? null : 'Loading plan…')
+                                  : _planSubtitle(sub),
+                              subtitleColor: sub != null && !sub.isActive && !sub.canAddListing
+                                  ? _Ui.red
+                                  : null,
+                              onTap: _openPlans,
+                            );
+                          },
+                        ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',
                         onTap: () => context.push(RouteNames.kycVerification),
                       ),
                     ],
+                    ),
                   ),
                   const SizedBox(height: 20),
                   _MenuGroup(
@@ -359,6 +408,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pill under the phone number: Buyer / Tenant, Owner or Broker.
+class _RoleBadge extends StatelessWidget {
+  final UserRole? role;
+  const _RoleBadge({required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (role) {
+      UserRole.owner => 'Owner',
+      UserRole.broker => 'Broker',
+      _ => 'Buyer / Tenant',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4A90FF).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF2B5FA8)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -408,6 +488,8 @@ class _MenuGroup extends StatelessWidget {
 class _ProfileMenuTile extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
+  final Color? subtitleColor;
   final VoidCallback onTap;
   final Color? iconColor;
   final Color? textColor;
@@ -416,6 +498,8 @@ class _ProfileMenuTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
+    this.subtitleColor,
     this.iconColor,
     this.textColor,
   });
@@ -431,13 +515,30 @@ class _ProfileMenuTile extends StatelessWidget {
             Icon(icon, size: 25, color: iconColor ?? _Ui.ink),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  color: textColor ?? _Ui.ink,
-                  fontSize: 16.5,
-                  fontWeight: FontWeight.w400,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: textColor ?? _Ui.ink,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: subtitleColor ?? _Ui.chevron,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const Icon(Icons.chevron_right, size: 24, color: _Ui.chevron),
