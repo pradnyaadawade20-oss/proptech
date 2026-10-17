@@ -79,14 +79,20 @@ func (h *AdminHandler) list(c *gin.Context, sql string, args ...any) {
 
 func (h *AdminHandler) Stats(c *gin.Context) {
 	var users, props, verified, visits, agreements, completed int
+	var pendingReview, awaitingOwner, openReports, pendingApprovals int
 	err := h.db.QueryRow(c.Request.Context(), `
 		SELECT (SELECT count(*) FROM users),
 		       (SELECT count(*) FROM properties),
 		       (SELECT count(*) FROM properties WHERE is_verified),
 		       (SELECT count(*) FROM visits),
 		       (SELECT count(*) FROM agreements),
-		       (SELECT count(*) FROM agreements WHERE status = 'completed')`).
-		Scan(&users, &props, &verified, &visits, &agreements, &completed)
+		       (SELECT count(*) FROM agreements WHERE status = 'completed'),
+		       (SELECT count(*) FROM properties WHERE approval_status = 'pending'),
+		       (SELECT count(*) FROM properties WHERE posted_by = 'broker' AND landlord_id IS NULL),
+		       (SELECT count(*) FROM property_reports WHERE status = 'open'),
+		       (SELECT count(*) FROM admin_approvals WHERE status = 'pending')`).
+		Scan(&users, &props, &verified, &visits, &agreements, &completed,
+			&pendingReview, &awaitingOwner, &openReports, &pendingApprovals)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -94,18 +100,23 @@ func (h *AdminHandler) Stats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"users": users, "properties": props, "verified_properties": verified,
 		"visits": visits, "agreements": agreements, "completed_agreements": completed,
+		"pending_review": pendingReview, "awaiting_owner": awaitingOwner,
+		"open_reports": openReports, "pending_approvals": pendingApprovals,
 	})
 }
 
 func (h *AdminHandler) Users(c *gin.Context) {
 	h.list(c, `SELECT id::text AS id, name, COALESCE(email,'') AS email, COALESCE(phone,'') AS phone,
-		COALESCE(active_role, role) AS active_role, roles, email_verified, created_at
+		COALESCE(active_role, role) AS active_role, roles, email_verified, created_at,
+		suspended_at, COALESCE(suspended_reason,'') AS suspended_reason
 		FROM users ORDER BY created_at DESC LIMIT 1000`)
 }
 
 func (h *AdminHandler) Properties(c *gin.Context) {
 	h.list(c, `SELECT p.id::text AS id, p.title, p.price::float8 AS price, p.price_unit, p.bhk, p.category,
 		p.city, p.locality, p.location, p.is_verified, p.listing_status, p.created_at,
+		p.approval_status, COALESCE(p.hidden_reason,'') AS hidden_reason, COALESCE(p.rejection_reason,'') AS rejection_reason,
+		p.posted_by, (p.landlord_id IS NOT NULL) AS owner_approved,
 		COALESCE(u.name,'') AS owner_name
 		FROM properties p LEFT JOIN users u ON u.id = p.owner_id
 		ORDER BY p.created_at DESC LIMIT 1000`)
