@@ -13,7 +13,6 @@ import 'profile_avatar.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
-import '../lease/agent_commissions_screen.dart';
 
 class _Ui {
   _Ui._();
@@ -313,15 +312,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Broker invitations',
                         onTap: () => context.push(RouteNames.landlordInvites),
                       ),
-                      // Only brokers set / track commissions.
-                      if (UserSession.instance.currentRole.value == UserRole.broker)
-                        _ProfileMenuTile(
-                          icon: Icons.payments_outlined,
-                          title: 'Agent commissions',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const AgentCommissionsScreen()),
-                          ),
-                        ),
+                      // Brokers send commission agreements, tenants sign them.
+                      _ProfileMenuTile(
+                        icon: Icons.payments_outlined,
+                        title: 'Commission agreements',
+                        onTap: () => context.push(RouteNames.commissionAgreements),
+                      ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',

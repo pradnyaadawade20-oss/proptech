@@ -7,7 +7,6 @@ import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/api/token_store.dart';
 import '../../core/widgets/app_button.dart';
-import '../lease/commission_card.dart';
 import '../profile/kyc_service.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
@@ -470,12 +469,6 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                               if (_waitingForOwner) _waitingBanner(),
                               _headerCard(),
                               if (_isDraftEditable) _editCard(),
-                              if (!_isOwner)
-                                CommissionCard(
-                                  agreementId: widget.agreementId,
-                                  propertyTitle: _agreement!.propertyTitle,
-                                  tenantName: _agreement!.tenantName,
-                                ),
                               _summaryCard(),
                               _keyTermsCard(),
                               _signatureCard(),

@@ -104,6 +104,21 @@ func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you must be the owner or tenant on this agreement"})
 		return
 	}
+	// Broker listing: the tenant must first sign the agent's commission agreement.
+	if parties.PostedBy == "broker" {
+		signed, cerr := h.repo.CommissionSigned(c.Request.Context(), req.PropertyID, req.TenantID)
+		if cerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": cerr.Error()})
+			return
+		}
+		if !signed {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Please sign the agent's commission agreement first (Profile > Commission agreements). Ask the agent to send it after your visit.",
+				"code":  "commission_required",
+			})
+			return
+		}
+	}
 	if req.TenantID == landlordID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "the owner cannot be the tenant on the same agreement"})
 		return

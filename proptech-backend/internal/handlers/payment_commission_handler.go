@@ -9,55 +9,15 @@ import (
 
 	"proptech-backend/internal/middleware"
 	"proptech-backend/internal/notify"
+	"proptech-backend/internal/receipt"
 	"proptech-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Agent commission flow:
-//   agent proposes (PUT) -> tenant accepts (POST /accept) or declines -> both sign the rent agreement
-//   -> tenant pays through Cashfree (POST /checkout, only once the lease exists).
-
-type commissionParty struct {
-	agreementID string
-	userID      string
-	tenantID    string
-	agentID     string
-	agrStatus   string
-	role        string // tenant | agent
-}
-
-func agreementRoute(id string) string { return "/agreement/" + id + "/status" }
-
-// commissionCtx finds out who is calling: the tenant of the agreement or the agent (broker) on it.
-func (h *PaymentHandler) commissionCtx(c *gin.Context) (commissionParty, bool) {
-	var p commissionParty
-	userID, err := middleware.GetUserID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return p, false
-	}
-	agentID, tenantID, status, err := h.repo.AgreementParties(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		leaseErr(c, err)
-		return p, false
-	}
-	p = commissionParty{agreementID: c.Param("id"), userID: userID, tenantID: tenantID, agentID: agentID, agrStatus: status}
-	switch {
-	case userID == tenantID:
-		p.role = "tenant"
-	case agentID != "" && userID == agentID:
-		p.role = "agent"
-	default:
-		c.JSON(http.StatusForbidden, gin.H{"error": "not your agreement"})
-		return p, false
-	}
-	return p, true
-}
-
-func agreementClosed(status string) bool {
-	return status == "rejected" || status == "cancelled" || status == "expired"
-}
+// Commission agreement between broker and tenant (see CommissionAgreement in the repository):
+//   broker creates + signs -> tenant signs (or declines) -> tenant may now request the rental agreement
+//   -> after the rental agreement is completed the tenant pays the commission through Cashfree.
 
 func commissionStateErr(c *gin.Context, err error) {
 	var se *repository.StateError
@@ -68,53 +28,47 @@ func commissionStateErr(c *gin.Context, err error) {
 	leaseErr(c, err)
 }
 
-// GET /api/agreements/:id/commission
-func (h *PaymentHandler) GetCommission(c *gin.Context) {
-	p, ok := h.commissionCtx(c)
-	if !ok {
-		return
+// commissionAgreementFor loads :id and works out whether the caller is the agent or the tenant.
+func (h *PaymentHandler) commissionAgreementFor(c *gin.Context) (*repository.CommissionAgreement, string, bool) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return nil, "", false
 	}
-	ctx := c.Request.Context()
-	cm, err := h.repo.GetCommission(ctx, p.agreementID)
+	ca, err := h.repo.GetCommissionAgreement(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		leaseErr(c, err)
-		return
+		return nil, "", false
 	}
-	leaseID, err := h.repo.LeaseIDForAgreement(ctx, p.agreementID)
-	if err != nil {
-		leaseErr(c, err)
-		return
+	switch userID {
+	case ca.TenantID:
+		ca.Role = "tenant"
+	case ca.AgentID:
+		ca.Role = "agent"
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "not your commission agreement"})
+		return nil, "", false
 	}
-	agentName := ""
-	if p.agentID != "" {
-		agentName, _, _, _ = h.repo.UserContact(ctx, p.agentID)
-	}
-	open := !agreementClosed(p.agrStatus)
-	c.JSON(http.StatusOK, gin.H{
-		"has_agent":  p.agentID != "",
-		"agent_name": agentName,
-		"role":       p.role,
-		"lease_id":   leaseID,
-		"commission": cm,
-		"can_set":    p.role == "agent" && open && (cm == nil || cm.Status == "requested"),
-		"can_accept": p.role == "tenant" && open && cm != nil && cm.Status == "requested",
-		"can_pay":    p.role == "tenant" && cm != nil && cm.Status == "accepted" && leaseID != "",
-	})
+	return ca, userID, true
 }
 
-// PUT /api/agreements/:id/commission   {amount, note}   (agent proposes the commission)
-func (h *PaymentHandler) SetCommission(c *gin.Context) {
-	p, ok := h.commissionCtx(c)
-	if !ok || !need(c, p.role, "agent") {
-		return
-	}
-	if agreementClosed(p.agrStatus) {
-		c.JSON(http.StatusConflict, gin.H{"error": "this agreement is closed"})
+func validSignature(t, data string) bool {
+	return (t == "draw" || t == "type") && strings.TrimSpace(data) != "" && len(data) <= 700000
+}
+
+// POST /api/properties/:id/commission-agreement   (broker, after the visit, when the tenant is interested)
+func (h *PaymentHandler) CreateCommissionAgreement(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	var body struct {
-		Amount float64 `json:"amount"`
-		Note   string  `json:"note"`
+		TenantEmail   string  `json:"tenant_email"`
+		Amount        float64 `json:"amount"`
+		Note          string  `json:"note"`
+		SignatureType string  `json:"signature_type"`
+		SignatureData string  `json:"signature_data"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -130,97 +84,212 @@ func (h *PaymentHandler) SetCommission(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "note is too long (max 200 characters)"})
 		return
 	}
-	cm, err := h.repo.SetCommission(c.Request.Context(), p.agreementID, p.userID, p.tenantID, body.Amount, body.Note)
-	if err != nil {
-		commissionStateErr(c, err)
+	if !strings.Contains(body.TenantEmail, "@") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter the tenant's email address"})
 		return
 	}
-	notify.SendRoute(p.tenantID, "commission", "Agent commission",
-		fmt.Sprintf("Your agent has proposed a commission of %s. Please review and accept it.", rupees(cm.Amount)), agreementRoute(p.agreementID))
-	c.JSON(http.StatusOK, cm)
-}
+	if !validSignature(body.SignatureType, body.SignatureData) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please sign the agreement"})
+		return
+	}
 
-// POST /api/agreements/:id/commission/accept   (tenant)
-func (h *PaymentHandler) AcceptCommission(c *gin.Context) {
-	p, ok := h.commissionCtx(c)
-	if !ok || !need(c, p.role, "tenant") {
-		return
-	}
-	cm, err := h.repo.AcceptCommission(c.Request.Context(), p.agreementID, p.userID)
-	if err != nil {
-		commissionStateErr(c, err)
-		return
-	}
-	notify.Send(p.agentID, "commission", "Commission accepted",
-		fmt.Sprintf("The tenant accepted your commission of %s. They will pay it after the agreement is signed.", rupees(cm.Amount)))
-	c.JSON(http.StatusOK, cm)
-}
-
-// POST /api/agreements/:id/commission/decline   (tenant)
-func (h *PaymentHandler) DeclineCommission(c *gin.Context) {
-	p, ok := h.commissionCtx(c)
-	if !ok || !need(c, p.role, "tenant") {
-		return
-	}
-	if err := h.repo.DeclineCommission(c.Request.Context(), p.agreementID, p.userID); err != nil {
-		commissionStateErr(c, err)
-		return
-	}
-	notify.Send(p.agentID, "commission", "Commission declined",
-		"The tenant did not accept your commission. Please talk to them and propose an amount again.")
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
-// POST /api/agreements/:id/commission/checkout   (tenant taps "Pay commission")
-func (h *PaymentHandler) CommissionCheckout(c *gin.Context) {
-	p, ok := h.commissionCtx(c)
-	if !ok || !need(c, p.role, "tenant") {
-		return
-	}
 	ctx := c.Request.Context()
-	cm, err := h.repo.GetCommission(ctx, p.agreementID)
+	propertyID := c.Param("id")
+	ownerID, postedBy, err := h.repo.PropertyPoster(ctx, propertyID)
 	if err != nil {
 		leaseErr(c, err)
 		return
 	}
-	switch {
-	case cm == nil:
-		c.JSON(http.StatusConflict, gin.H{"error": "your agent has not proposed a commission yet"})
-		return
-	case cm.Status == "paid":
-		c.JSON(http.StatusConflict, gin.H{"error": "this commission is already paid"})
-		return
-	case cm.Status != "accepted":
-		c.JSON(http.StatusConflict, gin.H{"error": "please accept the commission first"})
+	if postedBy != "broker" || ownerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the broker who listed this property can create a commission agreement"})
 		return
 	}
-	leaseID, err := h.repo.LeaseIDForAgreement(ctx, p.agreementID)
+	tenantID, _, err := h.repo.UserByEmail(ctx, body.TenantEmail)
 	if err != nil {
+		if errors.Is(err, repository.ErrLeaseNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No PropTech account found with this email. Ask the tenant to sign up with it first."})
+			return
+		}
 		leaseErr(c, err)
 		return
 	}
-	if leaseID == "" {
-		c.JSON(http.StatusConflict, gin.H{"error": "you can pay the commission once both parties have signed the agreement"})
+	if tenantID == userID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "you cannot be the tenant on your own listing"})
 		return
 	}
-	h.startCheckout(c, orderSpec{
-		kind: "commission", targetID: leaseID, leaseID: leaseID,
-		payerID: p.userID, ownerID: p.agentID, // the money is the agent's
-		amount: cm.Amount, rentAmount: cm.Amount, note: "Agent commission",
-	})
+	ca, err := h.repo.CreateCommissionAgreement(ctx, propertyID, userID, tenantID, body.Amount, body.Note, body.SignatureType, body.SignatureData)
+	if err != nil {
+		commissionStateErr(c, err)
+		return
+	}
+	ca.Role = "agent"
+	notify.SendRoute(tenantID, "commission", "Commission agreement",
+		fmt.Sprintf("%s sent you a commission agreement of %s for %s. Review and sign it to continue.", ca.AgentName, rupees(ca.Amount), ca.PropertyTitle),
+		"/commission-agreements")
+	c.JSON(http.StatusCreated, ca)
 }
 
-// GET /api/agent/agreements   -> the logged-in broker's agreements with commission status
-func (h *PaymentHandler) AgentAgreements(c *gin.Context) {
+// GET /api/commission-agreements   -> everything where I am the agent or the tenant
+func (h *PaymentHandler) ListCommissionAgreements(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	rows, err := h.repo.ListAgentAgreements(c.Request.Context(), userID)
+	rows, err := h.repo.ListCommissionAgreements(c.Request.Context(), userID)
 	if err != nil {
 		leaseErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"agreements": rows})
+	for i := range rows {
+		if rows[i].TenantID == userID {
+			rows[i].Role = "tenant"
+		} else {
+			rows[i].Role = "agent"
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": rows})
+}
+
+// GET /api/commission-agreements/:id
+func (h *PaymentHandler) GetCommissionAgreement(c *gin.Context) {
+	ca, _, ok := h.commissionAgreementFor(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, ca)
+}
+
+// POST /api/commission-agreements/:id/sign   {signature_type, signature_data}   (tenant)
+func (h *PaymentHandler) SignCommissionAgreement(c *gin.Context) {
+	ca, userID, ok := h.commissionAgreementFor(c)
+	if !ok || !need(c, ca.Role, "tenant") {
+		return
+	}
+	var body struct {
+		SignatureType string `json:"signature_type"`
+		SignatureData string `json:"signature_data"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || !validSignature(body.SignatureType, body.SignatureData) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please sign the agreement"})
+		return
+	}
+	signed, err := h.repo.SignCommissionAgreement(c.Request.Context(), ca.ID, userID, body.SignatureType, body.SignatureData)
+	if err != nil {
+		commissionStateErr(c, err)
+		return
+	}
+	signed.Role = "tenant"
+	notify.Send(ca.AgentID, "commission", "Commission agreement signed",
+		fmt.Sprintf("%s signed your commission agreement for %s. They can now request the rental agreement.", signed.TenantName, signed.PropertyTitle))
+	c.JSON(http.StatusOK, signed)
+}
+
+// POST /api/commission-agreements/:id/decline   (tenant)
+func (h *PaymentHandler) DeclineCommissionAgreement(c *gin.Context) {
+	ca, userID, ok := h.commissionAgreementFor(c)
+	if !ok || !need(c, ca.Role, "tenant") {
+		return
+	}
+	if err := h.repo.DeclineCommissionAgreement(c.Request.Context(), ca.ID, userID); err != nil {
+		commissionStateErr(c, err)
+		return
+	}
+	notify.Send(ca.AgentID, "commission", "Commission agreement declined",
+		fmt.Sprintf("%s did not accept your commission for %s. You can talk to them and send a new one.", ca.TenantName, ca.PropertyTitle))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// POST /api/commission-agreements/:id/cancel   (broker, before the tenant signs)
+func (h *PaymentHandler) CancelCommissionAgreement(c *gin.Context) {
+	ca, userID, ok := h.commissionAgreementFor(c)
+	if !ok || !need(c, ca.Role, "agent") {
+		return
+	}
+	if err := h.repo.CancelCommissionAgreement(c.Request.Context(), ca.ID, userID); err != nil {
+		commissionStateErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// POST /api/commission-agreements/:id/checkout   (tenant taps "Pay commission")
+func (h *PaymentHandler) CommissionCheckout(c *gin.Context) {
+	ca, userID, ok := h.commissionAgreementFor(c)
+	if !ok || !need(c, ca.Role, "tenant") {
+		return
+	}
+	switch {
+	case ca.Status != "signed":
+		c.JSON(http.StatusConflict, gin.H{"error": "please sign the commission agreement first"})
+		return
+	case ca.PayStatus == "paid":
+		c.JSON(http.StatusConflict, gin.H{"error": "this commission is already paid"})
+		return
+	case ca.LeaseID == "":
+		c.JSON(http.StatusConflict, gin.H{"error": "you can pay the commission once the rental agreement is signed by both owner and tenant"})
+		return
+	}
+	h.startCheckout(c, orderSpec{
+		kind: "commission", targetID: ca.LeaseID, leaseID: ca.LeaseID,
+		payerID: userID, ownerID: ca.AgentID, // the money is the agent's
+		amount: ca.Amount, rentAmount: ca.Amount, note: "Agent commission",
+	})
+}
+
+// GET /api/commission-agreements/:id/pdf   (signed agreements only)
+func (h *PaymentHandler) CommissionAgreementPDF(c *gin.Context) {
+	ca, _, ok := h.commissionAgreementFor(c)
+	if !ok {
+		return
+	}
+	if ca.Status != "signed" {
+		c.JSON(http.StatusConflict, gin.H{"error": "the PDF is available once both of you have signed"})
+		return
+	}
+	fmtTime := func(t interface{ Format(string) string }) string { return t.Format("2 Jan 2006, 15:04") }
+	d := receipt.CommissionAgreementData{
+		AgreementNumber: ca.AgreementNumber,
+		PropertyTitle:   ca.PropertyTitle,
+		AgentName:       ca.AgentName,
+		TenantName:      ca.TenantName,
+		Amount:          ca.Amount,
+		Note:            ca.Note,
+		AgentSignType:   ca.AgentSignType,
+		AgentSignData:   ca.AgentSignData,
+		TenantSignType:  ca.TenantSignType,
+		TenantSignData:  ca.TenantSignData,
+	}
+	if ca.AgentSignedAt != nil {
+		d.AgentSignedAt = fmtTime(ca.AgentSignedAt)
+	}
+	if ca.TenantSignedAt != nil {
+		d.TenantSignedAt = fmtTime(ca.TenantSignedAt)
+	}
+	c.Header("Content-Disposition", `attachment; filename="`+ca.AgreementNumber+`.pdf"`)
+	c.Data(http.StatusOK, "application/pdf", receipt.BuildCommissionAgreement(d))
+}
+
+// GET /api/leases/:id/commission-agreement   (tenant or agent of that lease; shows the pay card)
+func (h *PaymentHandler) LeaseCommissionAgreement(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	ca, err := h.repo.CommissionAgreementForLease(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		leaseErr(c, err)
+		return
+	}
+	if ca == nil || (userID != ca.TenantID && userID != ca.AgentID) {
+		c.JSON(http.StatusOK, gin.H{"commission_agreement": nil})
+		return
+	}
+	if userID == ca.TenantID {
+		ca.Role = "tenant"
+	} else {
+		ca.Role = "agent"
+	}
+	c.JSON(http.StatusOK, gin.H{"commission_agreement": ca})
 }

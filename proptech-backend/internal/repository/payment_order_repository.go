@@ -177,11 +177,12 @@ func (r *LeaseRepository) FinalizeOrder(ctx context.Context, orderID, cfPaymentI
 		settled = tag.RowsAffected() > 0
 	} else if o.Kind == "commission" {
 		tag, e := tx.Exec(ctx, `
-			UPDATE lease_commissions
-			SET status = 'paid', paid_at = now(), payment_method = $2, reference = $3, updated_at = now(),
-			    receipt_no = 'CM-' || to_char(now(), 'YYMMDD') || '-' || upper(left(id::text, 6))
-			WHERE agreement_id = (SELECT agreement_id FROM leases WHERE id = $1)
-			  AND status = 'accepted' AND abs(amount - $4) < 0.01`,
+			UPDATE commission_agreements ca
+			SET pay_status = 'paid', paid_at = now(), payment_method = $2, reference = $3, updated_at = now(),
+			    receipt_no = 'CM-' || to_char(now(), 'YYMMDD') || '-' || upper(left(ca.id::text, 6))
+			FROM leases l JOIN agreements a ON a.id = l.agreement_id
+			WHERE l.id = $1 AND ca.property_id = a.property_id AND ca.tenant_id = a.tenant_id
+			  AND ca.status = 'signed' AND ca.pay_status = 'unpaid' AND abs(ca.amount - $4) < 0.01`,
 			o.LeaseID, method, cfPaymentID, o.Amount)
 		if e != nil {
 			return nil, false, false, e

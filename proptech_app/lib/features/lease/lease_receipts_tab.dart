@@ -79,11 +79,8 @@ class _LeaseReceiptsTabState extends State<LeaseReceiptsTab> {
     }
     // Agent commission (only the tenant and the agent can read it; for the owner this just throws and is skipped).
     try {
-      final cv = await CommissionService.instance.get(l.agreementId);
-      final c = cv.commission;
-      if (cv.role == 'tenant' && c != null && c.paid) {
-        out.add(commissionReceipt(c: c, property: l.propertyTitle, paidBy: l.tenantName, receivedBy: cv.agentName));
-      }
+      final c = await CommissionService.instance.forLease(l.id);
+      if (c != null && c.paid) out.add(commissionReceipt(c));
     } catch (_) {}
 
     out.sort((a, b) {

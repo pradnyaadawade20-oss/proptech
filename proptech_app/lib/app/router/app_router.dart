@@ -44,6 +44,7 @@ import '../../features/agreement/agreements_screen.dart';
 import '../../features/landlord/landlord_invites_screen.dart';
 import '../../features/landlord/property_owner_link_screen.dart';
 import '../../features/landlord/owner_approve_screen.dart';
+import '../../features/lease/agent_commissions_screen.dart';
 import '../../features/call/in_app_call_screen.dart';
 import 'main_shell.dart';
 
@@ -350,6 +351,10 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
     GoRoute(
       path: RouteNames.landlordInvites,
       builder: (context, state) => const LandlordInvitesScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.commissionAgreements,
+      builder: (context, state) => const CommissionAgreementsScreen(),
     ),
     GoRoute(
       path: RouteNames.ownerApprove,

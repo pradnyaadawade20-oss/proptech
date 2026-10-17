@@ -204,12 +204,7 @@ class _OverviewTab extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
 
           if (_tenant)
-            CommissionCard(
-              agreementId: lease.agreementId,
-              propertyTitle: lease.propertyTitle,
-              tenantName: lease.tenantName,
-              onChanged: onChanged,
-            ),
+            CommissionCard(leaseId: lease.id, onChanged: onChanged),
           // ---- banners
           if (lease.overdueCount > 0)
             InfoBanner('${lease.overdueCount} rent payment${lease.overdueCount > 1 ? 's are' : ' is'} overdue. Check the Rent tab.',

@@ -3,149 +3,193 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// Commission is the agent's fee for one agreement, agreed before signing and paid by the tenant after.
-type Commission struct {
-	ID            string     `json:"id"`
-	AgreementID   string     `json:"agreement_id"`
-	AgentID       string     `json:"agent_id"`
-	TenantID      string     `json:"tenant_id"`
-	Amount        float64    `json:"amount"`
-	Note          string     `json:"note"`
-	Status        string     `json:"status"` // requested (tenant has not accepted) | accepted | paid
-	PaymentMethod string     `json:"payment_method"`
-	Reference     string     `json:"reference"`
-	ReceiptNo     string     `json:"receipt_no"`
-	PaidAt        *time.Time `json:"paid_at,omitempty"`
+// CommissionAgreement is the agreement between a broker (agent) and a tenant about the broker's commission.
+// Flow: broker creates + signs ("sent") -> tenant signs ("signed") -> after the rental agreement is
+// completed the tenant pays it through Cashfree (pay_status "paid").
+type CommissionAgreement struct {
+	ID              string     `json:"id"`
+	AgreementNumber string     `json:"agreement_number"`
+	PropertyID      string     `json:"property_id"`
+	PropertyTitle   string     `json:"property_title"`
+	AgentID         string     `json:"agent_id"`
+	AgentName       string     `json:"agent_name"`
+	TenantID        string     `json:"tenant_id"`
+	TenantName      string     `json:"tenant_name"`
+	Amount          float64    `json:"amount"`
+	Note            string     `json:"note"`
+	Status          string     `json:"status"` // sent | signed | declined | cancelled
+	AgentSignType   string     `json:"-"`
+	AgentSignData   string     `json:"-"`
+	AgentSignedAt   *time.Time `json:"agent_signed_at,omitempty"`
+	TenantSignType  string     `json:"-"`
+	TenantSignData  string     `json:"-"`
+	TenantSignedAt  *time.Time `json:"tenant_signed_at,omitempty"`
+	PayStatus       string     `json:"pay_status"` // unpaid | paid
+	PaymentMethod   string     `json:"payment_method"`
+	Reference       string     `json:"reference"`
+	ReceiptNo       string     `json:"receipt_no"`
+	PaidAt          *time.Time `json:"paid_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	LeaseID         string     `json:"lease_id"` // "" until the rental agreement is completed
+	Role            string     `json:"role"`     // set per request: agent | tenant
 }
 
-const commissionCols = `id, agreement_id, agent_id, tenant_id, amount, note, status,
-	payment_method, reference, receipt_no, paid_at`
+const commissionAgreementSelect = `
+	SELECT ca.id::text, ca.agreement_number, ca.property_id::text, COALESCE(p.title, ''),
+	       ca.agent_id::text, COALESCE(ag.name, ''), ca.tenant_id::text, COALESCE(t.name, ''),
+	       ca.amount, ca.note, ca.status,
+	       ca.agent_sign_type, ca.agent_sign_data, ca.agent_signed_at,
+	       ca.tenant_sign_type, ca.tenant_sign_data, ca.tenant_signed_at,
+	       ca.pay_status, ca.payment_method, ca.reference, ca.receipt_no, ca.paid_at, ca.created_at,
+	       COALESCE((SELECT l.id::text FROM leases l JOIN agreements a ON a.id = l.agreement_id
+	                 WHERE a.property_id = ca.property_id AND a.tenant_id = ca.tenant_id
+	                 ORDER BY l.created_at DESC LIMIT 1), '')
+	FROM commission_agreements ca
+	JOIN properties p ON p.id = ca.property_id
+	JOIN users ag ON ag.id = ca.agent_id
+	JOIN users t ON t.id = ca.tenant_id
+`
 
-func scanCommission(row interface{ Scan(dest ...any) error }) (*Commission, error) {
-	var c Commission
-	if err := row.Scan(&c.ID, &c.AgreementID, &c.AgentID, &c.TenantID, &c.Amount, &c.Note, &c.Status,
-		&c.PaymentMethod, &c.Reference, &c.ReceiptNo, &c.PaidAt); err != nil {
+func scanCommissionAgreement(row interface{ Scan(dest ...any) error }) (*CommissionAgreement, error) {
+	var c CommissionAgreement
+	if err := row.Scan(&c.ID, &c.AgreementNumber, &c.PropertyID, &c.PropertyTitle,
+		&c.AgentID, &c.AgentName, &c.TenantID, &c.TenantName,
+		&c.Amount, &c.Note, &c.Status,
+		&c.AgentSignType, &c.AgentSignData, &c.AgentSignedAt,
+		&c.TenantSignType, &c.TenantSignData, &c.TenantSignedAt,
+		&c.PayStatus, &c.PaymentMethod, &c.Reference, &c.ReceiptNo, &c.PaidAt, &c.CreatedAt,
+		&c.LeaseID); err != nil {
 		return nil, err
 	}
 	return &c, nil
 }
 
-// AgreementParties: who the agent and tenant of an agreement are ("" agent = no broker).
-func (r *LeaseRepository) AgreementParties(ctx context.Context, agreementID string) (agentID, tenantID, status string, err error) {
-	err = r.db.QueryRow(ctx, `
-		SELECT COALESCE(agent_id::text, ''), tenant_id::text, status
-		FROM agreements WHERE id = $1`, agreementID).Scan(&agentID, &tenantID, &status)
+// PropertyPoster tells who posted the property and how ("broker" | "owner").
+func (r *LeaseRepository) PropertyPoster(ctx context.Context, propertyID string) (ownerID, postedBy string, err error) {
+	err = r.db.QueryRow(ctx, `SELECT COALESCE(owner_id::text, ''), COALESCE(posted_by, 'owner') FROM properties WHERE id = $1`,
+		propertyID).Scan(&ownerID, &postedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrLeaseNotFound
 	}
 	return
 }
 
-// LeaseIDForAgreement is "" until both parties have signed (the lease is created then).
-func (r *LeaseRepository) LeaseIDForAgreement(ctx context.Context, agreementID string) (string, error) {
+// UserByEmail finds a PropTech account by email (case-insensitive).
+func (r *LeaseRepository) UserByEmail(ctx context.Context, email string) (id, name string, err error) {
+	err = r.db.QueryRow(ctx, `SELECT id::text, COALESCE(name, '') FROM users WHERE lower(email) = lower($1) LIMIT 1`,
+		strings.TrimSpace(email)).Scan(&id, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrLeaseNotFound
+	}
+	return
+}
+
+func (r *LeaseRepository) CreateCommissionAgreement(ctx context.Context, propertyID, agentID, tenantID string,
+	amount float64, note, signType, signData string) (*CommissionAgreement, error) {
 	var id string
-	err := r.db.QueryRow(ctx, `SELECT id::text FROM leases WHERE agreement_id = $1`, agreementID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	return id, err
-}
-
-// GetCommission returns nil (and no error) when the agent has not proposed one yet.
-func (r *LeaseRepository) GetCommission(ctx context.Context, agreementID string) (*Commission, error) {
-	c, err := scanCommission(r.db.QueryRow(ctx, `SELECT `+commissionCols+` FROM lease_commissions WHERE agreement_id = $1`, agreementID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	return c, err
-}
-
-// SetCommission lets the agent propose / change the amount. Locked once the tenant accepted it.
-func (r *LeaseRepository) SetCommission(ctx context.Context, agreementID, agentID, tenantID string, amount float64, note string) (*Commission, error) {
-	c, err := scanCommission(r.db.QueryRow(ctx, `
-		INSERT INTO lease_commissions (agreement_id, agent_id, tenant_id, amount, note)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (agreement_id) DO UPDATE
-		   SET amount = EXCLUDED.amount, note = EXCLUDED.note, updated_at = now()
-		 WHERE lease_commissions.status = 'requested'
-		RETURNING `+commissionCols, agreementID, agentID, tenantID, amount, note))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, badState("the tenant has already accepted this commission, so it can no longer be changed")
-	}
-	return c, err
-}
-
-// AcceptCommission: tenant agrees to the proposed amount (locks it).
-func (r *LeaseRepository) AcceptCommission(ctx context.Context, agreementID, tenantID string) (*Commission, error) {
-	c, err := scanCommission(r.db.QueryRow(ctx, `
-		UPDATE lease_commissions SET status = 'accepted', accepted_at = now(), updated_at = now()
-		WHERE agreement_id = $1 AND tenant_id = $2 AND status = 'requested'
-		RETURNING `+commissionCols, agreementID, tenantID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, badState("there is no commission waiting for your approval")
-	}
-	return c, err
-}
-
-// DeclineCommission: tenant says no; the proposal is removed so the agent can propose again.
-func (r *LeaseRepository) DeclineCommission(ctx context.Context, agreementID, tenantID string) error {
-	tag, err := r.db.Exec(ctx, `
-		DELETE FROM lease_commissions
-		WHERE agreement_id = $1 AND tenant_id = $2 AND status = 'requested'`, agreementID, tenantID)
+	err := r.db.QueryRow(ctx, `
+		INSERT INTO commission_agreements
+		  (agreement_number, property_id, agent_id, tenant_id, amount, note, status,
+		   agent_sign_type, agent_sign_data, agent_signed_at)
+		VALUES ('CA-' || to_char(now(), 'YYMMDD') || '-' || upper(substr(md5(random()::text), 1, 6)),
+		        $1, $2, $3, $4, $5, 'sent', $6, $7, now())
+		RETURNING id::text`,
+		propertyID, agentID, tenantID, amount, note, signType, signData).Scan(&id)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "uq_commission_active") {
+			return nil, badState("a commission agreement for this tenant and property already exists")
+		}
+		return nil, err
 	}
-	if tag.RowsAffected() == 0 {
-		return badState("there is no commission waiting for your approval")
-	}
-	return nil
+	return r.GetCommissionAgreement(ctx, id)
 }
 
-// AgentAgreementRow = one agreement of this agent with its commission (if any).
-type AgentAgreementRow struct {
-	AgreementID     string     `json:"agreement_id"`
-	LeaseID         string     `json:"lease_id"`
-	PropertyTitle   string     `json:"property_title"`
-	TenantName      string     `json:"tenant_name"`
-	AgreementStatus string     `json:"agreement_status"`
-	Amount          float64    `json:"amount"`
-	Note            string     `json:"note"`
-	Status          string     `json:"status"` // "" (not proposed) | requested | accepted | paid
-	PaymentMethod   string     `json:"payment_method"`
-	Reference       string     `json:"reference"`
-	ReceiptNo       string     `json:"receipt_no"`
-	PaidAt          *time.Time `json:"paid_at,omitempty"`
+func (r *LeaseRepository) GetCommissionAgreement(ctx context.Context, id string) (*CommissionAgreement, error) {
+	c, err := scanCommissionAgreement(r.db.QueryRow(ctx, commissionAgreementSelect+` WHERE ca.id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrLeaseNotFound
+	}
+	return c, err
 }
 
-func (r *LeaseRepository) ListAgentAgreements(ctx context.Context, agentID string) ([]AgentAgreementRow, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT a.id::text, COALESCE(l.id::text, ''), COALESCE(p.title, ''), COALESCE(t.name, ''), a.status,
-		       COALESCE(c.amount, 0), COALESCE(c.note, ''), COALESCE(c.status, ''),
-		       COALESCE(c.payment_method, ''), COALESCE(c.reference, ''), COALESCE(c.receipt_no, ''), c.paid_at
-		FROM agreements a
-		JOIN properties p ON p.id = a.property_id
-		JOIN users t ON t.id = a.tenant_id
-		LEFT JOIN leases l ON l.agreement_id = a.id
-		LEFT JOIN lease_commissions c ON c.agreement_id = a.id
-		WHERE a.agent_id = $1 AND a.status NOT IN ('rejected', 'cancelled', 'expired')
-		ORDER BY a.created_at DESC`, agentID)
+// ListCommissionAgreements = everything where the user is the agent or the tenant, newest first.
+func (r *LeaseRepository) ListCommissionAgreements(ctx context.Context, userID string) ([]CommissionAgreement, error) {
+	rows, err := r.db.Query(ctx, commissionAgreementSelect+`
+		WHERE ca.agent_id = $1 OR ca.tenant_id = $1
+		ORDER BY ca.created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []AgentAgreementRow{}
+	out := []CommissionAgreement{}
 	for rows.Next() {
-		var x AgentAgreementRow
-		if err := rows.Scan(&x.AgreementID, &x.LeaseID, &x.PropertyTitle, &x.TenantName, &x.AgreementStatus,
-			&x.Amount, &x.Note, &x.Status, &x.PaymentMethod, &x.Reference, &x.ReceiptNo, &x.PaidAt); err != nil {
+		c, err := scanCommissionAgreement(rows)
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, x)
+		out = append(out, *c)
 	}
 	return out, rows.Err()
+}
+
+// SignCommissionAgreement: the tenant signs. Only works while the agreement is "sent".
+func (r *LeaseRepository) SignCommissionAgreement(ctx context.Context, id, tenantID, signType, signData string) (*CommissionAgreement, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE commission_agreements
+		SET status = 'signed', tenant_sign_type = $3, tenant_sign_data = $4, tenant_signed_at = now(), updated_at = now()
+		WHERE id = $1 AND tenant_id = $2 AND status = 'sent'`, id, tenantID, signType, signData)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, badState("this commission agreement is no longer waiting for your signature")
+	}
+	return r.GetCommissionAgreement(ctx, id)
+}
+
+// DeclineCommissionAgreement: the tenant says no (the broker can send a new one).
+func (r *LeaseRepository) DeclineCommissionAgreement(ctx context.Context, id, tenantID string) error {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE commission_agreements SET status = 'declined', updated_at = now()
+		WHERE id = $1 AND tenant_id = $2 AND status = 'sent'`, id, tenantID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return badState("this commission agreement is no longer waiting for your answer")
+	}
+	return nil
+}
+
+// CancelCommissionAgreement: the broker withdraws it before the tenant signs.
+func (r *LeaseRepository) CancelCommissionAgreement(ctx context.Context, id, agentID string) error {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE commission_agreements SET status = 'cancelled', updated_at = now()
+		WHERE id = $1 AND agent_id = $2 AND status = 'sent'`, id, agentID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return badState("only an agreement the tenant has not signed yet can be cancelled")
+	}
+	return nil
+}
+
+// CommissionAgreementForLease: the signed commission agreement belonging to this lease (property + tenant).
+func (r *LeaseRepository) CommissionAgreementForLease(ctx context.Context, leaseID string) (*CommissionAgreement, error) {
+	c, err := scanCommissionAgreement(r.db.QueryRow(ctx, commissionAgreementSelect+`
+		WHERE ca.status = 'signed' AND EXISTS (
+		  SELECT 1 FROM leases l JOIN agreements a ON a.id = l.agreement_id
+		  WHERE l.id = $1 AND a.property_id = ca.property_id AND a.tenant_id = ca.tenant_id)
+		ORDER BY ca.created_at DESC LIMIT 1`, leaseID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return c, err
 }

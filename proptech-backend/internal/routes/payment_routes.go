@@ -19,11 +19,14 @@ func RegisterPaymentRoutes(router *gin.Engine, h *handlers.PaymentHandler) {
 	api.POST("/leases/:id/deposit/checkout", h.DepositCheckout)
 	api.GET("/payments/orders/:orderId", h.OrderStatus)
 
-	// Agent (broker) commission: agent proposes -> tenant accepts -> tenant pays after both sign
-	api.GET("/agreements/:id/commission", h.GetCommission)
-	api.PUT("/agreements/:id/commission", h.SetCommission)
-	api.POST("/agreements/:id/commission/accept", h.AcceptCommission)
-	api.POST("/agreements/:id/commission/decline", h.DeclineCommission)
-	api.POST("/agreements/:id/commission/checkout", h.CommissionCheckout)
-	api.GET("/agent/agreements", h.AgentAgreements)
+	// Commission agreement (broker <-> tenant): broker sends + signs, tenant signs, tenant pays after the lease exists
+	api.POST("/properties/:id/commission-agreement", h.CreateCommissionAgreement)
+	api.GET("/commission-agreements", h.ListCommissionAgreements)
+	api.GET("/commission-agreements/:id", h.GetCommissionAgreement)
+	api.POST("/commission-agreements/:id/sign", h.SignCommissionAgreement)
+	api.POST("/commission-agreements/:id/decline", h.DeclineCommissionAgreement)
+	api.POST("/commission-agreements/:id/cancel", h.CancelCommissionAgreement)
+	api.POST("/commission-agreements/:id/checkout", h.CommissionCheckout)
+	api.GET("/commission-agreements/:id/pdf", h.CommissionAgreementPDF)
+	api.GET("/leases/:id/commission-agreement", h.LeaseCommissionAgreement)
 }
