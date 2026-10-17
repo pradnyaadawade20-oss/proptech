@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
+import '../lease/online_payment.dart';
 import 'broker_subscription_service.dart';
 
 /// Shown when a broker hits the free limit. Returns true if they tapped
@@ -58,8 +59,17 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
   Future<void> _subscribe() async {
     setState(() => _busy = true);
     try {
-      // TODO: run the payment (Cashfree / UPI) here and pass its reference.
-      final d = await BrokerSubscriptionService.instance.subscribe(_selected);
+      // Cashfree checkout (UPI / card / netbanking). The server activates the plan after payment.
+      final paid = await payOnline(
+        context,
+        start: () => BrokerSubscriptionService.instance.checkout(_selected),
+      );
+      if (!mounted) return;
+      if (!paid) {
+        setState(() => _busy = false);
+        return;
+      }
+      final d = await BrokerSubscriptionService.instance.getMine();
       if (!mounted) return;
       setState(() {
         _data = d;

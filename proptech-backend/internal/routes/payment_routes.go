@@ -18,6 +18,7 @@ func RegisterPaymentRoutes(router *gin.Engine, h *handlers.PaymentHandler) {
 	api.POST("/rent/:paymentId/checkout", h.RentCheckout)
 	api.POST("/leases/:id/deposit/checkout", h.DepositCheckout)
 	api.GET("/payments/orders/:orderId", h.OrderStatus)
+	api.POST("/broker/:id/subscription/checkout", h.SubscriptionCheckout) // broker plan via Cashfree
 
 	// Commission agreement (broker <-> tenant): broker sends + signs, tenant signs, tenant pays after the lease exists
 	api.POST("/properties/:id/commission-agreement", h.CreateCommissionAgreement)

@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 
+	"proptech-backend/internal/models"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,6 +17,7 @@ type PaymentOrder struct {
 	OrderID          string     `json:"order_id"`
 	Kind             string     `json:"kind"` // rent | deposit
 	LeaseID          string     `json:"lease_id"`
+	PlanType         string     `json:"plan_type,omitempty"` // subscription orders only
 	RentPaymentID    *string    `json:"rent_payment_id,omitempty"`
 	PayerID          string     `json:"payer_id"`
 	OwnerID          string     `json:"owner_id"`
@@ -33,9 +36,9 @@ type PaymentOrder struct {
 }
 
 const orderSelect = `
-	SELECT id, order_id, kind, lease_id, rent_payment_id, payer_id, owner_id,
+	SELECT id, order_id, kind, COALESCE(lease_id::text, ''), rent_payment_id, payer_id, owner_id,
 	       amount, rent_amount, late_days, late_fee, status, cf_order_id, payment_session_id,
-	       cf_payment_id, payment_method, failure_reason, expires_at, paid_at
+	       cf_payment_id, payment_method, failure_reason, expires_at, paid_at, plan_type
 	FROM payment_orders
 `
 
@@ -43,7 +46,7 @@ func scanOrder(row interface{ Scan(dest ...any) error }) (*PaymentOrder, error) 
 	var o PaymentOrder
 	err := row.Scan(&o.ID, &o.OrderID, &o.Kind, &o.LeaseID, &o.RentPaymentID, &o.PayerID, &o.OwnerID,
 		&o.Amount, &o.RentAmount, &o.LateDays, &o.LateFee, &o.Status, &o.CFOrderID, &o.PaymentSessionID,
-		&o.CFPaymentID, &o.PaymentMethod, &o.FailureReason, &o.ExpiresAt, &o.PaidAt)
+		&o.CFPaymentID, &o.PaymentMethod, &o.FailureReason, &o.ExpiresAt, &o.PaidAt, &o.PlanType)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrLeaseNotFound
@@ -62,6 +65,8 @@ func (r *LeaseRepository) OpenOrder(ctx context.Context, kind, targetID string) 
 	q := orderSelect + ` WHERE status = 'created' AND expires_at > now() AND `
 	if kind == "rent" {
 		q += `kind = 'rent' AND rent_payment_id = $1`
+	} else if kind == "subscription" {
+		q += `kind = 'subscription' AND payer_id = $1` // targetID = the broker's user id
 	} else {
 		q += `kind = '` + kind + `' AND lease_id = $1` // kind is only ever "deposit" or "commission" (from our code)
 	}
@@ -79,6 +84,9 @@ func (r *LeaseRepository) SupersedeOpen(ctx context.Context, kind, targetID stri
 	if kind == "rent" {
 		_, err = r.db.Exec(ctx, `UPDATE payment_orders SET status = 'superseded', updated_at = now()
 			WHERE status = 'created' AND kind = 'rent' AND rent_payment_id = $1`, targetID)
+	} else if kind == "subscription" {
+		_, err = r.db.Exec(ctx, `UPDATE payment_orders SET status = 'superseded', updated_at = now()
+			WHERE status = 'created' AND kind = 'subscription' AND payer_id = $1`, targetID)
 	} else {
 		_, err = r.db.Exec(ctx, `UPDATE payment_orders SET status = 'superseded', updated_at = now()
 			WHERE status = 'created' AND kind = $2 AND lease_id = $1`, targetID, kind)
@@ -90,11 +98,11 @@ func (r *LeaseRepository) InsertOrder(ctx context.Context, o *PaymentOrder) erro
 	return r.db.QueryRow(ctx, `
 		INSERT INTO payment_orders
 		  (order_id, kind, lease_id, rent_payment_id, payer_id, owner_id, amount, rent_amount,
-		   late_days, late_fee, platform_fee, owner_amount, cf_order_id, payment_session_id, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$7,$11,$12,$13)
+		   late_days, late_fee, platform_fee, owner_amount, cf_order_id, payment_session_id, expires_at, plan_type)
+		VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,$9,$10,0,$7,$11,$12,$13,$14)
 		RETURNING id`,
 		o.OrderID, o.Kind, o.LeaseID, o.RentPaymentID, o.PayerID, o.OwnerID, o.Amount, o.RentAmount,
-		o.LateDays, o.LateFee, o.CFOrderID, o.PaymentSessionID, o.ExpiresAt).Scan(&o.ID)
+		o.LateDays, o.LateFee, o.CFOrderID, o.PaymentSessionID, o.ExpiresAt, o.PlanType).Scan(&o.ID)
 }
 
 // MarkFailure records a failed attempt (the tenant can simply try again in the same session).
@@ -175,6 +183,34 @@ func (r *LeaseRepository) FinalizeOrder(ctx context.Context, orderID, cfPaymentI
 			return nil, false, false, e
 		}
 		settled = tag.RowsAffected() > 0
+	} else if o.Kind == "subscription" {
+		plan, found := models.FindPlan(o.PlanType)
+		if !found {
+			return nil, false, false, badState("unknown subscription plan on the order")
+		}
+		// Same logic as BrokerSubscriptionRepository.Subscribe: time is added on top of what is left.
+		if _, e := tx.Exec(ctx, `INSERT INTO broker_subscriptions (broker_id) VALUES ($1) ON CONFLICT (broker_id) DO NOTHING`, o.PayerID); e != nil {
+			return nil, false, false, e
+		}
+		var current *time.Time
+		if e := tx.QueryRow(ctx, `SELECT expires_at FROM broker_subscriptions WHERE broker_id = $1 FOR UPDATE`, o.PayerID).Scan(&current); e != nil {
+			return nil, false, false, e
+		}
+		start := time.Now()
+		if current != nil && current.After(start) {
+			start = *current
+		}
+		expires := start.AddDate(0, plan.Months, 0)
+		if _, e := tx.Exec(ctx, `UPDATE broker_subscriptions
+			SET plan_type = $2, plan_name = $3, started_at = now(), expires_at = $4 WHERE broker_id = $1`,
+			o.PayerID, plan.ID, plan.Name, expires); e != nil {
+			return nil, false, false, e
+		}
+		if _, e := tx.Exec(ctx, `INSERT INTO broker_subscription_history (broker_id, plan_type, amount, starts_at, expires_at, payment_ref)
+			VALUES ($1, $2, $3, $4, $5, $6)`, o.PayerID, plan.ID, plan.Price, start, expires, orderID); e != nil {
+			return nil, false, false, e
+		}
+		settled = true
 	} else if o.Kind == "commission" {
 		tag, e := tx.Exec(ctx, `
 			UPDATE commission_agreements ca

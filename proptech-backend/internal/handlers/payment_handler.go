@@ -17,6 +17,7 @@ import (
 
 	"proptech-backend/internal/cashfree"
 	"proptech-backend/internal/middleware"
+	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
 	"proptech-backend/internal/repository"
 
@@ -64,7 +65,7 @@ func tenDigits(phone string) string {
 }
 
 type orderSpec struct {
-	kind          string // rent | deposit
+	kind          string // rent | deposit | commission | subscription
 	targetID      string // rent_payment id | lease id
 	leaseID       string
 	rentPaymentID *string
@@ -75,6 +76,7 @@ type orderSpec struct {
 	lateDays      int
 	lateFee       float64
 	note          string
+	planType      string // subscription only
 }
 
 func (h *PaymentHandler) checkoutJSON(c *gin.Context, o *repository.PaymentOrder) gin.H {
@@ -123,6 +125,8 @@ func (h *PaymentHandler) startCheckout(c *gin.Context, s orderSpec) {
 		prefix = "DEP"
 	case "commission":
 		prefix = "COM"
+	case "subscription":
+		prefix = "SUB"
 	}
 	// Cashfree order_id: max 50 chars (4 + 1 + 32 + 1 + 10 = 48).
 	orderID := fmt.Sprintf("%s-%s-%d", prefix, strings.ReplaceAll(s.targetID, "-", ""), time.Now().Unix())
@@ -154,7 +158,7 @@ func (h *PaymentHandler) startCheckout(c *gin.Context, s orderSpec) {
 		OrderID: orderID, Kind: s.kind, LeaseID: s.leaseID, RentPaymentID: s.rentPaymentID,
 		PayerID: s.payerID, OwnerID: s.ownerID, Amount: s.amount, RentAmount: s.rentAmount,
 		LateDays: s.lateDays, LateFee: s.lateFee, CFOrderID: cfo.CFOrderID,
-		PaymentSessionID: cfo.PaymentSessionID, ExpiresAt: expires,
+		PaymentSessionID: cfo.PaymentSessionID, ExpiresAt: expires, PlanType: s.planType,
 	}
 	if err := h.repo.InsertOrder(ctx, o); err != nil {
 		leaseErr(c, err)
@@ -208,6 +212,38 @@ func (h *PaymentHandler) DepositCheckout(c *gin.Context) {
 	})
 }
 
+// POST /api/broker/:id/subscription/checkout   {"plan":"monthly|yearly"}
+// The broker pays for a plan through Cashfree. The plan is activated only when the
+// payment is confirmed (webhook / status poll / sweeper) - see FinalizeOrder.
+func (h *PaymentHandler) SubscriptionCheckout(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if c.Param("id") != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only buy a plan for your own account"})
+		return
+	}
+	var req struct {
+		Plan string `json:"plan" binding:"required,oneof=monthly yearly"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plan must be 'monthly' or 'yearly'"})
+		return
+	}
+	plan, found := models.FindPlan(req.Plan)
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown plan"})
+		return
+	}
+	h.startCheckout(c, orderSpec{
+		kind: "subscription", targetID: userID, payerID: userID, ownerID: userID,
+		amount: float64(plan.Price), rentAmount: float64(plan.Price),
+		note: plan.Name, planType: plan.ID,
+	})
+}
+
 // ---------------------------------------------------------------------------
 // status (app polls this after the Cashfree page closes) + shared "mark paid"
 // ---------------------------------------------------------------------------
@@ -233,6 +269,15 @@ func (h *PaymentHandler) settle(ctx context.Context, o *repository.PaymentOrder,
 }
 
 func (h *PaymentHandler) afterPaid(ctx context.Context, o *repository.PaymentOrder) {
+	if o.Kind == "subscription" {
+		name := o.PlanType
+		if p, ok := models.FindPlan(o.PlanType); ok {
+			name = p.Name
+		}
+		notify.Send(o.PayerID, "subscription", "Subscription active",
+			fmt.Sprintf("Your payment of %s is received. %s is now active - you can add unlimited listings.", rupees(o.Amount), name))
+		return
+	}
 	l, err := h.repo.GetLease(ctx, o.LeaseID)
 	if err != nil {
 		return

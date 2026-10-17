@@ -52,30 +52,14 @@ type subscribeRequest struct {
 	PaymentRef string `json:"payment_ref"`
 }
 
-// Subscribe: POST /api/broker/:id/subscription/subscribe  {"plan":"monthly|yearly"}
+// Subscribe: POST /api/broker/:id/subscription/subscribe
 //
-// TODO(payments): verify the payment (Cashfree order / UPI ref) BEFORE
-// calling repo.Subscribe — right now the plan is activated directly.
+// Disabled on purpose: activating a plan without payment would let anyone get it free.
+// Plans are now bought with POST /api/broker/:id/subscription/checkout (Cashfree) and are
+// activated by the server only after the payment is confirmed.
 func (h *BrokerHandler) Subscribe(c *gin.Context) {
-	brokerID, ok := h.own(c)
-	if !ok {
+	if _, ok := h.own(c); !ok {
 		return
 	}
-	var req subscribeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "plan must be 'monthly' or 'yearly'"})
-		return
-	}
-	plan, found := models.FindPlan(req.Plan)
-	if !found {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown plan"})
-		return
-	}
-
-	sub, err := h.subscriptionRepo.Subscribe(c.Request.Context(), brokerID, plan, req.PaymentRef)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"subscription": sub, "plans": models.SubscriptionPlans})
+	c.JSON(http.StatusPaymentRequired, gin.H{"error": "please pay online to activate a plan"})
 }
