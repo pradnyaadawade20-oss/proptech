@@ -10,6 +10,7 @@ import '../../core/session/user_session.dart';
 import '../../core/utils/phone_mask.dart';
 import '../auth/auth_service.dart';
 import 'profile_avatar.dart';
+import 'role_switcher_sheet.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
@@ -224,7 +225,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 8),
                 ValueListenableBuilder<UserRole?>(
                   valueListenable: UserSession.instance.currentRole,
-                  builder: (context, role, _) => _RoleBadge(role: role),
+                  builder: (context, role, _) => _RoleBadge(
+                    role: role,
+                    onTap: () => showRoleSwitcherSheet(context),
+                  ),
                 ),
               ],
             ),
@@ -417,7 +421,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 /// Small pill under the phone number: Buyer / Tenant, Owner or Broker.
 class _RoleBadge extends StatelessWidget {
   final UserRole? role;
-  const _RoleBadge({required this.role});
+  final VoidCallback? onTap;
+  const _RoleBadge({required this.role, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -426,19 +431,32 @@ class _RoleBadge extends StatelessWidget {
       UserRole.broker => 'Broker',
       _ => 'Buyer / Tenant',
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFF4A90FF).withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2B5FA8)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4A90FF).withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFF2B5FA8)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 2),
+              const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.white),
+            ],
+          ],
         ),
       ),
     );

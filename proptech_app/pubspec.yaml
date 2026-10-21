@@ -66,6 +66,7 @@ dependencies:
   flutter_webrtc: ^1.5.2
   audioplayers: ^6.1.0 # ringtone for incoming calls
   web_socket_channel: ^3.0.1
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

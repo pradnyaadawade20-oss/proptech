@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../app/router/app_router.dart';
@@ -201,6 +202,8 @@ class CallService extends ChangeNotifier {
       throw Exception('Could not connect to the call server. Please try again.');
     }
     // Ask for the microphone BEFORE ringing the other person.
+    final micError = await _micPermissionError();
+    if (micError != null) throw Exception(micError);
     await _acquireMic();
 
     try {
@@ -256,18 +259,28 @@ class CallService extends ChangeNotifier {
     _stopBuzz();
     phase = CallPhase.connecting;
     notifyListeners();
+    // Tells the user the real reason instead of always blaming the microphone.
+    var failure = 'Could not answer the call';
     try {
+      final micError = await _micPermissionError();
+      if (micError != null) {
+        failure = micError;
+        throw Exception(micError);
+      }
+      failure = 'Could not connect. Check your internet and try again.';
       if (!await _ensureConnected()) throw Exception('No connection');
       final res = await _dio.get('/api/calls/ice-servers');
       _ice = _parseIce(res.data['ice_servers']);
+      failure = 'Could not start the microphone. Please try again.';
       await _acquireMic();
+      failure = 'Could not set up the call. Please try again.';
       await _createPeer();
       _send({'type': 'accept', 'call_id': callId});
       _startConnectTimeout();
     } catch (e) {
       debugPrint('accept failed: $e');
       _send({'type': 'reject', 'call_id': callId});
-      _hangUpLocal('Could not answer (microphone permission?)');
+      _hangUpLocal(failure);
     }
   }
 
@@ -438,6 +451,19 @@ class CallService extends ChangeNotifier {
       m.removeWhere((k, v) => v == null || v == '');
       return m;
     }).toList();
+  }
+
+  /// Asks for the microphone permission up-front (shows the system dialog).
+  /// Returns null when granted, or a message to show the user.
+  Future<String?> _micPermissionError() async {
+    var status = await Permission.microphone.status;
+    if (status.isGranted) return null;
+    status = await Permission.microphone.request();
+    if (status.isGranted) return null;
+    if (status.isPermanentlyDenied) {
+      return 'Microphone is blocked. Enable it in Settings > Apps > this app > Permissions > Microphone.';
+    }
+    return 'Microphone permission is needed for calls. Please allow it and try again.';
   }
 
   Future<void> _acquireMic() async {

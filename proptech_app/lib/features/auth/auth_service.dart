@@ -175,6 +175,20 @@ class AuthService {
     }
   }
 
+  /// Switches the account's active role on the server (Profile role switcher).
+  /// Returns null on success, or an error message to show the user.
+  Future<String?> switchRole(UserRole role) async {
+    try {
+      final id = await TokenStore.instance.getUserId();
+      if (id == null) return 'Please log in again.';
+      await _dio.patch('/api/auth/users/$id/role',
+          data: {'role': _roleToServer(role)});
+      return null;
+    } on DioException catch (e) {
+      return _extractError(e);
+    }
+  }
+
   Future<void> saveRole(UserRole role) async {
     try {
       final id = await TokenStore.instance.getUserId();
