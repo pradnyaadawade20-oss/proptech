@@ -100,8 +100,11 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
     );
   }
 
+  int _slideDir = 1; // 1 = new tab is to the right, -1 = to the left
+
   void _setMode(ListingMode mode) {
     if (mode == _mode) return;
+    _slideDir = mode.index > _mode.index ? 1 : -1;
     setState(() => _criteria = _carry(mode, _commercialRent));
   }
 
@@ -463,32 +466,38 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
           },
         ),
         title: const Text('Search'),
-        actions: [
-          ValueListenableBuilder<List<SavedSearch>>(
-            valueListenable: SavedSearchStore.instance.searches,
-            builder: (context, savedList, _) {
-              final newCount = SavedSearchStore.instance.totalNewMatches;
-              return IconButton(
-                icon: Badge(
-                  isLabelVisible: newCount > 0,
-                  label: Text('$newCount'),
-                  child: const Icon(Icons.bookmark_border),
-                ),
-                tooltip: 'Saved Searches',
-                onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const SavedSearchesScreen(),
-                  ));
-                },
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
           _buildModeTabs(),
-          Expanded(child: _showResults ? _buildResultsView(results) : _buildFiltersView()),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd: (d) {
+                final v = d.primaryVelocity ?? 0;
+                if (v.abs() < 300) return;
+                final modes = ListingMode.values;
+                final next = v < 0 ? _mode.index + 1 : _mode.index - 1;
+                if (next < 0 || next >= modes.length) return;
+                _setMode(modes[next]);
+              },
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, animation) {
+                  final isIncoming = child.key == ValueKey<ListingMode>(_mode);
+                  final begin = isIncoming ? Offset(_slideDir.toDouble(), 0) : Offset(-_slideDir.toDouble(), 0);
+                  return SlideTransition(
+                    position: Tween<Offset>(begin: begin, end: Offset.zero).animate(animation),
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey<ListingMode>(_mode),
+                  child: _showResults ? _buildResultsView(results) : _buildFiltersView(),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -95,10 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       AppTourStep(
         targetKey: _tourActionsKey,
-        icon: Icons.favorite_border,
-        title: 'Saved & notifications',
+        icon: Icons.add_circle_outline,
+        title: 'Post & notifications',
         description:
-            'Tap the heart to open your saved properties. The bell shows visit updates, messages and agreement alerts.',
+            'Tap "Post Property" to list your own property. The bell shows visit updates, messages and agreement alerts.',
       ),
       AppTourStep(
         targetKey: _tourSearchKey,
@@ -108,17 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
             'Type a city or area to find properties. Use the blue filter button to narrow by budget, BHK, furnishing and more.',
       ),
       AppTourStep(
-        targetKey: _tourCategoriesKey,
-        icon: Icons.grid_view_rounded,
-        title: 'Browse by category',
-        description:
-            'Jump straight to Buy, Rent, Commercial, Plot/Land or PG listings. Tap "Post" to list your own property.',
-      ),
-      AppTourStep(
         targetKey: _tourChipsKey,
         icon: Icons.bolt_outlined,
         title: 'Quick picks',
-        description: 'Popular searches like 1 BHK, 2 BHK, PG, Farmhouse and Villa are just one tap away.',
+        description: 'Jump straight to Buy, Rent, Commercial, Plot/Land, PG, 2 BHK and more with one tap.',
       ),
       AppTourStep(
         targetKey: _tourBannerKey,
@@ -290,9 +283,21 @@ class _HomeScreenState extends State<HomeScreen> {
             key: _tourActionsKey,
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: const Icon(Icons.favorite_border),
-                onPressed: () => context.push(RouteNames.favorites),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: TextButton.icon(
+                  onPressed: () => context.push(RouteNames.addProperty),
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('Post Property'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                ),
               ),
               const NotificationBell(),
             ],
@@ -379,33 +384,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Quick-action icons row — plain background, outlined circles
-
-          // Quick-action icons row — plain background, light-blue filled circles
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            key: _tourCategoriesKey,
-            height: 92,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              children: [
-                _HeroIconItem(icon: Icons.home_outlined, label: 'Buy', onTap: () => context.push('/category/buy')),
-                _HeroIconItem(icon: Icons.vpn_key_outlined, label: 'Rent', onTap: () => context.push('/category/rent')),
-                _HeroIconItem(icon: Icons.apartment_outlined, label: 'Commercial', onTap: () => context.push('/category/commercial')),
-                _HeroIconItem(icon: Icons.landscape_outlined, label: 'Plot/Land', onTap: () => context.push('/category/plot')),
-                _HeroIconItem(icon: Icons.bed_outlined, label: 'PG', onTap: () => context.push('/category/pg')),
-                _HeroIconItem(icon: Icons.add_circle_outline, label: 'Post', onTap: () => context.push(RouteNames.addProperty)),
-                _HeroIconItem(icon: Icons.arrow_forward, label: 'View all', onTap: () => context.push('/all-categories')),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
           // Search bar with filter icon
           Container(
             key: _tourSearchKey,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -423,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       hintText: 'Search location, city, or area...',
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
                     ),
                     style: AppTextStyles.bodyMedium,
                     onChanged: (value) => setState(() {
@@ -490,20 +472,29 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           const SizedBox(height: AppSpacing.md),
 
-          // Category chips
+          // Quick category chips
           SizedBox(
             key: _tourChipsKey,
             height: 40,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
+                _PopularChip(label: 'Buy', onTap: () => context.push('/category/buy')),
+                const SizedBox(width: 8),
+                _PopularChip(label: 'Rent', onTap: () => context.push('/category/rent')),
+                const SizedBox(width: 8),
+                _PopularChip(label: 'Commercial', onTap: () => context.push('/category/commercial')),
+                const SizedBox(width: 8),
+                _PopularChip(label: 'Plot/Land', onTap: () => context.push('/category/plot')),
+                const SizedBox(width: 8),
+                _PopularChip(label: 'PG', onTap: () => context.push('/category/pg')),
+                const SizedBox(width: 8),
                 _PopularChip(label: '1 BHK', onTap: () => context.push('/category/1bhk')),
                 const SizedBox(width: 8),
                 _PopularChip(label: '2 BHK', onTap: () => context.push('/category/2bhk')),
                 const SizedBox(width: 8),
-                _PopularChip(label: 'PG', onTap: () => context.push('/category/pg')),
-                const SizedBox(width: 8),
                 _PopularChip(label: 'Farmhouse', onTap: () => context.push('/category/farmhouse')),
+                const SizedBox(width: 8),
                 _PopularChip(label: 'Rooms', onTap: () => context.push('/category/rooms')),
                 const SizedBox(width: 8),
                 _PopularChip(label: 'Villa', onTap: () => context.push('/category/villa')),
@@ -512,10 +503,58 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: AppSpacing.lg),
 
+          // Activity cards
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _ActivityCard(
+                    icon: Icons.home_outlined,
+                    title: 'My Properties',
+                    onTap: () => context.push(RouteNames.myProperties),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _ActivityCard(
+                    icon: Icons.calendar_month_outlined,
+                    title: 'My Visits',
+                    onTap: () => context.push(RouteNames.myVisits),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _ActivityCard(
+                    icon: Icons.description_outlined,
+                    title: 'Agreements',
+                    onTap: () => context.push(RouteNames.agreements),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _ActivityCard(
+                    icon: Icons.vpn_key_outlined,
+                    title: 'Leases & Rent',
+                    onTap: () => context.push(RouteNames.leases),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
           // List your property banner (swipeable carousel)
           SizedBox(
             key: _tourBannerKey,
-            height: 190,
+            height: 160,
             child: PageView.builder(
               controller: _listBannerController,
               itemCount: _listBannerSlides.length,
@@ -1295,6 +1334,78 @@ class _PopularChip extends StatelessWidget {
       backgroundColor: AppColors.primaryLight,
       side: BorderSide.none,
       onPressed: onTap,
+    );
+  }
+}
+
+class _ActivityCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _ActivityCard({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F9FE), // very light blue tint
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: const Color(0xFFDCE8F6)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3EEFB),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, color: AppColors.primary, size: 20),
+                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.textPrimary, size: 20),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

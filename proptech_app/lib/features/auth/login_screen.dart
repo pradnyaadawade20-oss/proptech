@@ -12,8 +12,8 @@ import 'google_auth.dart';
 import '../landlord/pending_invite_store.dart';
 
 // â”€â”€ Design tokens taken from the login mock-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const _teal = Color(0xFF15558A); // matches AppColors.primary (navy blue)
-const _tealGlow = Color(0xFF2B6FA3); // matches AppColors.secondary
+const _teal = Color(0xFF0C3476); // matches AppColors.primary (navy blue)
+const _tealGlow = Color(0xFF2459A8); // matches AppColors.secondary
 const _ink = Color(0xFF17202A); // matches AppColors.textPrimary
 const _muted = Color(0xFF667085); // matches AppColors.textSecondary
 const _fieldActiveBg = Color(0xFFEAF2FA); // matches AppColors.primaryLight
@@ -801,7 +801,7 @@ class _Footer extends StatelessWidget {
                     imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                     child: Opacity(
                       opacity: 0.35,
-                      child: img(tint: const Color(0xFF15558A)),
+                      child: img(tint: const Color(0xFF0C3476)),
                     ),
                   ),
                 ),
