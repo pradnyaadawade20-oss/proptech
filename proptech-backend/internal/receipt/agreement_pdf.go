@@ -36,6 +36,16 @@ type AgreementData struct {
 	TenantSignType string
 	TenantSignData string
 	TenantSignedAt string
+
+	// Substitute payer (optional, filled by the tenant)
+	SubstituteName     string
+	SubstitutePhone    string
+	SubstituteRelation string
+
+	// Date/time stamps (already formatted, IST)
+	CreatedAt   string // when the agreement was created / requested
+	CompletedAt string // when the last party signed
+	GeneratedAt string // when this PDF was generated
 }
 
 type agImage struct {
@@ -262,6 +272,37 @@ func BuildAgreement(a AgreementData) []byte {
 			}
 			d.y -= 14
 		}
+	}
+
+	if strings.TrimSpace(a.SubstituteName) != "" {
+		d.section("Substitute payer")
+		d.kv("Name", a.SubstituteName)
+		d.kv("Mobile", a.SubstitutePhone)
+		if a.SubstituteRelation != "" {
+			d.kv("Relation to Tenant", a.SubstituteRelation)
+		}
+		for _, l := range agWrap("If the Tenant is unavailable for any reason, the rent for this agreement will be paid by the Substitute named above.", 92) {
+			d.ensure(14)
+			d.text("F1", 10, 50, d.y, l)
+			d.y -= 14
+		}
+	}
+
+	d.section("Date and time record")
+	if a.CreatedAt != "" {
+		d.kv("Agreement created", a.CreatedAt)
+	}
+	if a.OwnerSignedAt != "" {
+		d.kv("Owner signed", a.OwnerSignedAt)
+	}
+	if a.TenantSignedAt != "" {
+		d.kv("Tenant signed", a.TenantSignedAt)
+	}
+	if a.CompletedAt != "" {
+		d.kv("Fully signed", a.CompletedAt)
+	}
+	if a.GeneratedAt != "" {
+		d.kv("PDF generated", a.GeneratedAt)
 	}
 
 	d.section("Signatures")

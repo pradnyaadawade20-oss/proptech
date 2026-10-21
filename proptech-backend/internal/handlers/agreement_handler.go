@@ -221,10 +221,76 @@ func (h *AgreementHandler) UpdateDraft(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	notifyOtherParty(agreement, userID, "Agreement draft updated",
-		fmt.Sprintf("The draft agreement for %s was updated", agreement.PropertyTitle))
+	// Notify the tenant only the first time the draft is sent for signature
+	// (status was still "requested"). Later edits/saves stay silent so the
+	// tenant is not pinged again and again.
+	if ag0.Status == "requested" {
+		notifyOtherParty(agreement, userID, "Agreement ready for signature",
+			fmt.Sprintf("The agreement for %s is ready. Please review and sign it.", agreement.PropertyTitle))
+	}
 
 	c.JSON(http.StatusOK, gin.H{"agreement": agreement})
+}
+
+// PUT /api/agreements/:id/substitute
+// The tenant adds (or clears) the substitute payer before signing.
+func (h *AgreementHandler) UpdateSubstitute(c *gin.Context) {
+	id := c.Param("id")
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	ag, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "agreement not found"})
+		return
+	}
+	if ag.TenantID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the tenant can add a substitute"})
+		return
+	}
+	var req models.UpdateSubstituteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	relation := strings.TrimSpace(req.Relation)
+	phone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, req.Phone)
+	if len(phone) > 10 {
+		phone = phone[len(phone)-10:]
+	}
+	if name == "" && phone == "" && relation == "" {
+		// cleared
+	} else {
+		if len(name) < 2 || len(name) > 80 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "enter the substitute's full name"})
+			return
+		}
+		if len(phone) != 10 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "enter the substitute's 10-digit mobile number"})
+			return
+		}
+		if len(relation) > 60 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "relation is too long (max 60 characters)"})
+			return
+		}
+	}
+	updated, err := h.repo.UpdateSubstitute(c.Request.Context(), id, name, phone, relation)
+	if err != nil {
+		if writeStateError(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"agreement": updated})
 }
 
 func (h *AgreementHandler) SignAgreement(c *gin.Context) {
@@ -524,7 +590,18 @@ func (h *AgreementHandler) DownloadPDF(c *gin.Context) {
 		}
 	}
 
+	// Date/time stamps for the PDF (IST)
+	createdAt := a.CreatedAt
+	completedAt := a.OwnerSignedAt
+	if a.TenantSignedAt != nil && (completedAt == nil || a.TenantSignedAt.After(*completedAt)) {
+		completedAt = a.TenantSignedAt
+	}
+	now := time.Now()
+
 	pdf := receipt.BuildAgreement(receipt.AgreementData{
+		CreatedAt:        pdfIST(&createdAt),
+		CompletedAt:      pdfIST(completedAt),
+		GeneratedAt:      pdfIST(&now),
 		AgreementID:      a.ID,
 		PropertyTitle:    a.PropertyTitle,
 		PropertyAddress:  pdfStr(a.PropertyAddress),
@@ -545,6 +622,10 @@ func (h *AgreementHandler) DownloadPDF(c *gin.Context) {
 		TenantSignType:   a.TenantSignatureType,
 		TenantSignData:   a.TenantSignatureData,
 		TenantSignedAt:   pdfIST(a.TenantSignedAt),
+
+		SubstituteName:     a.SubstituteName,
+		SubstitutePhone:    a.SubstitutePhone,
+		SubstituteRelation: a.SubstituteRelation,
 	})
 	c.Header("Content-Disposition", `inline; filename="rental-agreement.pdf"`)
 	c.Data(http.StatusOK, "application/pdf", pdf)

@@ -60,12 +60,10 @@ func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 	visits.Use(middleware.AuthRequired())
 	{
 		visits.GET("", h.GetVisits)
-		visits.GET("/access", h.Access)
 		visits.POST("", h.CreateVisit)
 		visits.PATCH("/:id/status", h.UpdateVisitStatus)
 		visits.PATCH("/:id/reschedule", h.RescheduleVisit)
 		visits.POST("/:id/feedback", h.SubmitFeedback)
-		visits.POST("/:id/verify-otp", h.VerifyOTP)
 		visits.DELETE("/:id", h.DeleteVisit)
 	}
 }
@@ -104,6 +102,7 @@ func RegisterAgreementRoutes(router *gin.Engine, h *handlers.AgreementHandler) {
 		agreements.GET("/:id/pdf", h.DownloadPDF)
 		agreements.POST("", h.CreateAgreement)
 		agreements.PUT("/:id/draft", h.UpdateDraft)
+		agreements.PUT("/:id/substitute", h.UpdateSubstitute)
 		agreements.POST("/:id/sign", h.SignAgreement)
 		agreements.PATCH("/:id/status", h.UpdateStatus)
 	}

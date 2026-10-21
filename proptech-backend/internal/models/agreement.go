@@ -37,6 +37,11 @@ type Agreement struct {
 	NoticePeriodDays *int    `json:"notice_period_days,omitempty"`
 	RentDueDay       *int    `json:"rent_due_day,omitempty"`
 
+	// Substitute payer, filled by the tenant before signing (optional).
+	SubstituteName     string `json:"substitute_name,omitempty"`
+	SubstitutePhone    string `json:"substitute_phone,omitempty"`
+	SubstituteRelation string `json:"substitute_relation,omitempty"`
+
 	OwnerSignatureType string     `json:"owner_signature_type,omitempty"`
 	OwnerSignatureData string     `json:"owner_signature_data,omitempty"`
 	OwnerSignedAt      *time.Time `json:"owner_signed_at,omitempty"`
@@ -77,6 +82,13 @@ type UpdateDraftRequest struct {
 	PropertyAddress  *string `json:"property_address"`
 	NoticePeriodDays *int    `json:"notice_period_days"`
 	RentDueDay       *int    `json:"rent_due_day"`
+}
+
+// Tenant fills (or clears, by sending empty values) the substitute payer before signing.
+type UpdateSubstituteRequest struct {
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Relation string `json:"relation"`
 }
 
 // Step 3: either party signs — via drawn signature (base64 PNG) or typed name.

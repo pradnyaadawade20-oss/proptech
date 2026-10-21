@@ -28,7 +28,8 @@ const agreementSelectQuery = `
 	       COALESCE(a.final_pdf_url, ''), a.created_at, a.updated_at,
 	       a.expires_at, COALESCE(a.status_reason, ''), COALESCE(a.status_changed_by::text, ''), a.status_changed_at,
 	       a.property_address, a.notice_period_days, a.rent_due_day,
-	       COALESCE(a.agent_id::text, ''), COALESCE(ag.name, '')
+	       COALESCE(a.agent_id::text, ''), COALESCE(ag.name, ''),
+	       COALESCE(a.substitute_name, ''), COALESCE(a.substitute_phone, ''), COALESCE(a.substitute_relation, '')
 	FROM agreements a
 	JOIN properties p ON p.id = a.property_id
 	JOIN users ou ON ou.id = a.owner_id
@@ -49,6 +50,7 @@ func scanAgreement(row interface{ Scan(dest ...any) error }) (*models.Agreement,
 		&a.ExpiresAt, &a.StatusReason, &a.StatusChangedBy, &a.StatusChangedAt,
 		&a.PropertyAddress, &a.NoticePeriodDays, &a.RentDueDay,
 		&a.AgentID, &a.AgentName,
+		&a.SubstituteName, &a.SubstitutePhone, &a.SubstituteRelation,
 	)
 	if err != nil {
 		return nil, err
@@ -153,6 +155,28 @@ func (r *AgreementRepository) UpdateDraft(ctx context.Context, id string, req mo
 		  AND owner_signed_at IS NULL AND tenant_signed_at IS NULL
 	`, req.MonthlyRent, req.SecurityDeposit, req.StartDate, req.DurationMonths, req.Terms, id, models.AgreementExpiryDays,
 		req.PropertyAddress, req.NoticePeriodDays, req.RentDueDay)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrAgreementLocked
+	}
+	return r.GetByID(ctx, id)
+}
+
+// UpdateSubstitute stores the tenant's substitute payer. Allowed only while
+// nobody has signed yet (same lock as the draft), so a signed agreement never
+// changes underneath a signer. Empty values clear it.
+func (r *AgreementRepository) UpdateSubstitute(ctx context.Context, id, name, phone, relation string) (*models.Agreement, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE agreements
+		SET substitute_name = NULLIF($1, ''), substitute_phone = NULLIF($2, ''),
+		    substitute_relation = NULLIF($3, ''), updated_at = now()
+		WHERE id = $4
+		  AND status IN ('draft_ready', 'awaiting_signatures')
+		  AND (expires_at IS NULL OR expires_at > now())
+		  AND owner_signed_at IS NULL AND tenant_signed_at IS NULL
+	`, name, phone, relation, id)
 	if err != nil {
 		return nil, err
 	}
