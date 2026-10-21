@@ -43,6 +43,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       RecentlyViewedStore.instance.markViewed(widget.propertyId);
       await _ensureLoaded();
+      _loadPosterName();
       _loadAgreementEligibility();
     });
   }
@@ -54,6 +55,26 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
   }
 
   bool _notFound = false;
+
+  /// Name of whoever listed this property (shown under the title).
+  String _posterName = '';
+
+  Future<void> _loadPosterName() async {
+    final p = PropertyStore.instance.byId(widget.propertyId);
+    if (p == null) return;
+    if (p.ownerName.isNotEmpty) {
+      if (mounted) setState(() => _posterName = p.ownerName);
+      return;
+    }
+    if (p.ownerId.isEmpty) return;
+    try {
+      final profile = await ProfileService.instance.getProfile(p.ownerId);
+      if (!mounted) return;
+      setState(() => _posterName = profile.name);
+    } catch (_) {
+      // Name just stays hidden if the profile can't be loaded.
+    }
+  }
 
   // Broker listings: online agreements open only once the real owner has accepted the broker's invite.
   bool _agreementAvailable = false;
@@ -428,6 +449,31 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       ],
                     ),
                     const SizedBox(height: 6),
+
+                    // Posted by - whoever listed this property
+                    if (_posterName.isNotEmpty) ...[
+                      GestureDetector(
+                        onTap: () => _contactOwner(property),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person_outline, size: 16, color: AppColors.textSecondary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${property.postedBy == 'broker' ? 'Listed by' : 'Posted by'} $_posterName',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
 
                     // Location + rating
                     Row(
