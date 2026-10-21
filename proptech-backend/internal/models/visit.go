@@ -26,6 +26,9 @@ type Visit struct {
 	// GET /api/visits - never for the owner. OTPVerified = owner entered it.
 	OTPCode     string `json:"otp_code,omitempty"`
 	OTPVerified bool   `json:"otp_verified"`
+	// OTPPending = visit is confirmed but the OTP is still hidden because the
+	// visit time has not come yet (it appears after the buyer has visited).
+	OTPPending bool `json:"otp_pending"`
 }
 
 type CreateVisitRequest struct {

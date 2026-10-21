@@ -43,7 +43,10 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
     if (mounted) setState(() => _canContact = ok);
   }
 
-  void _showLocked() {
+  Future<void> _showLocked() async {
+    // Owner may have accepted just now - re-check before showing the lock hint.
+    await _loadAccess();
+    if (!mounted || _canContact) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Chat & call unlock once the owner accepts your visit request.')),
     );

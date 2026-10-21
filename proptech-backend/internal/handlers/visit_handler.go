@@ -231,7 +231,7 @@ func (h *VisitHandler) notifyVisitStatus(c *gin.Context, visit *models.Visit, ac
 	}
 	if visit.Status == "confirmed" {
 		notify.SendRoute(visit.VisitorID, "visit", title,
-			fmt.Sprintf("Your visit to %s is confirmed. Open Visit Requests to see your visit OTP and share it with the owner at the visit.", visit.PropertyTitle), "/visits")
+			fmt.Sprintf("Your visit to %s is confirmed. After you visit the property, your visit OTP will appear in Visit Requests - share it with the owner.", visit.PropertyTitle), "/visits")
 		return
 	}
 	notify.Send(visit.VisitorID, "visit", title,
@@ -409,6 +409,8 @@ func (h *VisitHandler) VerifyOTP(c *gin.Context) {
 
 	if err := h.repo.VerifyOTP(c.Request.Context(), id, req.Code); err != nil {
 		switch {
+		case errors.Is(err, repository.ErrVisitOTPTooEarly):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "too_early"})
 		case errors.Is(err, repository.ErrVisitOTPInvalid):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "otp_invalid"})
 		case errors.Is(err, repository.ErrVisitOTPLocked):

@@ -139,15 +139,17 @@ func (r *VisitRepository) Reschedule(ctx context.Context, id string, scheduledAt
 	return r.GetByID(ctx, id)
 }
 
-// CanContact: true once a visit between the two users is confirmed/completed.
-func (r *VisitRepository) CanContact(ctx context.Context, a, b string) (bool, error) {
-	return VisitAccepted(ctx, r.db, a, b)
+// CanContact: is chat/call from `me` to `peer` unlocked? Always true for the
+// owner (towards their buyers); for the buyer only once the visit is accepted.
+func (r *VisitRepository) CanContact(ctx context.Context, me, peer string) (bool, error) {
+	return ContactAllowed(ctx, r.db, me, peer)
 }
 
 // ---- Visit OTP --------------------------------------------------------
 
 var (
 	ErrVisitNotConfirmed = errors.New("this visit is not confirmed yet")
+	ErrVisitOTPTooEarly  = errors.New("the visit time has not come yet - the OTP unlocks after the visitor has visited")
 	ErrVisitOTPInvalid   = errors.New("incorrect OTP")
 	ErrVisitOTPExpired   = errors.New("this OTP has expired - the visit needs to be rescheduled")
 	ErrVisitOTPNotReady  = errors.New("the visitor has not received an OTP yet - ask them to open Visit Requests in the app")
@@ -189,11 +191,19 @@ func (r *VisitRepository) IssueOTP(ctx context.Context, id string, scheduledAt t
 func (r *VisitRepository) AttachOTPs(ctx context.Context, visits []models.Visit) error {
 	index := map[string]int{}
 	ids := []string{}
+	now := time.Now()
 	for i, v := range visits {
-		if v.Status == "confirmed" && !v.OTPVerified {
-			index[v.ID] = i
-			ids = append(ids, v.ID)
+		if v.Status != "confirmed" || v.OTPVerified {
+			continue
 		}
+		if now.Before(v.ScheduledAt) {
+			// Hidden until the visit time: the OTP appears only after the
+			// buyer has actually visited the property.
+			visits[i].OTPPending = true
+			continue
+		}
+		index[v.ID] = i
+		ids = append(ids, v.ID)
 	}
 	if len(ids) == 0 {
 		return nil
@@ -263,6 +273,9 @@ func (r *VisitRepository) VerifyOTP(ctx context.Context, id, code string) error 
 	}
 	if status != "confirmed" {
 		return ErrVisitNotConfirmed
+	}
+	if time.Now().Before(scheduledAt) {
+		return ErrVisitOTPTooEarly
 	}
 	if stored == nil || *stored == "" {
 		return ErrVisitOTPNotReady

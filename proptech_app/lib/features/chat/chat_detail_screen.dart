@@ -49,7 +49,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _loadOtherUser();
     _loadAccess();
     _loadThread();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _loadThread(silent: true));
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _loadThread(silent: true);
+      // Buyer: unlock automatically as soon as the owner accepts the visit.
+      if (!_canContact) _loadAccess();
+    });
   }
 
   @override

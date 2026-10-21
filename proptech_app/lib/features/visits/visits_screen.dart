@@ -390,7 +390,29 @@ class _VisitCard extends StatelessWidget {
   }
 
   /// Buyer: the OTP to tell the owner at the visit (proves who they are).
-  Widget _otpSection() {
+  Widget _otpSection(BuildContext context) {
+    if (visit.otpPending) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.sm + 4),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.lock_clock_outlined, size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Your visit OTP will appear here after you visit the property (from ${_dateTime(context)}). Share it with the owner then.',
+                style: AppTextStyles.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     if (visit.otpCode.isEmpty) {
       return Text(
         'Your visit OTP is not available (expired). Reschedule the visit to get a new one.',
@@ -414,7 +436,7 @@ class _VisitCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tell this OTP to the owner when you meet at the property. Don\'t share it before the visit.',
+            'Tell this OTP to the owner to confirm that you visited the property.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall,
           ),
@@ -541,7 +563,7 @@ class _VisitCard extends StatelessWidget {
           ),
           if (!isOwner && visit.status == VisitStatus.confirmed) ...[
             const SizedBox(height: AppSpacing.sm),
-            _otpSection(),
+            _otpSection(context),
           ],
           if (visit.status == VisitStatus.completed) ...[
             const SizedBox(height: AppSpacing.sm),

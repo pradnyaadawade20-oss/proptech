@@ -120,7 +120,8 @@ func (r *MessageRepository) MarkRead(ctx context.Context, userID string, otherUs
 }
 
 
-// CanChat: chat is allowed only after the owner accepted a visit request.
-func (r *MessageRepository) CanChat(ctx context.Context, a, b string) (bool, error) {
-	return VisitAccepted(ctx, r.db, a, b)
+// CanChat: the owner can always message their buyers; a buyer can message the
+// owner only after the owner accepted a visit request.
+func (r *MessageRepository) CanChat(ctx context.Context, sender, other string) (bool, error) {
+	return ContactAllowed(ctx, r.db, sender, other)
 }

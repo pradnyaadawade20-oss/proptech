@@ -22,6 +22,9 @@ class Visit {
   final String otpCode;
   final bool otpVerified;
 
+  /// Confirmed, but the OTP stays hidden until the visit time has come.
+  final bool otpPending;
+
   const Visit({
     required this.id,
     this.propertyId = '',
@@ -35,6 +38,7 @@ class Visit {
     this.rescheduleCount = 0,
     this.otpCode = '',
     this.otpVerified = false,
+    this.otpPending = false,
   });
 
   bool get hasFeedback => feedbackInterest.isNotEmpty;
@@ -62,6 +66,7 @@ class Visit {
       rescheduleCount: (json['reschedule_count'] as num?)?.toInt() ?? 0,
       otpCode: json['otp_code'] as String? ?? '',
       otpVerified: json['otp_verified'] as bool? ?? false,
+      otpPending: json['otp_pending'] as bool? ?? false,
     );
   }
 }
