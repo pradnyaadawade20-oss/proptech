@@ -889,9 +889,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             controller: _depositController,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
               labelText: 'Security Deposit (₹)',
-              prefixIcon: Icon(Icons.currency_rupee),
+              helperText: _priceHelper(_depositController),
+              prefixIcon: const Icon(Icons.currency_rupee),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -900,8 +902,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           controller: _maintenanceController,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: _isRent ? 'Maintenance (₹/month, if extra)' : 'Maintenance (₹/month, optional)',
+            helperText: _priceHelper(_maintenanceController),
             prefixIcon: const Icon(Icons.currency_rupee),
           ),
         ),
@@ -1474,9 +1478,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return m == null ? 0 : double.tryParse(m.group(0)!) ?? 0;
   }
 
-  /// Live preview under the price field, e.g. "= ₹50,00,000 (50 Lakh)".
-  String? _priceHelper() {
-    final v = _parseAmount(_priceController.text);
+  /// Live preview under the price / deposit / maintenance fields, e.g. "= ₹50,00,000 (50 Lakh)".
+  String? _priceHelper([TextEditingController? controller]) {
+    final v = _parseAmount((controller ?? _priceController).text);
     if (v <= 0) return null;
     final digits = v.round().toString();
     var grouped = digits;

@@ -102,6 +102,11 @@ class Agreement {
   final int? noticePeriodDays;
   final int? rentDueDay;
 
+  /// Substitute payer, filled by the tenant before signing ('' when not given).
+  final String substituteName;
+  final String substitutePhone;
+  final String substituteRelation;
+
   /// The broker who introduced the deal (broker listings only, '' otherwise). Not a signer.
   final String agentName;
 
@@ -144,6 +149,9 @@ class Agreement {
     this.noticePeriodDays,
     this.rentDueDay,
     this.agentName = '',
+    this.substituteName = '',
+    this.substitutePhone = '',
+    this.substituteRelation = '',
     this.ownerSignatureType,
     this.ownerSignatureData,
     this.ownerSignedAt,
@@ -160,6 +168,7 @@ class Agreement {
 
   bool get ownerHasSigned => ownerSignedAt != null;
   bool get tenantHasSigned => tenantSignedAt != null;
+  bool get hasSubstitute => substituteName.isNotEmpty;
   bool get hasDraft => terms != null && terms!.isNotEmpty;
 
   /// Readable reference like RA-2026-1A2B3C (built from the creation year + id).
@@ -207,6 +216,9 @@ class Agreement {
       noticePeriodDays: (json['notice_period_days'] as num?)?.toInt(),
       rentDueDay: (json['rent_due_day'] as num?)?.toInt(),
       agentName: json['agent_name'] as String? ?? '',
+      substituteName: json['substitute_name'] as String? ?? '',
+      substitutePhone: json['substitute_phone'] as String? ?? '',
+      substituteRelation: json['substitute_relation'] as String? ?? '',
       ownerSignatureType: parseSigType(json['owner_signature_type'] as String?),
       ownerSignatureData: json['owner_signature_data'] as String?,
       ownerSignedAt: json['owner_signed_at'] != null ? DateTime.tryParse(json['owner_signed_at']) : null,

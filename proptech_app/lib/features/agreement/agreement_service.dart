@@ -123,6 +123,25 @@ class AgreementService {
     }
   }
 
+  /// Tenant adds (or clears, with empty values) the substitute payer before signing.
+  Future<Agreement> updateSubstitute({
+    required String id,
+    required String name,
+    required String phone,
+    required String relation,
+  }) async {
+    try {
+      final response = await _dio.put('/api/agreements/$id/substitute', data: {
+        'name': name,
+        'phone': phone,
+        'relation': relation,
+      });
+      return Agreement.fromJson(response.data['agreement'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   /// Step 3: either party signs — draw (base64 PNG) or type (name text).
   Future<Agreement> sign({
     required String id,

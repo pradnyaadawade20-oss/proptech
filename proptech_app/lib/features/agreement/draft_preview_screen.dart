@@ -87,6 +87,10 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
   TextEditingController? _dueDayController;
   TextEditingController? _termsController; // "additional terms"
   DateTime? _startDate;
+  TextEditingController? _subNameController;
+  TextEditingController? _subPhoneController;
+  TextEditingController? _subRelationController;
+  String _durationUnit = 'Months'; // 'Months' or 'Years'
 
   final Set<int> _expanded = {};
 
@@ -111,10 +115,23 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
   bool get _waitingForOwner => !_isOwner && _agreement?.status == AgreementStatus.requested;
   bool get _hasSignedAlready => _isOwner ? (_agreement?.ownerHasSigned ?? false) : (_agreement?.tenantHasSigned ?? false);
 
+  // The tenant can add a substitute payer until anyone has signed.
+  bool get _canEditSubstitute =>
+      !_isOwner &&
+      !_isClosed &&
+      !_waitingForOwner &&
+      !(_agreement?.ownerHasSigned ?? false) &&
+      !(_agreement?.tenantHasSigned ?? false) &&
+      const {AgreementStatus.draftReady, AgreementStatus.awaitingSignatures}.contains(_agreement?.status);
+
   // ---- live values (always read from the controllers, which start from the saved agreement)
   double? get _rent => double.tryParse(_rentController?.text.trim() ?? '');
   double? get _deposit => double.tryParse(_depositController?.text.trim() ?? '');
-  int? get _months => int.tryParse(_durationController?.text.trim() ?? '');
+  int? get _months {
+    final n = int.tryParse(_durationController?.text.trim() ?? '');
+    if (n == null) return null;
+    return _durationUnit == 'Years' ? n * 12 : n;
+  }
   int? get _notice => int.tryParse(_noticeController?.text.trim() ?? '');
   int? get _dueDay => int.tryParse(_dueDayController?.text.trim() ?? '');
   String get _address => _addressController?.text.trim() ?? '';
@@ -146,6 +163,9 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
   }
 
   void _disposeControllers() {
+    _subNameController?.dispose();
+    _subPhoneController?.dispose();
+    _subRelationController?.dispose();
     _addressController?.dispose();
     _rentController?.dispose();
     _depositController?.dispose();
@@ -172,9 +192,19 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         _addressController = _ctl(agreement.propertyAddress ?? '');
         _rentController = _ctl(agreement.monthlyRent?.toStringAsFixed(0) ?? '');
         _depositController = _ctl(agreement.securityDeposit?.toStringAsFixed(0) ?? '');
-        _durationController = _ctl(agreement.durationMonths?.toString() ?? '11');
+        final dm = agreement.durationMonths ?? 11;
+        if (dm >= 12 && dm % 12 == 0) {
+          _durationUnit = 'Years';
+          _durationController = _ctl((dm ~/ 12).toString());
+        } else {
+          _durationUnit = 'Months';
+          _durationController = _ctl(dm.toString());
+        }
         _noticeController = _ctl((agreement.noticePeriodDays ?? 30).toString());
         _dueDayController = _ctl((agreement.rentDueDay ?? 5).toString());
+        _subNameController = TextEditingController(text: agreement.substituteName);
+        _subPhoneController = TextEditingController(text: agreement.substitutePhone);
+        _subRelationController = TextEditingController(text: agreement.substituteRelation);
         final t = agreement.terms;
         _termsController = _ctl((t == null || t == _kNoExtraTerms) ? '' : t);
         _startDate = agreement.startDate ?? DateTime(now.year, now.month + 1, 1);
@@ -225,7 +255,39 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
     return false;
   }
 
+  /// Saves the tenant's substitute details (if the tenant can still edit them).
+  /// Returns false when the details are incomplete or the server refused.
+  Future<bool> _saveSubstitute() async {
+    if (!_canEditSubstitute) return true;
+    final name = _subNameController?.text.trim() ?? '';
+    final phone = (_subPhoneController?.text ?? '').replaceAll(RegExp(r'\D'), '');
+    final relation = _subRelationController?.text.trim() ?? '';
+    final a = _agreement!;
+    final untouched = name == a.substituteName && phone == a.substitutePhone && relation == a.substituteRelation;
+    if (untouched) return true;
+    if ((name.isNotEmpty || phone.isNotEmpty) && (name.length < 2 || phone.length < 10)) {
+      _toast('Enter the substitute\'s name and a 10-digit mobile number, or leave both empty.');
+      return false;
+    }
+    try {
+      final updated = await AgreementService.instance.updateSubstitute(
+        id: widget.agreementId,
+        name: name,
+        phone: phone,
+        relation: relation,
+      );
+      if (!mounted) return false;
+      setState(() => _agreement = updated);
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      _toast('Could not save substitute: ${e.toString().replaceFirst('Exception: ', '')}');
+      return false;
+    }
+  }
+
   Future<void> _openSignatureScreen() async {
+    if (!await _saveSubstitute()) return;
     if (!await _checkKyc()) return;
     if (!mounted) return;
     final result = await Navigator.of(context).push<Map<String, String>>(
@@ -470,6 +532,7 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
                               _headerCard(),
                               if (_isDraftEditable) _editCard(),
                               _summaryCard(),
+                              if (_canEditSubstitute) _substituteEditCard() else if (_agreement!.hasSubstitute) _substituteViewCard(),
                               _keyTermsCard(),
                               _signatureCard(),
                             ],
@@ -521,12 +584,15 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.primary),
       );
 
-  InputDecoration _dec({String? hint, String? prefix}) {
+  InputDecoration _dec({String? hint, String? prefix, String? helper}) {
     const side = BorderSide(color: AppColors.border);
     return InputDecoration(
       hintText: hint,
       hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
       prefixText: prefix,
+      helperText: helper,
+      helperMaxLines: 2,
+      helperStyle: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
       isDense: true,
       counterText: '',
       filled: true,
@@ -762,12 +828,72 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         ],
       );
 
-  Widget _numField(TextEditingController c, {String? prefix, String? hint}) => TextField(
+  Widget _numField(TextEditingController c, {String? prefix, String? hint, bool showAmount = false}) => TextField(
         controller: c,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         style: GoogleFonts.inter(fontSize: 14),
-        decoration: _dec(prefix: prefix, hint: hint),
+        decoration: _dec(prefix: prefix, hint: hint, helper: showAmount ? _amountHelper(c) : null),
+      );
+
+  /// Live preview under money fields, e.g. "= ₹1,50,000 (1.5 Lakh)".
+  String? _amountHelper(TextEditingController c) {
+    final v = double.tryParse(c.text.trim()) ?? 0;
+    if (v <= 0) return null;
+    final digits = v.round().toString();
+    var grouped = digits;
+    if (digits.length > 3) {
+      final last3 = digits.substring(digits.length - 3);
+      var rest = digits.substring(0, digits.length - 3);
+      final parts = <String>[];
+      while (rest.length > 2) {
+        parts.insert(0, rest.substring(rest.length - 2));
+        rest = rest.substring(0, rest.length - 2);
+      }
+      if (rest.isNotEmpty) parts.insert(0, rest);
+      grouped = '${parts.join(',')},$last3';
+    }
+    String trim(double x) => x == x.roundToDouble() ? x.toStringAsFixed(0) : x.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+    var words = '';
+    if (v >= 10000000) {
+      words = ' (${trim(v / 10000000)} Crore)';
+    } else if (v >= 100000) {
+      words = ' (${trim(v / 100000)} Lakh)';
+    }
+    return '= ₹$grouped$words';
+  }
+
+  Widget _durationField() => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 4, child: _numField(_durationController!)),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 5,
+            child: DropdownButtonFormField<String>(
+              initialValue: _durationUnit,
+              isExpanded: true,
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
+              decoration: _dec(),
+              items: const [
+                DropdownMenuItem(value: 'Months', child: Text('Months')),
+                DropdownMenuItem(value: 'Years', child: Text('Years')),
+              ],
+              onChanged: (v) {
+                if (v == null || v == _durationUnit) return;
+                final m = _months;
+                setState(() {
+                  _durationUnit = v;
+                  // keep the same total length when it converts cleanly
+                  if (m != null) {
+                    if (v == 'Years' && m % 12 == 0) _durationController!.text = (m ~/ 12).toString();
+                    if (v == 'Months') _durationController!.text = m.toString();
+                  }
+                });
+              },
+            ),
+          ),
+        ],
       );
 
   Widget _dateField() => InkWell(
@@ -796,16 +922,16 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _labeled('Monthly Rent (₹)', _numField(_rentController!, prefix: '₹ '))),
+                Expanded(child: _labeled('Monthly Rent (₹)', _numField(_rentController!, prefix: '₹ ', showAmount: true))),
                 const SizedBox(width: 10),
-                Expanded(child: _labeled('Security Deposit (₹)', _numField(_depositController!, prefix: '₹ '))),
+                Expanded(child: _labeled('Security Deposit (₹)', _numField(_depositController!, prefix: '₹ ', showAmount: true))),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _labeled('Duration (months)', _numField(_durationController!))),
+                Expanded(child: _labeled('Duration', _durationField())),
                 const SizedBox(width: 10),
                 Expanded(child: _labeled('Notice period (days)', _numField(_noticeController!))),
               ],
@@ -867,6 +993,97 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
           ],
         ),
       );
+
+  Widget _substituteEditCard() => _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle('Substitute payer (optional)'),
+            const SizedBox(height: 4),
+            Text(
+              'If you are ever unavailable, who will pay the rent on your behalf? This is written into the agreement and the owner will see it before signing.',
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 14),
+            _labeled(
+              'Full name',
+              TextField(
+                controller: _subNameController,
+                textCapitalization: TextCapitalization.words,
+                style: GoogleFonts.inter(fontSize: 14),
+                decoration: _dec(hint: 'e.g. Rahul Sharma'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _labeled(
+                    'Mobile number',
+                    TextField(
+                      controller: _subPhoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')), LengthLimitingTextInputFormatter(14)],
+                      style: GoogleFonts.inter(fontSize: 14),
+                      decoration: _dec(hint: '10-digit number'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _labeled(
+                    'Relation',
+                    TextField(
+                      controller: _subRelationController,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.inter(fontSize: 14),
+                      decoration: _dec(hint: 'e.g. Brother'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+  Widget _substituteViewCard() {
+    final a = _agreement!;
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle('Substitute payer'),
+          const SizedBox(height: 4),
+          Text(
+            'If the tenant is unavailable, the rent will be paid by:',
+            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            const Icon(Icons.person_outline, size: 20, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(child: Text(a.substituteName, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600))),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.phone_outlined, size: 20, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(a.substitutePhone, style: GoogleFonts.inter(fontSize: 14)),
+          ]),
+          if (a.substituteRelation.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              const Icon(Icons.group_outlined, size: 20, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Text(a.substituteRelation, style: GoogleFonts.inter(fontSize: 14)),
+            ]),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _summaryCard() {
     final months = _months;
