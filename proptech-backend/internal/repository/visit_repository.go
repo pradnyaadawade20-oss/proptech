@@ -140,7 +140,7 @@ func (r *VisitRepository) Reschedule(ctx context.Context, id string, scheduledAt
 }
 
 // CanContact: is chat/call from `me` to `peer` unlocked? Always true for the
-// owner (towards their buyers); for the buyer only once the visit is accepted.
+// tenant; for the owner only once they have received a visit request.
 func (r *VisitRepository) CanContact(ctx context.Context, me, peer string) (bool, error) {
 	return ContactAllowed(ctx, r.db, me, peer)
 }

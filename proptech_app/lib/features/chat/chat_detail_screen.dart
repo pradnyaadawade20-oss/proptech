@@ -34,7 +34,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   UserProfile? _other;
   bool _loading = true;
   bool _hasText = false;
-  bool _canContact = true; // flips false if no accepted visit (checked in initState)
+  bool _canContact = true; // flips false for an owner with no visit request yet (tenant is never locked)
   int _pendingCount = 0; // messages currently being sent
   String? _error;
   Timer? _timer;
@@ -51,7 +51,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _loadThread();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) {
       _loadThread(silent: true);
-      // Buyer: unlock automatically as soon as the owner accepts the visit.
+      // Owner: unlock automatically as soon as the first visit request arrives.
       if (!_canContact) _loadAccess();
     });
   }
@@ -222,7 +222,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             onPressed: _canContact
                 ? _callOther
                 : () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Call unlocks once the owner accepts the visit request.')),
+                      const SnackBar(content: Text('Call unlocks once you receive your first visit request.')),
                     ),
           ),
         ],
@@ -250,7 +250,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Chat & call unlock once the owner accepts your visit request.',
+                  'Chat & call unlock once you receive your first visit request.',
                   style: AppTextStyles.bodySmall,
                 ),
               ),

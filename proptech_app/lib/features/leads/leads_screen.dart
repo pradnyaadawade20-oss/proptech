@@ -5,6 +5,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../../core/utils/phone_mask.dart';
 import '../call/call_service.dart';
+import '../visits/visit_service.dart';
 import 'lead.dart';
 import 'lead_service.dart';
 
@@ -113,13 +114,28 @@ class _LeadsScreenState extends State<LeadsScreen> with SingleTickerProviderStat
     }
   }
 
+  static const _lockedMsg = 'Chat & call unlock once you receive your first visit request.';
+
+  /// Owner side is locked until the owner has received at least one visit request.
+  Future<bool> _ownerUnlocked(Lead lead) async {
+    final ok = await VisitService.instance.canContact(lead.buyerId);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(_lockedMsg)));
+    }
+    return ok;
+  }
+
   Future<void> _call(Lead lead) async {
+    if (!await _ownerUnlocked(lead)) return;
     // In-app (peer-to-peer) call - never opens the phone dialer.
+    if (!mounted) return;
     await CallService.dial(context, leadId: lead.id, peerName: lead.name);
     if (lead.status == 'new') _setStatus(lead, 'contacted');
   }
 
-  void _chat(Lead lead) {
+  Future<void> _chat(Lead lead) async {
+    if (!await _ownerUnlocked(lead)) return;
+    if (!mounted) return;
     context.push('/chats/${lead.buyerId}?propertyId=${lead.propertyId}');
     if (lead.status == 'new') _setStatus(lead, 'contacted');
   }

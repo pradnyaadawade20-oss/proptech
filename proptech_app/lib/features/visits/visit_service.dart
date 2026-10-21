@@ -44,7 +44,7 @@ class VisitService {
     }
   }
 
-  /// Chat / call with [peerId] unlock only after the owner accepted a visit.
+  /// Tenant side is always open; owner side unlocks after the first visit request.
   Future<bool> canContact(String peerId) async {
     try {
       final response = await _dio.get('/api/visits/access', queryParameters: {'peer_id': peerId});

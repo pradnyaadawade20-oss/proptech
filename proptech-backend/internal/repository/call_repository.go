@@ -130,14 +130,14 @@ func (r *CallRepository) Create(ctx context.Context, leadID, callerID string) (*
 		return nil, ErrCallForbidden
 	}
 
-	// Owner can always call their buyer; a buyer can call only after the
-	// owner accepted a visit request.
+	// Tenant can always call the owner; the owner can call only after
+	// receiving their first visit request.
 	accepted, err := ContactAllowed(ctx, r.db, callerID, calleeID)
 	if err != nil {
 		return nil, err
 	}
 	if !accepted {
-		return nil, ErrVisitNotAccepted
+		return nil, ErrOwnerLocked
 	}
 
 	var busy bool

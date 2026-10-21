@@ -8,7 +8,6 @@ import '../profile/profile_service.dart';
 import '../properties/property.dart';
 import '../../core/utils/phone_mask.dart';
 import '../call/call_service.dart';
-import '../visits/visit_service.dart';
 import 'lead.dart';
 import 'lead_service.dart';
 
@@ -42,20 +41,12 @@ class _ContactOwnerSheetState extends State<_ContactOwnerSheet> {
   bool _sending = false;
   String? _error;
   LeadResult? _result;
-  bool _canContact = false; // chat/call unlock after owner accepts a visit
 
   @override
   void initState() {
     super.initState();
     _message = TextEditingController(text: "Hi, I'm interested in \"${widget.property.title}\". Is it still available?");
     _prefill();
-    _loadAccess();
-  }
-
-  Future<void> _loadAccess() async {
-    if (widget.property.ownerId.isEmpty) return;
-    final ok = await VisitService.instance.canContact(widget.property.ownerId);
-    if (mounted) setState(() => _canContact = ok);
   }
 
   /// Pre-fill name/phone from the logged-in user's profile.
@@ -197,42 +188,20 @@ class _ContactOwnerSheetState extends State<_ContactOwnerSheet> {
           Text(maskPhone(r.ownerPhone), style: AppTextStyles.h3),
         ],
         const SizedBox(height: AppSpacing.md),
-        if (!_canContact)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.lock_outline, size: 18, color: AppColors.warning),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Chat & Call unlock once the owner accepts your visit request. Book a visit from the property page.',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (!_canContact) const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: _canContact ? () => _call(r.ownerName) : null,
-                icon: Icon(_canContact ? Icons.call_outlined : Icons.lock_outline, size: 20),
+                onPressed: () => _call(r.ownerName),
+                icon: const Icon(Icons.call_outlined, size: 20),
                 label: const Text('Call'),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: _canContact ? _chat : null,
-                icon: Icon(_canContact ? Icons.chat_bubble_outline : Icons.lock_outline, size: 20),
+                onPressed: _chat,
+                icon: const Icon(Icons.chat_bubble_outline, size: 20),
                 label: const Text('Chat'),
               ),
             ),

@@ -63,7 +63,7 @@ func (h *VisitHandler) CreateVisit(c *gin.Context) {
 }
 
 // GET /api/visits/access?peer_id=<uuid>
-// Tells the app whether chat/call with that user is unlocked (visit accepted).
+// Tells the app whether chat/call with that user is unlocked for the caller.
 func (h *VisitHandler) Access(c *gin.Context) {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
