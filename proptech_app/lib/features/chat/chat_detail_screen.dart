@@ -7,6 +7,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 import '../profile/profile_service.dart';
+import '../visits/visit_service.dart';
 import 'chat_avatar.dart';
 import 'chat_message.dart';
 import 'chat_service.dart';
@@ -33,6 +34,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   UserProfile? _other;
   bool _loading = true;
   bool _hasText = false;
+  bool _canContact = true; // flips false if no accepted visit (checked in initState)
   int _pendingCount = 0; // messages currently being sent
   String? _error;
   Timer? _timer;
@@ -45,6 +47,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       if (has != _hasText) setState(() => _hasText = has);
     });
     _loadOtherUser();
+    _loadAccess();
     _loadThread();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _loadThread(silent: true));
   }
@@ -55,6 +58,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAccess() async {
+    final ok = await VisitService.instance.canContact(widget.chatId);
+    if (mounted) setState(() => _canContact = ok);
   }
 
   Future<void> _loadOtherUser() async {
@@ -206,8 +214,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         actions: [
           IconButton(
             tooltip: 'Call',
-            icon: const Icon(Icons.call_outlined),
-            onPressed: _callOther,
+            icon: Icon(_canContact ? Icons.call_outlined : Icons.lock_outline),
+            onPressed: _canContact
+                ? _callOther
+                : () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Call unlocks once the owner accepts the visit request.')),
+                    ),
           ),
         ],
       ),
@@ -221,6 +233,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _buildInputBar() {
+    if (!_canContact) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          color: AppColors.warning.withValues(alpha: 0.12),
+          child: Row(
+            children: [
+              const Icon(Icons.lock_outline, size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Chat & call unlock once the owner accepts your visit request.',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return SafeArea(
       top: false,
       child: Padding(

@@ -133,3 +133,8 @@ func (r *VisitRepository) Reschedule(ctx context.Context, id string, scheduledAt
 	}
 	return r.GetByID(ctx, id)
 }
+
+// CanContact: true once a visit between the two users is confirmed/completed.
+func (r *VisitRepository) CanContact(ctx context.Context, a, b string) (bool, error) {
+	return VisitAccepted(ctx, r.db, a, b)
+}

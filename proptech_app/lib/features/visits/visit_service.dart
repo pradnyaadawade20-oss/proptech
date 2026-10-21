@@ -44,6 +44,16 @@ class VisitService {
     }
   }
 
+  /// Chat / call with [peerId] unlock only after the owner accepted a visit.
+  Future<bool> canContact(String peerId) async {
+    try {
+      final response = await _dio.get('/api/visits/access', queryParameters: {'peer_id': peerId});
+      return response.data['allowed'] == true;
+    } on DioException {
+      return false;
+    }
+  }
+
   /// Visitor's feedback after a completed visit.
   /// [interest] = 'interested' | 'maybe' | 'not_interested'.
   Future<Visit> submitFeedback(String id, {required String interest, String note = ''}) async {

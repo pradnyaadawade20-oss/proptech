@@ -51,6 +51,17 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
+	// Chat unlocks only after the owner accepted a visit request.
+	allowed, err := h.repo.CanChat(c.Request.Context(), userID, req.ReceiverID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrVisitNotAccepted.Error(), "code": "visit_not_accepted"})
+		return
+	}
+
 	message, err := h.repo.Send(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

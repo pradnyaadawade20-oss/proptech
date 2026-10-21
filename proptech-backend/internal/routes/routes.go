@@ -60,6 +60,7 @@ func RegisterVisitRoutes(router *gin.Engine, h *handlers.VisitHandler) {
 	visits.Use(middleware.AuthRequired())
 	{
 		visits.GET("", h.GetVisits)
+		visits.GET("/access", h.Access)
 		visits.POST("", h.CreateVisit)
 		visits.PATCH("/:id/status", h.UpdateVisitStatus)
 		visits.PATCH("/:id/reschedule", h.RescheduleVisit)

@@ -167,6 +167,8 @@ func writeCallError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repository.ErrCallForbidden):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "forbidden"})
+	case errors.Is(err, repository.ErrVisitNotAccepted):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "code": "visit_not_accepted"})
 	case errors.Is(err, repository.ErrCallBusy):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "busy"})
 	case errors.Is(err, repository.ErrCallNotFound):

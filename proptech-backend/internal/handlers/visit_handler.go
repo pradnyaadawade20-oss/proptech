@@ -61,6 +61,27 @@ func (h *VisitHandler) CreateVisit(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"visit": visit})
 }
 
+// GET /api/visits/access?peer_id=<uuid>
+// Tells the app whether chat/call with that user is unlocked (visit accepted).
+func (h *VisitHandler) Access(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	peer := c.Query("peer_id")
+	if peer == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "peer_id is required"})
+		return
+	}
+	ok, err := h.repo.CanContact(c.Request.Context(), userID, peer)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"allowed": ok})
+}
+
 // GET /api/visits            -> visits I booked (as visitor)
 // GET /api/visits?as=owner   -> visits on properties I own
 func (h *VisitHandler) GetVisits(c *gin.Context) {

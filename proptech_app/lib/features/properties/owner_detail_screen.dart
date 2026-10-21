@@ -7,6 +7,7 @@ import '../../app/theme/app_text_styles.dart';
 import '../../core/api/token_store.dart';
 import '../chat/chat_avatar.dart';
 import '../leads/lead_service.dart';
+import '../visits/visit_service.dart';
 import '../profile/profile_service.dart';
 import 'property_service.dart';
 import 'property.dart';
@@ -25,6 +26,7 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
   UserProfile? _owner;
   int? _listedCount;
   bool _loading = true;
+  bool _canContact = false; // true once owner accepted a visit request
 
   Property get property => widget.property;
 
@@ -32,6 +34,19 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
   void initState() {
     super.initState();
     _loadOwner();
+    _loadAccess();
+  }
+
+  Future<void> _loadAccess() async {
+    if (property.ownerId.isEmpty) return;
+    final ok = await VisitService.instance.canContact(property.ownerId);
+    if (mounted) setState(() => _canContact = ok);
+  }
+
+  void _showLocked() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Chat & call unlock once the owner accepts your visit request.')),
+    );
   }
 
   Future<void> _loadOwner() async {
@@ -296,20 +311,20 @@ class _OwnerDetailScreenState extends State<OwnerDetailScreen> {
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary, width: 1.5),
                 ),
-                icon: const Icon(Icons.phone_outlined),
+                icon: Icon(_canContact ? Icons.phone_outlined : Icons.lock_outline),
                 label: Text(
                   'Call',
                   style: AppTextStyles.button.copyWith(color: AppColors.primary),
                 ),
-                onPressed: property.ownerId.isEmpty ? null : () => _callOwner(ownerName),
+                onPressed: property.ownerId.isEmpty ? null : (_canContact ? () => _callOwner(ownerName) : _showLocked),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.chat_bubble_outline),
+                icon: Icon(_canContact ? Icons.chat_bubble_outline : Icons.lock_outline),
                 label: const Text('Message'),
-                onPressed: property.ownerId.isEmpty ? null : _messageOwner,
+                onPressed: property.ownerId.isEmpty ? null : (_canContact ? _messageOwner : _showLocked),
               ),
             ),
           ],
