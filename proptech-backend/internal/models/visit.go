@@ -21,6 +21,11 @@ type Visit struct {
 	// How many times this visit was rescheduled (and when last).
 	RescheduleCount int        `json:"reschedule_count"`
 	RescheduledAt   *time.Time `json:"rescheduled_at"`
+
+	// Visit OTP. OTPCode is only ever filled for the visitor (buyer) in
+	// GET /api/visits - never for the owner. OTPVerified = owner entered it.
+	OTPCode     string `json:"otp_code,omitempty"`
+	OTPVerified bool   `json:"otp_verified"`
 }
 
 type CreateVisitRequest struct {
@@ -40,4 +45,8 @@ type VisitFeedbackRequest struct {
 
 type RescheduleVisitRequest struct {
 	ScheduledAt time.Time `json:"scheduled_at" binding:"required"`
+}
+
+type VerifyVisitOTPRequest struct {
+	Code string `json:"code" binding:"required,len=6"`
 }

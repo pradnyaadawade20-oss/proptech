@@ -17,6 +17,11 @@ class Visit {
   /// How many times this visit was rescheduled.
   final int rescheduleCount;
 
+  /// 6-digit visit OTP. Only the visitor (buyer) receives it, once the owner
+  /// confirms the visit. The buyer tells it to the owner at the visit.
+  final String otpCode;
+  final bool otpVerified;
+
   const Visit({
     required this.id,
     this.propertyId = '',
@@ -28,6 +33,8 @@ class Visit {
     this.feedbackInterest = '',
     this.feedbackNote = '',
     this.rescheduleCount = 0,
+    this.otpCode = '',
+    this.otpVerified = false,
   });
 
   bool get hasFeedback => feedbackInterest.isNotEmpty;
@@ -53,6 +60,8 @@ class Visit {
       feedbackInterest: json['feedback_interest'] as String? ?? '',
       feedbackNote: json['feedback_note'] as String? ?? '',
       rescheduleCount: (json['reschedule_count'] as num?)?.toInt() ?? 0,
+      otpCode: json['otp_code'] as String? ?? '',
+      otpVerified: json['otp_verified'] as bool? ?? false,
     );
   }
 }

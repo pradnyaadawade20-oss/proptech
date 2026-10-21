@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -145,6 +146,79 @@ class _VisitsScreenState extends State<VisitsScreen> {
     }
   }
 
+  /// Owner types the OTP the buyer shows at the visit.
+  Future<void> _verifyOtp(Visit visit) async {
+    final controller = TextEditingController();
+    String? error;
+    bool loading = false;
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Verify visitor'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ask ${visit.visitorName.isEmpty ? 'the visitor' : visit.visitorName} for the 6-digit OTP shown in their app.'),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: AppTextStyles.h3.copyWith(fontSize: 24, letterSpacing: 8),
+                decoration: InputDecoration(counterText: '', hintText: '------', errorText: error),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: loading
+                  ? null
+                  : () async {
+                      final code = controller.text.trim();
+                      if (code.length != 6) {
+                        setLocal(() => error = 'Enter the 6-digit OTP');
+                        return;
+                      }
+                      setLocal(() {
+                        loading = true;
+                        error = null;
+                      });
+                      try {
+                        await VisitService.instance.verifyOtp(visit.id, code);
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } catch (e) {
+                        setLocal(() {
+                          loading = false;
+                          error = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: loading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Verify'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (verified == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Visitor verified. Visit marked as completed.')),
+      );
+      await _refresh();
+    }
+  }
+
   Future<void> _giveFeedback(Visit visit) async {
     final sent = await showModalBottomSheet<bool>(
       context: context,
@@ -203,6 +277,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   onChangeStatus: (s) => _changeStatus(v, s),
                   onFeedback: () => _giveFeedback(v),
                   onReschedule: () => _reschedule(v),
+                  onVerifyOtp: () => _verifyOtp(v),
                 );
               },
             ),
@@ -220,6 +295,7 @@ class _VisitCard extends StatelessWidget {
   final ValueChanged<VisitStatus> onChangeStatus;
   final VoidCallback onFeedback;
   final VoidCallback onReschedule;
+  final VoidCallback onVerifyOtp;
   const _VisitCard({
     required this.visit,
     required this.isOwner,
@@ -227,6 +303,7 @@ class _VisitCard extends StatelessWidget {
     required this.onChangeStatus,
     required this.onFeedback,
     required this.onReschedule,
+    required this.onVerifyOtp,
   });
 
   Color _statusColor(VisitStatus status) {
@@ -295,9 +372,10 @@ class _VisitCard extends StatelessWidget {
           child: const Text('Cancel'),
         ),
         if (reschedule != null) reschedule,
-        ElevatedButton(
-          onPressed: busy ? null : () => onChangeStatus(VisitStatus.completed),
-          child: const Text('Mark completed'),
+        ElevatedButton.icon(
+          onPressed: busy ? null : onVerifyOtp,
+          icon: const Icon(Icons.verified_user_outlined, size: 18),
+          label: const Text('Verify OTP'),
         ),
       ];
     }
@@ -309,6 +387,40 @@ class _VisitCard extends StatelessWidget {
       ),
       if (reschedule != null) reschedule,
     ];
+  }
+
+  /// Buyer: the OTP to tell the owner at the visit (proves who they are).
+  Widget _otpSection() {
+    if (visit.otpCode.isEmpty) {
+      return Text(
+        'Your visit OTP is not available (expired). Reschedule the visit to get a new one.',
+        style: AppTextStyles.bodySmall,
+      );
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm + 4),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Column(
+        children: [
+          Text('Your visit OTP', style: AppTextStyles.caption),
+          const SizedBox(height: 4),
+          Text(
+            visit.otpCode,
+            style: AppTextStyles.h3.copyWith(fontSize: 28, letterSpacing: 8, color: AppColors.primary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tell this OTP to the owner when you meet at the property. Don\'t share it before the visit.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall,
+          ),
+        ],
+      ),
+    );
   }
 
   /// Visitor: give / edit feedback. Owner: sees what the visitor said.
@@ -427,6 +539,10 @@ class _VisitCard extends StatelessWidget {
               ),
             ],
           ),
+          if (!isOwner && visit.status == VisitStatus.confirmed) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _otpSection(),
+          ],
           if (visit.status == VisitStatus.completed) ...[
             const SizedBox(height: AppSpacing.sm),
             _feedbackSection(),

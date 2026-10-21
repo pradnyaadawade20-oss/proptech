@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -103,6 +104,13 @@ func (h *VisitHandler) GetVisits(c *gin.Context) {
 		return
 	}
 
+	// The OTP is shown only to the visitor (buyer) - never in the owner's list.
+	if c.Query("as") != "owner" {
+		if oerr := h.repo.AttachOTPs(c.Request.Context(), visits); oerr != nil {
+			log.Printf("visit otp attach failed: %v", oerr)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"visits": visits})
 }
 
@@ -124,16 +132,45 @@ func (h *VisitHandler) UpdateVisitStatus(c *gin.Context) {
 		return
 	}
 
+	current, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "visit not found"})
+		return
+	}
+	if current.Status == "completed" || current.Status == "cancelled" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "this visit is already " + current.Status})
+		return
+	}
+	switch {
+	case req.Status == "completed":
+		// A visit is completed only by the owner entering the buyer's OTP.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a visit is completed by verifying the buyer's OTP"})
+		return
+	case req.Status == "pending":
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a visit can't be moved back to pending"})
+		return
+	case req.Status == "confirmed":
+		// Only the property owner can accept a visit request.
+		if current.VisitorID == userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only the owner can accept a visit request"})
+			return
+		}
+		if current.Status != "pending" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "only a pending visit can be confirmed"})
+			return
+		}
+	}
+
 	visit, err := h.repo.UpdateStatus(c.Request.Context(), id, req.Status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Lead hook: completed visit -> lead becomes "visited" (forward only).
-	if visit.Status == "completed" {
-		if lerr := h.leads.Advance(c.Request.Context(), visit.PropertyID, visit.VisitorID, "visited"); lerr != nil {
-			log.Printf("lead advance (visited) failed: %v", lerr)
+	// Accepted -> issue the visit OTP (the buyer sees it in the app).
+	if visit.Status == "confirmed" {
+		if _, oerr := h.repo.IssueOTP(c.Request.Context(), visit.ID, visit.ScheduledAt); oerr != nil {
+			log.Printf("visit otp issue failed: %v", oerr)
 		}
 	}
 
@@ -190,6 +227,11 @@ func (h *VisitHandler) notifyVisitStatus(c *gin.Context, visit *models.Visit, ac
 			notify.Send(*property.OwnerID, "visit", title,
 				fmt.Sprintf("%s marked the visit to %s as %s", nameOr(visit.VisitorName, "The visitor"), visit.PropertyTitle, visit.Status))
 		}
+		return
+	}
+	if visit.Status == "confirmed" {
+		notify.SendRoute(visit.VisitorID, "visit", title,
+			fmt.Sprintf("Your visit to %s is confirmed. Open Visit Requests to see your visit OTP and share it with the owner at the visit.", visit.PropertyTitle), "/visits")
 		return
 	}
 	notify.Send(visit.VisitorID, "visit", title,
@@ -314,6 +356,13 @@ func (h *VisitHandler) RescheduleVisit(c *gin.Context) {
 		return
 	}
 
+	// Owner moved a confirmed visit -> new time needs a fresh OTP.
+	if newStatus == "confirmed" {
+		if _, oerr := h.repo.IssueOTP(c.Request.Context(), id, updated.ScheduledAt); oerr != nil {
+			log.Printf("visit otp issue (reschedule) failed: %v", oerr)
+		}
+	}
+
 	// Tell the other party.
 	when := updated.ScheduledAt.Local().Format("2 Jan, 3:04 PM")
 	if actorIsVisitor {
@@ -327,4 +376,68 @@ func (h *VisitHandler) RescheduleVisit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"visit": updated})
+}
+
+// POST /api/visits/:id/verify-otp   body: {"code":"123456"}
+// The property owner types the OTP the buyer shows/tells them at the visit.
+// A correct code proves it is the same buyer and completes the visit.
+func (h *VisitHandler) VerifyOTP(c *gin.Context) {
+	id := c.Param("id")
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	visit, err := h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "visit not found"})
+		return
+	}
+	property, perr := h.propertyRepo.GetByID(c.Request.Context(), visit.PropertyID)
+	if perr != nil || property.OwnerID == nil || *property.OwnerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the property owner can verify the visit OTP"})
+		return
+	}
+
+	var req models.VerifyVisitOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enter the 6-digit OTP"})
+		return
+	}
+
+	if err := h.repo.VerifyOTP(c.Request.Context(), id, req.Code); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrVisitOTPInvalid):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "otp_invalid"})
+		case errors.Is(err, repository.ErrVisitOTPLocked):
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "otp_locked"})
+		case errors.Is(err, repository.ErrVisitOTPExpired):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "otp_expired"})
+		case errors.Is(err, repository.ErrVisitOTPNotReady):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "otp_not_ready"})
+		case errors.Is(err, repository.ErrVisitNotConfirmed):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "not_confirmed"})
+		default:
+			log.Printf("visit otp verify failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not verify OTP"})
+		}
+		return
+	}
+
+	visit, err = h.repo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Lead hook: verified visit -> lead becomes "visited" (forward only).
+	if lerr := h.leads.Advance(c.Request.Context(), visit.PropertyID, visit.VisitorID, "visited"); lerr != nil {
+		log.Printf("lead advance (visited) failed: %v", lerr)
+	}
+	notify.SendRoute(visit.VisitorID, "visit", "Visit verified",
+		fmt.Sprintf("The owner verified your visit to %s. Please share your feedback.", visit.PropertyTitle), "/visits")
+
+	c.JSON(http.StatusOK, gin.H{"visit": visit})
 }

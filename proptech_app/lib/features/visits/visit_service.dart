@@ -54,6 +54,17 @@ class VisitService {
     }
   }
 
+  /// Owner enters the OTP the buyer gave at the visit. A correct code proves
+  /// it is the same buyer and marks the visit completed.
+  Future<Visit> verifyOtp(String id, String code) async {
+    try {
+      final response = await _dio.post('/api/visits/$id/verify-otp', data: {'code': code});
+      return Visit.fromJson(response.data['visit'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
   /// Visitor's feedback after a completed visit.
   /// [interest] = 'interested' | 'maybe' | 'not_interested'.
   Future<Visit> submitFeedback(String id, {required String interest, String note = ''}) async {
