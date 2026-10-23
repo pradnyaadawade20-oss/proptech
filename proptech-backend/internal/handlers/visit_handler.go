@@ -231,7 +231,7 @@ func (h *VisitHandler) notifyVisitStatus(c *gin.Context, visit *models.Visit, ac
 	}
 	if visit.Status == "confirmed" {
 		notify.SendRoute(visit.VisitorID, "visit", title,
-			fmt.Sprintf("Your visit to %s is confirmed. After you visit the property, your visit OTP will appear in Visit Requests - share it with the owner.", visit.PropertyTitle), "/visits")
+			fmt.Sprintf("Your visit to %s is confirmed. Your visit OTP is ready in Visit Requests - share it with the owner when you meet.", visit.PropertyTitle), "/visits")
 		return
 	}
 	notify.Send(visit.VisitorID, "visit", title,

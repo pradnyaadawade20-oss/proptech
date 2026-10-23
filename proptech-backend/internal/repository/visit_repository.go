@@ -186,20 +186,15 @@ func (r *VisitRepository) IssueOTP(ctx context.Context, id string, scheduledAt t
 }
 
 // AttachOTPs fills OTPCode on the visitor's own confirmed, not-yet-verified
-// visits. A confirmed visit that has no OTP yet (e.g. confirmed before this
-// feature existed) gets one issued here. Only call this for the visitor's list.
+// visits. The OTP is shown as soon as the owner confirms the visit and stays the
+// same until the owner verifies it. A confirmed visit that has no OTP yet (e.g.
+// confirmed before this feature existed) gets one issued here. Only call this
+// for the visitor's list.
 func (r *VisitRepository) AttachOTPs(ctx context.Context, visits []models.Visit) error {
 	index := map[string]int{}
 	ids := []string{}
-	now := time.Now()
 	for i, v := range visits {
 		if v.Status != "confirmed" || v.OTPVerified {
-			continue
-		}
-		if now.Before(v.ScheduledAt) {
-			// Hidden until the visit time: the OTP appears only after the
-			// buyer has actually visited the property.
-			visits[i].OTPPending = true
 			continue
 		}
 		index[v.ID] = i
@@ -228,10 +223,10 @@ func (r *VisitRepository) AttachOTPs(ctx context.Context, visits []models.Visit)
 			rows.Close()
 			return err
 		}
-		switch {
-		case code == "":
+		_ = expires // the OTP no longer expires: it stays until the owner verifies it
+		if code == "" {
 			needNew = append(needNew, pending{id, scheduledAt})
-		case expires == nil || time.Now().Before(*expires):
+		} else {
 			visits[index[id]].OTPCode = code
 		}
 	}
@@ -280,9 +275,7 @@ func (r *VisitRepository) VerifyOTP(ctx context.Context, id, code string) error 
 	if stored == nil || *stored == "" {
 		return ErrVisitOTPNotReady
 	}
-	if expires != nil && time.Now().After(*expires) {
-		return ErrVisitOTPExpired
-	}
+	_ = expires // no expiry: the OTP is valid until it is verified
 
 	if subtle.ConstantTimeCompare([]byte(*stored), []byte(code)) == 1 {
 		if _, err := tx.Exec(ctx, `
