@@ -226,7 +226,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     return true;
   }
 
-  /// Visit status message + chat / call, shown when this page was opened from Visit Requests.
+  /// Visit status message (and OTP for the visitor), shown when this page was opened from Visit Requests.
   Widget _visitBanner(Property property) {
     final vc = widget.visitContext!;
     final v = vc.visit;
@@ -269,9 +269,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
         break;
     }
 
-    final peerId = vc.isOwner ? v.visitorId : property.ownerId;
-    final peerName = vc.isOwner ? v.visitorName : (_posterName.isNotEmpty ? _posterName : property.ownerName);
-    final canContact = peerId.isNotEmpty && v.status != VisitStatus.cancelled;
     final showOtp = !vc.isOwner && v.status == VisitStatus.confirmed && v.otpCode.isNotEmpty;
 
     return Container(
@@ -308,33 +305,6 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
             Text(
               v.otpCode,
               style: AppTextStyles.h3.copyWith(fontSize: 24, letterSpacing: 6, color: AppColors.primary),
-            ),
-          ],
-          if (canContact) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => context.push('/chats/$peerId?propertyId=${property.id}'),
-                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                    label: Text(vc.isOwner ? 'Chat with visitor' : 'Chat with owner'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => CallService.dial(
-                      context,
-                      propertyId: property.id,
-                      peerId: vc.isOwner ? v.visitorId : null,
-                      peerName: peerName,
-                    ),
-                    icon: const Icon(Icons.call_outlined, size: 18),
-                    label: Text(vc.isOwner ? 'Call visitor' : 'Call owner'),
-                  ),
-                ),
-              ],
             ),
           ],
         ],
