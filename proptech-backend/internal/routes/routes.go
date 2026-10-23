@@ -115,6 +115,7 @@ func RegisterBrokerRoutes(router *gin.Engine, h *handlers.BrokerHandler) {
 	{
 		broker.GET("/:id/subscription", h.GetSubscription)
 		broker.POST("/:id/subscription/subscribe", h.Subscribe)
+		broker.GET("/:id/subscription/history", h.GetHistory)
 	}
 }
 

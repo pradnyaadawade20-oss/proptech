@@ -36,6 +36,7 @@ class SubscriptionPlansScreen extends StatefulWidget {
 
 class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
   BrokerSubscriptionData? _data;
+  List<SubscriptionReceipt> _history = [];
   String? _error;
   String _selected = 'yearly';
   bool _busy = false;
@@ -51,9 +52,17 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
     try {
       final d = await BrokerSubscriptionService.instance.getMine();
       if (mounted) setState(() => _data = d);
+      _loadHistory();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     }
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final h = await BrokerSubscriptionService.instance.getHistory();
+      if (mounted) setState(() => _history = h);
+    } catch (_) {}
   }
 
   Future<void> _subscribe() async {
@@ -75,6 +84,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         _data = d;
         _busy = false;
       });
+      _loadHistory();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${d.subscription.planName} active till ${d.subscription.expiryLabel ?? ''}')),
       );
@@ -86,6 +96,60 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: AppColors.error),
       );
     }
+  }
+
+  static String _date(DateTime d) {
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${d.day} ${m[d.month - 1]} ${d.year}';
+  }
+
+  void _showReceipt(SubscriptionReceipt r) {
+    Widget row(String k, String v) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 120, child: Text(k, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary))),
+              Expanded(child: Text(v, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600))),
+            ],
+          ),
+        );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.check_circle, color: AppColors.success),
+                const SizedBox(width: 8),
+                Text('Payment receipt', style: AppTextStyles.h3),
+              ]),
+              const Divider(height: 24),
+              row('Receipt no', r.receiptNo),
+              row('Plan', r.planName),
+              row('Amount paid', '₹${r.amount.toStringAsFixed(r.amount % 1 == 0 ? 0 : 2)}'),
+              row('Paid on', _date(r.paidAt)),
+              row('Valid', '${_date(r.startsAt)} - ${_date(r.expiresAt)}'),
+              if (r.paymentMethod.isNotEmpty) row('Method', r.paymentMethod),
+              row('Order id', r.paymentRef),
+              if (r.transactionId.isNotEmpty) row('Transaction id', r.transactionId),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -189,7 +253,63 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                 : Text(sub.isActive ? 'Renew / Extend' : 'Subscribe'),
           ),
         ),
+        if (_history.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text('Payment history', style: AppTextStyles.h3),
+          const SizedBox(height: AppSpacing.sm),
+          for (final r in _history) _ReceiptTile(r: r, onTap: () => _showReceipt(r)),
+        ],
       ],
+    );
+  }
+}
+
+class _ReceiptTile extends StatelessWidget {
+  final SubscriptionReceipt r;
+  final VoidCallback onTap;
+  const _ReceiptTile({required this.r, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = r.paidAt;
+    final dateStr = _SubscriptionPlansScreenState._date(d);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.planName, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+                    Text('$dateStr • ${r.receiptNo}',
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('₹${r.amount.toStringAsFixed(r.amount % 1 == 0 ? 0 : 2)}', style: AppTextStyles.bodyMedium),
+                  Text('Paid', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

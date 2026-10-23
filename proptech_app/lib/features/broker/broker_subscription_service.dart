@@ -71,6 +71,44 @@ class BrokerSubscription {
   }
 }
 
+class SubscriptionReceipt {
+  final String receiptNo;
+  final String planName;
+  final String planType;
+  final double amount;
+  final DateTime startsAt;
+  final DateTime expiresAt;
+  final DateTime paidAt;
+  final String paymentRef;
+  final String paymentMethod;
+  final String transactionId;
+  const SubscriptionReceipt({
+    required this.receiptNo,
+    required this.planName,
+    required this.planType,
+    required this.amount,
+    required this.startsAt,
+    required this.expiresAt,
+    required this.paidAt,
+    required this.paymentRef,
+    required this.paymentMethod,
+    required this.transactionId,
+  });
+
+  factory SubscriptionReceipt.fromJson(Map<String, dynamic> j) => SubscriptionReceipt(
+        receiptNo: j['receipt_no'] as String? ?? '',
+        planName: j['plan_name'] as String? ?? '',
+        planType: j['plan_type'] as String? ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        startsAt: DateTime.tryParse(j['starts_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+        expiresAt: DateTime.tryParse(j['expires_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+        paidAt: DateTime.tryParse(j['paid_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+        paymentRef: j['payment_ref'] as String? ?? '',
+        paymentMethod: j['payment_method'] as String? ?? '',
+        transactionId: j['transaction_id'] as String? ?? '',
+      );
+}
+
 class BrokerSubscriptionData {
   final BrokerSubscription subscription;
   final List<SubscriptionPlan> plans;
@@ -131,6 +169,19 @@ class BrokerSubscriptionService {
     try {
       final r = await _dio.post('/api/broker/$id/subscription/checkout', data: {'plan': planId});
       return CheckoutInfo.fromJson(r.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _err(e);
+    }
+  }
+
+  /// Every purchase / renewal (receipts), newest first.
+  Future<List<SubscriptionReceipt>> getHistory() async {
+    final id = await _userId();
+    try {
+      final r = await _dio.get('/api/broker/$id/subscription/history');
+      return (r.data['history'] as List<dynamic>? ?? [])
+          .map((e) => SubscriptionReceipt.fromJson(e as Map<String, dynamic>))
+          .toList();
     } on DioException catch (e) {
       throw _err(e);
     }
