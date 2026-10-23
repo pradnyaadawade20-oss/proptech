@@ -260,6 +260,7 @@ func (r *VisitRepository) VerifyOTP(ctx context.Context, id, code string) error 
 	var expires *time.Time
 	var attempts int
 	var scheduledAt time.Time
+	_ = scheduledAt // the visit time no longer gates verification
 	err = tx.QueryRow(ctx, `
 		SELECT status, otp_code, otp_expires_at, COALESCE(otp_attempts, 0), scheduled_at
 		FROM visits WHERE id = $1 FOR UPDATE`, id).Scan(&status, &stored, &expires, &attempts, &scheduledAt)
@@ -268,9 +269,6 @@ func (r *VisitRepository) VerifyOTP(ctx context.Context, id, code string) error 
 	}
 	if status != "confirmed" {
 		return ErrVisitNotConfirmed
-	}
-	if time.Now().Before(scheduledAt) {
-		return ErrVisitOTPTooEarly
 	}
 	if stored == nil || *stored == "" {
 		return ErrVisitOTPNotReady
