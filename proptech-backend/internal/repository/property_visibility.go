@@ -81,6 +81,24 @@ func (r *PropertyRepository) GetByIDForViewer(ctx context.Context, id, viewerID 
 		`SELECT `+PublicCondition+` FROM properties WHERE id = $1::uuid`, id).Scan(&public); err != nil {
 		return nil, err
 	}
+	if !public && viewerID != "" {
+		// The owner a broker invited may preview the listing they are asked to approve
+		// ("View property details" on the Broker invitations screen), while it is still pending.
+		var invited bool
+		if err := r.db.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM landlord_invites i
+				JOIN users me ON me.id = $2::uuid
+				WHERE i.property_id = $1::uuid
+				  AND i.status = 'pending' AND i.expires_at > now()
+				  AND `+inviteAddressedToMe+`
+			)`, id, viewerID).Scan(&invited); err != nil {
+			return nil, err
+		}
+		if invited {
+			return p, nil
+		}
+	}
 	if !public {
 		return nil, pgx.ErrNoRows
 	}
