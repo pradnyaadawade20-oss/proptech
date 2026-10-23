@@ -16,6 +16,7 @@ import '../../features/owner/owner_dashboard_screen.dart';
 import '../../features/broker/broker_dashboard_screen.dart';
 import '../../features/broker/subscription_plans_screen.dart';
 import '../../features/visits/visits_screen.dart';
+import '../../features/visits/visit.dart';
 import '../../features/leads/leads_screen.dart';
 import '../../features/properties/my_properties_screen.dart';
 import '../../features/properties/add_property_screen.dart';
@@ -193,6 +194,7 @@ final GoRouter appRouter = GoRouter(
         key: state.pageKey,
         child: PropertyDetailScreen(
           propertyId: state.pathParameters['id']!,
+          visitContext: state.extra is VisitContext ? state.extra as VisitContext : null,
         ),
         transitionDuration: const Duration(milliseconds: 350),
         reverseTransitionDuration: const Duration(milliseconds: 300),

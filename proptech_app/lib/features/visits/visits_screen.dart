@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:go_router/go_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
@@ -505,7 +506,15 @@ class _VisitCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          InkWell(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            onTap: visit.propertyId.isEmpty
+                ? null
+                : () => context.push(
+                      '/property/${visit.propertyId}',
+                      extra: VisitContext(visit: visit, isOwner: isOwner),
+                    ),
+            child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
@@ -560,6 +569,7 @@ class _VisitCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
           ),
           if (!isOwner && visit.status == VisitStatus.confirmed) ...[
             const SizedBox(height: AppSpacing.sm),

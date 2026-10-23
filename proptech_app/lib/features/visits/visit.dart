@@ -3,6 +3,7 @@ enum VisitStatus { pending, confirmed, completed, cancelled }
 class Visit {
   final String id;
   final String propertyId;
+  final String visitorId;
   final String propertyTitle;
   final String propertyImageUrl;
   final String visitorName;
@@ -28,6 +29,7 @@ class Visit {
   const Visit({
     required this.id,
     this.propertyId = '',
+    this.visitorId = '',
     required this.propertyTitle,
     required this.propertyImageUrl,
     required this.visitorName,
@@ -53,6 +55,7 @@ class Visit {
     return Visit(
       id: json['id'] as String,
       propertyId: json['property_id'] as String? ?? '',
+      visitorId: json['visitor_id'] as String? ?? '',
       propertyTitle: json['property_title'] as String? ?? '',
       propertyImageUrl: json['property_image_url'] as String? ?? '',
       visitorName: json['visitor_name'] as String? ?? '',
@@ -69,4 +72,12 @@ class Visit {
       otpPending: json['otp_pending'] as bool? ?? false,
     );
   }
+}
+
+/// Passed as `extra` when a visit card opens the property page, so that page can
+/// show the visit's status message and chat / call with the other person.
+class VisitContext {
+  final Visit visit;
+  final bool isOwner; // true = viewer owns the property (the other person is the visitor)
+  const VisitContext({required this.visit, required this.isOwner});
 }

@@ -11,6 +11,7 @@ import '../../core/widgets/video_tour_player.dart';
 import '../../core/api/token_store.dart';
 import '../profile/profile_service.dart';
 import '../landlord/landlord_service.dart';
+import '../visits/visit.dart';
 import '../visits/visit_service.dart';
 import '../leads/lead_service.dart';
 import '../call/call_service.dart';
@@ -26,7 +27,10 @@ import '../../core/utils/price_format.dart';
 
 class PropertyDetailScreen extends StatefulWidget {
   final String propertyId;
-  const PropertyDetailScreen({super.key, required this.propertyId});
+
+  /// Set when opened from a visit card: shows that visit's status + chat / call.
+  final VisitContext? visitContext;
+  const PropertyDetailScreen({super.key, required this.propertyId, this.visitContext});
 
   @override
   State<PropertyDetailScreen> createState() => _PropertyDetailScreenState();
@@ -220,6 +224,122 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
       return false;
     }
     return true;
+  }
+
+  /// Visit status message + chat / call, shown when this page was opened from Visit Requests.
+  Widget _visitBanner(Property property) {
+    final vc = widget.visitContext!;
+    final v = vc.visit;
+    final d = v.scheduledAt;
+    final when = '${d.day}/${d.month}/${d.year} at ${TimeOfDay.fromDateTime(d).format(context)}';
+    final visitor = v.visitorName.isEmpty ? 'The visitor' : v.visitorName;
+
+    final Color color;
+    final IconData icon;
+    final String title;
+    final String body;
+    switch (v.status) {
+      case VisitStatus.pending:
+        color = Colors.orange;
+        icon = Icons.schedule_rounded;
+        title = vc.isOwner ? 'Visit requested' : 'Visit request sent';
+        body = vc.isOwner
+            ? '$visitor wants to visit on $when. Confirm it from Visit Requests.'
+            : 'Your visit request for $when is waiting for the owner to confirm.';
+        break;
+      case VisitStatus.confirmed:
+        color = Colors.blue;
+        icon = Icons.event_available_rounded;
+        title = 'Visit booking confirmed';
+        body = vc.isOwner
+            ? 'The visit with $visitor is confirmed for $when. Ask for the visit OTP when you meet.'
+            : 'Your visit is confirmed for $when. Share your visit OTP with the owner when you meet.';
+        break;
+      case VisitStatus.completed:
+        color = Colors.green;
+        icon = Icons.check_circle_outline_rounded;
+        title = 'Visit completed';
+        body = 'The visit on $when was completed.';
+        break;
+      case VisitStatus.cancelled:
+        color = Colors.red;
+        icon = Icons.cancel_outlined;
+        title = 'Visit cancelled';
+        body = 'The visit planned for $when was cancelled.';
+        break;
+    }
+
+    final peerId = vc.isOwner ? v.visitorId : property.ownerId;
+    final peerName = vc.isOwner ? v.visitorName : (_posterName.isNotEmpty ? _posterName : property.ownerName);
+    final canContact = peerId.isNotEmpty && v.status != VisitStatus.cancelled;
+    final showOtp = !vc.isOwner && v.status == VisitStatus.confirmed && v.otpCode.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700, color: color)),
+                    const SizedBox(height: 2),
+                    Text(body, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (showOtp) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text('Your visit OTP', style: AppTextStyles.caption),
+            Text(
+              v.otpCode,
+              style: AppTextStyles.h3.copyWith(fontSize: 24, letterSpacing: 6, color: AppColors.primary),
+            ),
+          ],
+          if (canContact) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push('/chats/$peerId?propertyId=${property.id}'),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                    label: Text(vc.isOwner ? 'Chat with visitor' : 'Chat with owner'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => CallService.dial(
+                      context,
+                      propertyId: property.id,
+                      peerId: vc.isOwner ? v.visitorId : null,
+                      peerName: peerName,
+                    ),
+                    icon: const Icon(Icons.call_outlined, size: 18),
+                    label: Text(vc.isOwner ? 'Call visitor' : 'Call owner'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _chatOwner(Property property) async {
@@ -584,6 +704,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
+
+                    // Visit status + chat / call (only when opened from Visit Requests)
+                    if (widget.visitContext != null) ...[
+                      _visitBanner(property),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
 
                     // Property Highlights — floor / area / available from
                     if (property.totalFloors > 0 || property.area > 0 || property.availableFrom != null) ...[
