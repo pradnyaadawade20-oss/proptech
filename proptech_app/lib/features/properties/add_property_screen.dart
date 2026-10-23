@@ -562,6 +562,20 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
+      if (e.toString().contains('BROKER_LIMIT_REACHED')) {
+        // Free listings used up: send the broker to the plans instead of showing a raw DB error.
+        try {
+          final sub = (await BrokerSubscriptionService.instance.getMine()).subscription;
+          if (!mounted) return;
+          final goPlans = await showSubscriptionRequiredDialog(context, sub);
+          if (goPlans == true && mounted) await context.push(RouteNames.brokerSubscription);
+          return;
+        } catch (_) {
+          if (!mounted) return;
+          _showError('Your free listing limit is reached. Subscribe to a plan to add more listings.');
+          return;
+        }
+      }
       _showError('Could not list property: $e');
     }
   }

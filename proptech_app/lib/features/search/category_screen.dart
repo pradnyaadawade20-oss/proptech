@@ -46,7 +46,14 @@ class _CategoryScreenState extends State<CategoryScreen> with PropertyStoreListe
             .toList();
         break;
       case 'farmhouse':
-        results = PropertyStore.instance.all.where((p) => p.category == 'Farmhouse').toList();
+        results = PropertyStore.instance.all.where((p) {
+          final t = p.title.toLowerCase();
+          final b = p.bhk.toLowerCase();
+          return p.category == 'Farmhouse' ||
+              b.contains('farm') ||
+              t.contains('farmhouse') ||
+              t.contains('farm house');
+        }).toList();
         break;
       case 'commercial':
         results = PropertyStore.instance.all.where((p) => p.category == 'Commercial').toList();

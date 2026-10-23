@@ -597,13 +597,44 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
 
 
                     // About — owner's description.
-                    if (property.description.isNotEmpty) ...[
+                    if (property.description.isNotEmpty || property.fullAddress.isNotEmpty) ...[
                       _SectionCard(
                         icon: Icons.info_outline,
                         title: 'About this property',
-                        child: Text(
-                          property.description,
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary, height: 1.5),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (property.description.isNotEmpty)
+                              Text(
+                                property.description,
+                                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary, height: 1.5),
+                              ),
+                            if (property.description.isNotEmpty && property.fullAddress.isNotEmpty)
+                              const SizedBox(height: AppSpacing.md),
+                            if (property.fullAddress.isNotEmpty)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.location_on_outlined, size: 20, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Address',
+                                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          property.fullAddress,
+                                          style: AppTextStyles.bodyMedium
+                                              .copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),

@@ -267,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildHeader(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, top + 20, 16, 26),
+      padding: EdgeInsets.fromLTRB(16, top + 16, 16, 26),
       decoration: const BoxDecoration(
         gradient: _Ui.header,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
@@ -275,19 +275,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              'Profile',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
           _buildUserCard(),
         ],
       ),

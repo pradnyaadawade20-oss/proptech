@@ -37,6 +37,7 @@ class Property {
   final String locality;
   final String society; // society / building name
   final String pincode;
+  final String address; // full street address (optional)
   /// Rent listings only (0 = not set).
   final double securityDeposit;
   final double maintenanceCharges;
@@ -123,6 +124,7 @@ class Property {
     this.locality = '',
     this.society = '',
     this.pincode = '',
+    this.address = '',
     this.securityDeposit = 0,
     this.maintenanceCharges = 0,
     this.preferredTenants = const [],
@@ -156,6 +158,27 @@ class Property {
   /// True once there's an actual paper trail (RERA number + at least one
   /// checked document) behind the verified badge — not just a flag.
   bool get isDocumentVerified => reraNumber != null && reraNumber!.isNotEmpty && verificationDocuments.isNotEmpty;
+
+  /// Address shown under "About this property": the street address if the owner gave one,
+  /// otherwise built from society, locality, city and pincode.
+  String get fullAddress {
+    final parts = <String>[];
+    void add(String v) {
+      final t = v.trim();
+      if (t.isEmpty) return;
+      if (parts.any((e) => e.toLowerCase().contains(t.toLowerCase()))) return; // skip duplicates
+      parts.add(t);
+    }
+
+    add(address);
+    add(society);
+    add(locality);
+    add(city);
+    var out = parts.join(', ');
+    if (pincode.trim().isNotEmpty && !out.contains(pincode.trim())) out = '$out - ${pincode.trim()}';
+    if (out.isEmpty) out = location.trim();
+    return out;
+  }
 
   /// Maps GET/POST /api/properties response fields. Backend fields not
   /// present yet (area, facing, gallery, etc.) fall back to defaults so
@@ -194,6 +217,7 @@ class Property {
       locality: json['locality'] as String? ?? '',
       society: json['society'] as String? ?? '',
       pincode: json['pincode'] as String? ?? '',
+      address: json['address'] as String? ?? '',
       securityDeposit: num_('security_deposit'),
       maintenanceCharges: num_('maintenance_charges'),
       preferredTenants: (json['preferred_tenants'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
@@ -247,6 +271,7 @@ class Property {
       locality: locality,
       society: society,
       pincode: pincode,
+      address: address,
       securityDeposit: securityDeposit,
       maintenanceCharges: maintenanceCharges,
       preferredTenants: preferredTenants,
