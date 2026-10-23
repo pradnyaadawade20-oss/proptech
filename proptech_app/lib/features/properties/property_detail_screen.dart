@@ -13,6 +13,7 @@ import '../profile/profile_service.dart';
 import '../landlord/landlord_service.dart';
 import '../visits/visit_service.dart';
 import '../leads/lead_service.dart';
+import '../call/call_service.dart';
 import '../moderation/report_listing_sheet.dart';
 import '../../app/router/route_names.dart';
 import '../compare/compare_store.dart';
@@ -205,6 +206,73 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
     void _contactOwner(Property property) {
     LeadService.instance.track(property.id, 'contact'); // lead banao, UI ko block nahi karta
     context.push('/property/${property.id}/owner');
+  }
+
+  /// Tenant side is never locked: chat / call open straight away.
+  Future<bool> _canActOnOwner(Property property) async {
+    if (property.ownerId.isEmpty) return false;
+    final myId = await TokenStore.instance.getUserId();
+    if (!mounted) return false;
+    if (myId == property.ownerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This is your own listing.')),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _chatOwner(Property property) async {
+    if (!await _canActOnOwner(property)) return;
+    LeadService.instance.track(property.id, 'chat');
+    if (!mounted) return;
+    context.push('/chats/${property.ownerId}?propertyId=${property.id}');
+  }
+
+  Future<void> _callOwner(Property property) async {
+    if (!await _canActOnOwner(property)) return;
+    LeadService.instance.track(property.id, 'call');
+    if (!mounted) return;
+    final name = _posterName.isNotEmpty ? _posterName : property.ownerName;
+    await CallService.dial(context, propertyId: property.id, peerName: name);
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool filled = false,
+  }) {
+    final fg = filled ? Colors.white : AppColors.primaryDark;
+    return Expanded(
+      child: Material(
+        color: filled ? AppColors.primary : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+          side: filled ? BorderSide.none : BorderSide(color: AppColors.primary.withValues(alpha: 0.18)),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+          child: Container(
+            height: 76,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 24, color: fg),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: AppTextStyles.button.copyWith(color: fg, fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _requestAgreement(Property property) async {
@@ -712,20 +780,23 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
                     // Actions
                     Row(
                       children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _bookVisit(property),
-                            icon: const Icon(Icons.calendar_month_outlined, size: 20),
-                            label: const Text('Book a Visit'),
-                          ),
+                        _actionTile(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          label: 'Chat',
+                          onTap: property.ownerId.isEmpty ? null : () => _chatOwner(property),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _contactOwner(property),
-                            icon: const Icon(Icons.person_outline, size: 20),
-                            label: Text(property.postedBy == 'broker' ? 'Contact Broker' : 'Contact Owner'),
-                          ),
+                        _actionTile(
+                          icon: Icons.call_outlined,
+                          label: 'Call',
+                          filled: true,
+                          onTap: property.ownerId.isEmpty ? null : () => _callOwner(property),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _actionTile(
+                          icon: Icons.calendar_month_outlined,
+                          label: 'Visit',
+                          onTap: () => _bookVisit(property),
                         ),
                       ],
                     ),
