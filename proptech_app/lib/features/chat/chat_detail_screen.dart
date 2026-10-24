@@ -30,6 +30,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final ScrollController _scroll = ScrollController();
 
   List<ChatMessage> _messages = [];
+  List<ChatCall> _calls = [];
   UserProfile? _other;
   bool _loading = true;
   bool _hasText = false;
@@ -71,20 +72,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _loadThread({bool silent = false}) async {
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
-      final data = await ChatService.instance.getThread(widget.chatId);
+      final results = await Future.wait([
+        ChatService.instance.getThread(widget.chatId),
+        ChatService.instance.getCalls(widget.chatId),
+      ]);
+      final data = results[0] as List<ChatMessage>;
+      final calls = results[1] as List<ChatCall>;
       if (!mounted) return;
       // Don't overwrite the list while a message is mid-send; the next poll will sync.
       if (_pendingCount > 0) return;
 
-      final previousCount = _messages.length;
+      final previousCount = _messages.length + _calls.length;
       final hasIncoming = data.any((m) => !m.isMe);
       setState(() {
         _messages = data;
+        _calls = calls;
         _loading = false;
         _error = null;
       });
 
-      if (data.length != previousCount) {
+      if (data.length + calls.length != previousCount) {
         _scrollToBottom(jump: previousCount == 0);
         if (hasIncoming) {
           ChatService.instance.markRead(widget.chatId).catchError((_) {});
@@ -293,15 +300,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       );
     }
 
-    if (_messages.isEmpty) {
+    if (_messages.isEmpty && _calls.isEmpty) {
       return Center(child: Text('Say hi 👋', style: AppTextStyles.bodyMedium));
     }
+
+    // Messages and calls in one timeline, oldest first.
+    DateTime timeOf(Object o) => o is ChatMessage ? o.sentAt : (o as ChatCall).createdAt;
+    final timeline = <Object>[..._messages, ..._calls]..sort((a, b) => timeOf(a).compareTo(timeOf(b)));
 
     // Interleave date separators ("Today", "Yesterday"...) between days.
     final items = <Object>[];
     DateTime? lastDay;
-    for (final m in _messages) {
-      final day = DateTime(m.sentAt.year, m.sentAt.month, m.sentAt.day);
+    for (final m in timeline) {
+      final t = timeOf(m);
+      final day = DateTime(t.year, t.month, t.day);
       if (lastDay == null || day != lastDay) {
         items.add(day);
         lastDay = day;
@@ -316,8 +328,48 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       itemBuilder: (context, index) {
         final item = items[index];
         if (item is DateTime) return _DateChip(label: formatDateLabel(item));
+        if (item is ChatCall) return _buildCallRow(item);
         return _buildBubble(item as ChatMessage);
       },
+    );
+  }
+
+  /// WhatsApp-style call entry: icon, "Missed voice call", duration and time.
+  Widget _buildCallRow(ChatCall call) {
+    final missed = call.isMissed;
+    final color = missed ? Colors.red.shade600 : AppColors.textSecondary;
+    final icon = call.isOutgoing ? Icons.call_made : (missed ? Icons.call_missed : Icons.call_received);
+    final detail = [
+      if (call.durationLabel.isNotEmpty) call.durationLabel,
+      formatBubbleTime(call.createdAt),
+    ].join(' · ');
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.call, size: 16, color: color),
+            const SizedBox(width: 6),
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(call.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: missed ? color : AppColors.textPrimary)),
+                Text(detail, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

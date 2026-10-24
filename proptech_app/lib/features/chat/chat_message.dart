@@ -98,3 +98,60 @@ String formatDateLabel(DateTime time) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return '${day.day} ${months[day.month - 1]} ${day.year}';
 }
+
+/// One call (audio) with the other person, shown inside the chat thread
+/// like WhatsApp's "Voice call" rows. Comes from GET /api/calls?peer_id=.
+class ChatCall {
+  final String id;
+  final bool isOutgoing;
+
+  /// ringing | active | ended | rejected | missed
+  final String status;
+  final DateTime createdAt;
+  final int durationSec;
+
+  const ChatCall({
+    required this.id,
+    required this.isOutgoing,
+    required this.status,
+    required this.createdAt,
+    this.durationSec = 0,
+  });
+
+  factory ChatCall.fromJson(Map<String, dynamic> json) {
+    return ChatCall(
+      id: json['id'] as String,
+      isOutgoing: (json['direction'] as String?) == 'outgoing',
+      status: json['status'] as String? ?? 'ended',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      durationSec: (json['duration_sec'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  /// Calls still ringing / in progress are not history yet.
+  bool get isFinished => status != 'ringing' && status != 'active';
+
+  /// Missed (incoming, nobody picked up) or declined by the other side.
+  bool get isMissed => status == 'missed' || status == 'rejected';
+
+  String get title {
+    if (isOutgoing) {
+      if (status == 'missed') return 'No answer';
+      if (status == 'rejected') return 'Call declined';
+      return 'Outgoing voice call';
+    }
+    if (status == 'missed') return 'Missed voice call';
+    if (status == 'rejected') return 'Declined voice call';
+    return 'Incoming voice call';
+  }
+
+  /// "2:05" / "1:02:07", or empty when the call was never answered.
+  String get durationLabel {
+    if (durationSec <= 0) return '';
+    final h = durationSec ~/ 3600;
+    final m = (durationSec % 3600) ~/ 60;
+    final s = durationSec % 60;
+    final ss = s.toString().padLeft(2, '0');
+    return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$ss' : '$m:$ss';
+  }
+}
