@@ -160,6 +160,22 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        leadingWidth: 64,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.md),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.maybePop(context),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            ),
+          ),
+        ),
         title: Text('Broker Plans', style: AppTextStyles.h3),
       ),
       body: _error != null
@@ -191,41 +207,93 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        // Current plan
+        // Current plan (gradient hero card)
+        Container(
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0C3476), Color(0xFF1A4BA0)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(color: AppColors.primary.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -4,
+                top: -6,
+                child: Icon(Icons.workspace_premium, size: 72, color: Colors.white.withValues(alpha: 0.10)),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.verified, color: AppColors.primary, size: 28),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(sub.planName,
+                            style: AppTextStyles.h3.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text(
+                          (sub.isActive
+                                  ? '${sub.usageLabel} • valid till ${sub.expiryLabel}'
+                                  : sub.expired
+                                      ? 'Expired on ${sub.expiryLabel} • ${sub.listingsUsed} listings'
+                                      : sub.usageLabel)
+                              .replaceAll(' • ', '  •  '),
+                          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        // Free listings note
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: AppColors.primaryLight,
+            color: AppColors.surfaceSoft,
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           child: Row(
             children: [
-              const Icon(Icons.workspace_premium_outlined, color: AppColors.primaryDark),
-              const SizedBox(width: AppSpacing.sm),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle),
+                child: const Icon(Icons.card_giftcard, color: AppColors.secondary),
+              ),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(sub.planName, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
-                    Text(
-                      sub.isActive
-                          ? '${sub.usageLabel} • valid till ${sub.expiryLabel}'
-                          : sub.expired
-                              ? 'Expired on ${sub.expiryLabel} • ${sub.listingsUsed} listings'
-                              : sub.usageLabel,
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                    ),
+                    Text('First ${sub.listingsLimit} listings are free.',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondary, fontWeight: FontWeight.w700)),
+                    Text('Subscribe for unlimited listings.',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                   ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          'First ${sub.listingsLimit} listings are free. Subscribe for unlimited listings.',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text('Choose your plan', style: AppTextStyles.h3),
         const SizedBox(height: AppSpacing.md),
         for (final p in plans)
           _PlanTile(
@@ -234,24 +302,67 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
             badge: p.id == 'yearly' && savePct > 0 ? 'Save $savePct%' : null,
             onTap: () => setState(() => _selected = p.id),
           ),
-        const SizedBox(height: AppSpacing.md),
-        const _Feature('Unlimited property listings'),
-        const _Feature('Add listings for all your clients'),
-        const _Feature('Plan renews by adding time on top of what is left'),
-        const SizedBox(height: AppSpacing.lg),
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _busy || plans.isEmpty ? null : _subscribe,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-            ),
-            child: _busy
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(sub.isActive ? 'Renew / Extend' : 'Subscribe'),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F8F4),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
+          child: Column(
+            children: const [
+              _Feature('Unlimited property listings'),
+              Divider(height: 1, color: AppColors.border),
+              _Feature('Add listings for all your clients'),
+              Divider(height: 1, color: AppColors.border),
+              _Feature('Plan renews by adding time on top of what is left'),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        GestureDetector(
+          onTap: _busy || plans.isEmpty ? null : _subscribe,
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF1A4BA0), Color(0xFF0C3476)]),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 5)),
+              ],
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Center(
+                    child: _busy
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Text(sub.isActive ? 'Renew / Extend' : 'Subscribe',
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+                  ),
+                ),
+                const Icon(Icons.security, color: Colors.white, size: 24),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle),
+              child: const Icon(Icons.shield_outlined, size: 18, color: AppColors.secondary),
+            ),
+            const SizedBox(width: 8),
+            Text('Secure payment  •  Cancel anytime',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+          ],
         ),
         if (_history.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -330,11 +441,11 @@ class _PlanTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 18),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: selected ? AppColors.primaryLight.withValues(alpha: 0.6) : AppColors.surface,
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1),
+            border: Border.all(color: selected ? AppColors.secondary : AppColors.border, width: selected ? 1.5 : 1),
           ),
           child: Row(
             children: [
@@ -369,7 +480,10 @@ class _PlanTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Text('₹${plan.price}', style: AppTextStyles.h3),
+              Container(width: 1, height: 44, color: AppColors.border),
+              const SizedBox(width: AppSpacing.md),
+              Text('₹${plan.price}', style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(width: 2),
               Text(isYear ? '/yr' : '/mo', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
             ],
           ),
@@ -385,11 +499,11 @@ class _Feature extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, size: 18, color: AppColors.success),
-            const SizedBox(width: 8),
+            const Icon(Icons.check_circle_outline, size: 24, color: AppColors.success),
+            const SizedBox(width: 12),
             Expanded(child: Text(text, style: AppTextStyles.bodySmall)),
           ],
         ),
