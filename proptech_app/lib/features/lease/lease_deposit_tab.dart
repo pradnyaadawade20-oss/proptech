@@ -23,6 +23,7 @@ class LeaseDepositTab extends StatefulWidget {
 class _LeaseDepositTabState extends State<LeaseDepositTab> {
   late final Future<Deposit?> _future = LeaseService.instance.deposit(widget.lease.id);
   bool _busy = false;
+  Future<EarlyExit?>? _suggestFuture;
 
   bool get _tenant => widget.role == 'tenant';
   bool get _owner => widget.role == 'owner';
@@ -33,7 +34,68 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     final done = await runGuarded(context, fn, success: ok);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (done) await widget.onChanged();
+    if (done) {
+      setState(() => _suggestFuture = null); // refresh suggestions after any change
+      await widget.onChanged();
+    }
+  }
+
+  /// Early-exit suggestions (unpaid rent, notice shortfall) - owner only, during inspection.
+  Future<EarlyExit?> _loadSuggestions() async {
+    try {
+      return await LeaseService.instance.earlyExit(_id);
+    } catch (_) {
+      return null; // suggestions are optional
+    }
+  }
+
+  Widget _suggestions(Deposit d) {
+    if (!_owner || d.status != 'inspection') return const SizedBox.shrink();
+    _suggestFuture ??= _loadSuggestions();
+    return FutureBuilder<EarlyExit?>(
+      future: _suggestFuture,
+      builder: (context, snap) {
+        final ex = snap.data;
+        if (ex == null) return const SizedBox.shrink();
+        final added = d.deductions.map((x) => x.reason).toSet();
+        final todo = ex.items.where((i) => !added.contains(i.reason)).toList();
+        if (todo.isEmpty) return const SizedBox.shrink();
+        return SectionCard(
+          title: 'Suggested deductions',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              ex.early
+                  ? 'The tenant left before the lease end (${fmtDate(ex.endDate)}). Add what applies; the rest of the deposit is refunded.'
+                  : 'Based on unpaid rent. Add what applies; the rest of the deposit is refunded.',
+              style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            for (final it in todo)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(it.reason, style: GoogleFonts.inter(fontSize: 13)),
+                      Text(inr(it.amount), style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.error)),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(
+                              () => LeaseService.instance.addDeduction(_id, category: it.category, reason: it.reason, amount: it.amount),
+                              'Deduction added',
+                            ),
+                    child: const Text('Add'),
+                  ),
+                ]),
+              ),
+          ]),
+        );
+      },
+    );
   }
 
   Future<void> _tenantPay(Deposit d) async {
@@ -145,6 +207,7 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
                 ]),
               ),
               _statusBlock(d),
+              _suggestions(d),
               if (d.deductions.isNotEmpty || d.status == 'inspection') _deductions(d),
               if (_showTotals(d)) _totals(d),
               if (d.tenantNote.isNotEmpty) InfoBanner('Tenant note: ${d.tenantNote}', color: AppColors.warning, icon: Icons.chat_outlined),
@@ -248,7 +311,7 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
       case 'inspection':
         return _owner
             ? Column(children: [
-                const InfoBanner('Add deductions with proof (damage needs a photo). The tenant sees them before anything is final.', icon: Icons.fact_check_outlined),
+                const InfoBanner('Deductions for unpaid rent and short notice are already added. Remove any that are wrong, add anything else (damage needs a photo), then send the settlement. The tenant sees everything before it is final.', icon: Icons.fact_check_outlined),
                 btn('Send settlement to tenant', () async {
                   if (await confirmDialog(context, 'Send settlement', 'The tenant will be asked to accept or dispute. You cannot add deductions afterwards.', yes: 'Send')) {
                     await _run(() => LeaseService.instance.sendSettlement(_id), 'Settlement sent');

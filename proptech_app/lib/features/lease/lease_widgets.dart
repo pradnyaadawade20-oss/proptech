@@ -81,6 +81,7 @@ Color statusColor(String s) {
     case 'settlement':
     case 'refund_due':
     case 'notice_given':
+    case 'ended':
     case 'renew_requested':
     case 'vacate':
       return AppColors.warning;
@@ -113,6 +114,7 @@ Future<bool> confirmDialog(BuildContext context, String title, String body, {Str
   final r = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
+      scrollable: true, // long messages (e.g. the early-exit breakdown) must scroll, not overflow
       title: Text(title),
       content: Text(body),
       actions: [

@@ -286,3 +286,31 @@ type AdminResolveDepositRequest struct {
 	RefundAmount float64 `json:"refund_amount"`
 	Note         string  `json:"note" binding:"required"`
 }
+
+// EarlyExitItem is one suggested deposit deduction when a tenant leaves early.
+type EarlyExitItem struct {
+	Category string  `json:"category"` // unpaid_rent | other
+	Reason   string  `json:"reason"`
+	Amount   float64 `json:"amount"`
+}
+
+// EarlyExit is the preview of what a move-out costs: unpaid rent up to the
+// move-out date and, for an exit before the lease end, the notice-period
+// shortfall. The owner can add the items as deposit deductions; the rest of
+// the deposit is refunded through the normal settlement flow.
+type EarlyExit struct {
+	Early              bool            `json:"early"` // move-out before the lease end date
+	EndDate            string          `json:"end_date"`
+	MoveOutDate        string          `json:"move_out_date"`
+	NoticeDate         string          `json:"notice_date"`
+	NoticeRequiredDays int             `json:"notice_required_days"`
+	NoticeGivenDays    int             `json:"notice_given_days"`
+	ShortfallDays      int             `json:"shortfall_days"`
+	ShortfallAmount    float64         `json:"shortfall_amount"`
+	UnpaidMonths       int             `json:"unpaid_months"`
+	UnpaidRent         float64         `json:"unpaid_rent"`
+	Items              []EarlyExitItem `json:"items"`
+	TotalDeduction     float64         `json:"total_deduction"`
+	DepositAmount      float64         `json:"deposit_amount"`
+	EstimatedRefund    float64         `json:"estimated_refund"`
+}

@@ -115,7 +115,7 @@ class _LeaseCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
-                StatusPill.status(lease.status),
+                StatusPill.status(lease.displayStatus),
               ]),
               const SizedBox(height: 6),
               Text('${inr(lease.monthlyRent)} / month  •  ${fmtDate(lease.startDate)} to ${fmtDate(lease.endDate)}',

@@ -106,6 +106,13 @@ class LeaseService {
   Future<void> requestRenewal(String leaseId) =>
       _run(() => _dio.post('/api/leases/$leaseId/renewal', data: {'decision': 'renew'}));
 
+  /// Preview of what leaving on [moveOut] (YYYY-MM-DD) costs. Omit it once notice is given.
+  Future<EarlyExit> earlyExit(String leaseId, {String? moveOut}) => _run(() async {
+        final r = await _dio.get('/api/leases/$leaseId/early-exit',
+            queryParameters: moveOut == null ? null : {'move_out': moveOut});
+        return EarlyExit.fromJson(Map<String, dynamic>.from(r.data['early_exit'] as Map));
+      });
+
   Future<void> giveNotice(String leaseId, String moveOutDate) =>
       _run(() => _dio.post('/api/leases/$leaseId/move-out', data: {'move_out_date': moveOutDate}));
 

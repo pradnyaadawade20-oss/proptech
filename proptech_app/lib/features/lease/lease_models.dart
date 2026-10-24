@@ -42,6 +42,13 @@ class Lease {
     this.moveInConfirmedAt,
   });
 
+  /// What to show as the lease status: a lease whose end date has passed (and
+  /// where nobody is renewing) is "ended", not "active".
+  String get displayStatus =>
+      status == 'active' && daysToExpiry < 0 && (renewalStatus == 'none' || renewalStatus == 'renew_declined')
+          ? 'ended'
+          : status;
+
   factory Lease.fromJson(Map<String, dynamic> j) => Lease(
         id: _s(j['id']),
         agreementId: _s(j['agreement_id']),
@@ -248,4 +255,57 @@ class RoomComparison {
         ((v as List?) ?? const []).map((e) => LeasePhoto.fromJson(e as Map<String, dynamic>)).toList();
     return RoomComparison(room: _s(j['room']), moveIn: list(j['move_in']), moveOut: list(j['move_out']));
   }
+}
+
+/// One suggested deposit deduction for an early move-out.
+class EarlyExitItem {
+  final String category, reason;
+  final double amount;
+  const EarlyExitItem({required this.category, required this.reason, required this.amount});
+
+  factory EarlyExitItem.fromJson(Map<String, dynamic> j) =>
+      EarlyExitItem(category: _s(j['category']), reason: _s(j['reason']), amount: _n(j['amount']));
+}
+
+/// What a move-out costs: unpaid rent and (for an exit before the lease end) the notice shortfall.
+class EarlyExit {
+  final bool early;
+  final String endDate, moveOutDate;
+  final int noticeRequiredDays, noticeGivenDays, shortfallDays, unpaidMonths;
+  final double shortfallAmount, unpaidRent, totalDeduction, depositAmount, estimatedRefund;
+  final List<EarlyExitItem> items;
+
+  const EarlyExit({
+    required this.early,
+    required this.endDate,
+    required this.moveOutDate,
+    required this.noticeRequiredDays,
+    required this.noticeGivenDays,
+    required this.shortfallDays,
+    required this.unpaidMonths,
+    required this.shortfallAmount,
+    required this.unpaidRent,
+    required this.totalDeduction,
+    required this.depositAmount,
+    required this.estimatedRefund,
+    required this.items,
+  });
+
+  factory EarlyExit.fromJson(Map<String, dynamic> j) => EarlyExit(
+        early: j['early'] == true,
+        endDate: _s(j['end_date']),
+        moveOutDate: _s(j['move_out_date']),
+        noticeRequiredDays: (j['notice_required_days'] as num?)?.toInt() ?? 0,
+        noticeGivenDays: (j['notice_given_days'] as num?)?.toInt() ?? 0,
+        shortfallDays: (j['shortfall_days'] as num?)?.toInt() ?? 0,
+        unpaidMonths: (j['unpaid_months'] as num?)?.toInt() ?? 0,
+        shortfallAmount: _n(j['shortfall_amount']),
+        unpaidRent: _n(j['unpaid_rent']),
+        totalDeduction: _n(j['total_deduction']),
+        depositAmount: _n(j['deposit_amount']),
+        estimatedRefund: _n(j['estimated_refund']),
+        items: ((j['items'] as List?) ?? const [])
+            .map((e) => EarlyExitItem.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
+      );
 }

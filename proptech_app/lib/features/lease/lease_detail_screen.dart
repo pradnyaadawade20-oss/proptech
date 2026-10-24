@@ -135,11 +135,42 @@ class _OverviewTab extends StatelessWidget {
     final now = DateTime.now();
     final date = await askDate(context, first: now, last: now.add(const Duration(days: 730)), initial: DateTime.tryParse(lease.endDate));
     if (date == null || !context.mounted) return;
-    if (!await confirmDialog(context, 'Give notice', 'Tell ${lease.ownerName} you will move out on ${fmtDate(date)}?', yes: 'Give notice')) return;
+
+    // Show what this move-out will cost before the tenant confirms.
+    String message = 'Tell ${lease.ownerName} you will move out on ${fmtDate(date)}?';
+    String title = 'Give notice';
+    try {
+      final ex = await LeaseService.instance.earlyExit(lease.id, moveOut: date);
+      if (!context.mounted) return;
+      message = _earlyExitMessage(ex, date);
+      if (ex.early) title = 'Leave early';
+    } catch (_) {
+      // preview is only a courtesy; the notice itself still works without it
+    }
+    if (!context.mounted) return;
+    if (!await confirmDialog(context, title, message, yes: 'Give notice')) return;
     if (!context.mounted) return;
     if (await runGuarded(context, () => LeaseService.instance.giveNotice(lease.id, date), success: 'Notice sent')) {
       await onChanged();
     }
+  }
+
+  String _earlyExitMessage(EarlyExit ex, String date) {
+    final b = StringBuffer('Tell ${lease.ownerName} you will move out on ${fmtDate(date)}?');
+    if (ex.early) {
+      b.write('\n\nThis is before the lease ends on ${fmtDate(ex.endDate)}, so it is an early exit.');
+      b.write('\nNotice in the agreement: ${ex.noticeRequiredDays} days. You are giving ${ex.noticeGivenDays} days.');
+    }
+    if (ex.items.isNotEmpty) {
+      b.write('\n\nThe owner can deduct from your security deposit:');
+      for (final it in ex.items) {
+        b.write('\n- ${it.reason}: ${inr(it.amount)}');
+      }
+      b.write('\n\nEstimated refund: ${inr(ex.estimatedRefund)} of ${inr(ex.depositAmount)}.');
+    } else if (ex.early) {
+      b.write('\n\nNo deductions expected. Your full deposit of ${inr(ex.depositAmount)} is due back, after the owner inspects the property.');
+    }
+    return b.toString();
   }
 
   Future<void> _respondRenewal(BuildContext context, bool accept) async {
@@ -171,7 +202,7 @@ class _OverviewTab extends StatelessWidget {
     if (!await confirmDialog(
       context,
       'Confirm move-out',
-      'Confirm the tenant has moved out. You need at least one move-out photo first. The property becomes available again.',
+      'Confirm the tenant has moved out. The property becomes available again, and the deposit check starts with the deductions already filled in.',
       yes: 'Confirm',
     )) {
       return;
@@ -199,7 +230,7 @@ class _OverviewTab extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(children: [
             Expanded(child: Text(lease.propertyTitle, style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w600))),
-            StatusPill.status(lease.status),
+            StatusPill.status(lease.displayStatus),
           ]),
           const SizedBox(height: AppSpacing.md),
 
@@ -279,9 +310,11 @@ class _OverviewTab extends StatelessWidget {
           if (lease.renewalStatus == 'none') out.add(btn('Request renewal', () => _requestRenewal(context)));
           out.add(btn('Give notice / move out', () => _giveNotice(context), outlined: true));
         } else {
+          out.add(btn('Leave early / end agreement', () => _giveNotice(context), outlined: true));
           out.add(Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text('Renewal and move-out notice open on ${_noticeOpensOn()} (90 days before the lease ends).',
+            child: Text(
+                'Leaving before the lease ends: unpaid rent and any short notice can be deducted from your deposit. Renewal opens on ${_noticeOpensOn()} (90 days before the lease ends).',
                 style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
           ));
         }

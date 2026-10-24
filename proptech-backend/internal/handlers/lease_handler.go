@@ -411,9 +411,19 @@ func (h *LeaseHandler) giveNotice(c *gin.Context, l *models.Lease, userID, dateS
 		return false
 	}
 	h.repo.LogEvent(c.Request.Context(), l.ID, userID, "notice_given", "move-out on "+dateStr)
-	notify.SendRoute(l.OwnerID, "lease", "Tenant is moving out",
-		fmt.Sprintf("%s will move out of %s on %s.", l.TenantName, l.PropertyTitle, d.Format("2 Jan 2006")),
-		leaseRoute(l.ID))
+	msg := fmt.Sprintf("%s will move out of %s on %s.", l.TenantName, l.PropertyTitle, d.Format("2 Jan 2006"))
+	if ex, perr := h.repo.EarlyExitPreview(c.Request.Context(), l, d); perr == nil {
+		if ex.Early {
+			msg += fmt.Sprintf(" This is before the lease ends on %s.", ex.EndDate)
+		}
+		if ex.TotalDeduction > 0 {
+			msg += fmt.Sprintf(" Deduction from deposit: %s. Refund to tenant: %s of %s.",
+				rupees(ex.TotalDeduction), rupees(ex.EstimatedRefund), rupees(ex.DepositAmount))
+		} else if ex.DepositAmount > 0 {
+			msg += fmt.Sprintf(" No deduction expected. Deposit to refund: %s.", rupees(ex.DepositAmount))
+		}
+	}
+	notify.SendRoute(l.OwnerID, "lease", "Tenant is moving out", msg, leaseRoute(l.ID))
 	return true
 }
 
@@ -460,28 +470,33 @@ func (h *LeaseHandler) MoveOutComplete(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	n, err := h.repo.CountPhotos(ctx, l.ID, "move_out", nil, nil)
-	if err != nil {
-		leaseErr(c, err)
-		return
-	}
-	if n == 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "upload at least one move-out photo before confirming the move-out"})
-		return
-	}
 	if err := h.repo.CompleteMoveOut(ctx, l); err != nil {
 		leaseErr(c, err)
 		return
 	}
 	h.repo.LogEvent(ctx, l.ID, userID, "moved_out", "property is available again")
-	notify.SendRoute(l.TenantID, "lease", "Move-out confirmed",
-		fmt.Sprintf("Your move-out from %s is confirmed. The deposit inspection comes next.", l.PropertyTitle),
-		leaseRoute(l.ID))
 	updated, err := h.repo.GetLease(ctx, l.ID)
 	if err != nil {
 		leaseErr(c, err)
 		return
 	}
+
+	// Start the deposit check right away and pre-fill the deductions (unpaid rent,
+	// short notice). The owner reviews them, removes / adds anything, then sends
+	// the settlement. If the deposit is not held yet, nothing is started here.
+	tenantMsg := fmt.Sprintf("Your move-out from %s is confirmed. The deposit check comes next.", l.PropertyTitle)
+	if updated.MoveOutDate != nil && h.repo.StartInspection(ctx, updated) == nil {
+		h.repo.LogEvent(ctx, l.ID, userID, "inspection_started", "")
+		tenantMsg = fmt.Sprintf("Your move-out from %s is confirmed. The owner is checking your deposit. You will see any deductions before they are final.", l.PropertyTitle)
+		if ex, perr := h.repo.EarlyExitPreview(ctx, updated, models.ParseDate(*updated.MoveOutDate)); perr == nil {
+			for _, it := range ex.Items {
+				if _, aerr := h.repo.AddDeduction(ctx, l.ID, userID, it.Category, it.Reason, it.Amount); aerr == nil {
+					h.repo.LogEvent(ctx, l.ID, userID, "deduction_added", fmt.Sprintf("%s %s: %s", it.Category, rupees(it.Amount), it.Reason))
+				}
+			}
+		}
+	}
+	notify.SendRoute(l.TenantID, "lease", "Move-out confirmed", tenantMsg, leaseRoute(l.ID))
 	c.JSON(http.StatusOK, gin.H{"lease": updated})
 }
 
@@ -505,4 +520,33 @@ func (h *LeaseHandler) MoveInConfirm(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"lease": updated})
+}
+// GET /api/leases/:id/early-exit?move_out=YYYY-MM-DD   (owner or tenant)
+// Preview of what leaving on that date costs: unpaid rent and any notice-period
+// shortfall. move_out is optional once notice has been given (the planned date is used).
+func (h *LeaseHandler) EarlyExit(c *gin.Context) {
+	l, _, _, ok := h.party(c)
+	if !ok {
+		return
+	}
+	var moveOut time.Time
+	if s := strings.TrimSpace(c.Query("move_out")); s != "" {
+		d, err := time.Parse(models.DateLayout, s)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "move_out must look like 2026-12-31"})
+			return
+		}
+		moveOut = d
+	} else if l.MoveOutDate != nil {
+		moveOut = models.ParseDate(*l.MoveOutDate)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "move_out date is required"})
+		return
+	}
+	preview, err := h.repo.EarlyExitPreview(c.Request.Context(), l, moveOut)
+	if err != nil {
+		leaseErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"early_exit": preview})
 }

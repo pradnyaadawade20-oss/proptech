@@ -20,6 +20,7 @@ func RegisterLeaseRoutes(router *gin.Engine, h *handlers.LeaseHandler) {
 		l.GET("/rent", h.Rent)
 		l.POST("/renewal", h.Renewal)
 		l.POST("/renewal/respond", h.RenewalRespond)
+		l.GET("/early-exit", h.EarlyExit)
 		l.POST("/move-out", h.MoveOut)
 		l.POST("/move-out/complete", h.MoveOutComplete)
 		l.POST("/move-in/confirm", h.MoveInConfirm)
