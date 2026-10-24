@@ -551,9 +551,12 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
 
   Widget _bottomButton() {
     if (_isDraftEditable) {
+      // Once the draft has been sent for signature, disable (blur) the button.
+      final alreadySent = const {AgreementStatus.draftReady, AgreementStatus.awaitingSignatures}.contains(_agreement?.status);
       return AppButton(
-        label: 'Save Draft & Send for Signature',
-        onPressed: _saving ? null : _saveDraftAndContinue,
+        label: alreadySent ? 'Draft Sent for Signature' : 'Save Draft & Send for Signature',
+        loading: _saving,
+        onPressed: (_saving || alreadySent) ? null : _saveDraftAndContinue,
       );
     }
     if (_isClosed) {
@@ -1296,9 +1299,21 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         child: Text(text, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: color)),
       );
 
-  Widget _signerRow(int n, String role, String name, bool signed, {required Color pendingColor}) {
+  // The signed-in user can tap their own pending row to open the signature page,
+  // once the draft has been sent (status draft_ready / awaiting_signatures).
+  bool get _canSignNow =>
+      !_isClosed &&
+      !_waitingForOwner &&
+      !_hasSignedAlready &&
+      !_saving &&
+      const {AgreementStatus.draftReady, AgreementStatus.awaitingSignatures}.contains(_agreement?.status);
+
+  Widget _signerRow(int n, String role, String name, bool signed, {required Color pendingColor, required bool isMe}) {
     final color = signed ? AppColors.success : pendingColor;
-    return Padding(
+    final tappable = isMe && !signed && _canSignNow;
+    return InkWell(
+      onTap: tappable ? _openSignatureScreen : null,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
@@ -1337,7 +1352,7 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _signatureCard() {
@@ -1348,9 +1363,9 @@ class _DraftPreviewScreenState extends State<DraftPreviewScreen> {
         children: [
           _sectionTitle('Signature Status'),
           const SizedBox(height: 6),
-          _signerRow(1, 'Owner', a.ownerName, a.ownerHasSigned, pendingColor: AppColors.warning),
+          _signerRow(1, 'Owner', a.ownerName, a.ownerHasSigned, pendingColor: AppColors.warning, isMe: _isOwner),
           const Divider(height: 1, color: AppColors.border),
-          _signerRow(2, 'Tenant', a.tenantName, a.tenantHasSigned, pendingColor: AppColors.primary),
+          _signerRow(2, 'Tenant', a.tenantName, a.tenantHasSigned, pendingColor: AppColors.primary, isMe: !_isOwner),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,

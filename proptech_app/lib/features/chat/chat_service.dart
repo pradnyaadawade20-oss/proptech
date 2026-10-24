@@ -63,6 +63,24 @@ class ChatService {
     }
   }
 
+  /// Call history with [otherUserId] (newest first). Never throws - if the
+  /// call log can't load, the chat still shows its messages.
+  Future<List<ChatCall>> getCalls(String otherUserId) async {
+    try {
+      final response = await _dio.get(
+        '/api/calls',
+        queryParameters: {'peer_id': otherUserId},
+      );
+      final list = response.data['calls'] as List<dynamic>? ?? [];
+      return list
+          .map((e) => ChatCall.fromJson(e as Map<String, dynamic>))
+          .where((c) => c.isFinished)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<ChatMessage> send({
     required String receiverId,
     required String text,
