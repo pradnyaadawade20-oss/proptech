@@ -151,10 +151,10 @@ class _CallScreenState extends State<CallScreen> {
         ),
         _RoundButton(icon: Icons.call_end, color: Colors.red, label: 'End', onTap: _call.hangUp),
         _RoundButton(
-          icon: _call.speakerOn ? Icons.volume_up : Icons.volume_down,
+          icon: _call.speakerOn ? Icons.volume_up_rounded : Icons.hearing_rounded, // speaker on -> speaker, else earpiece (ear)
           color: _call.speakerOn ? Colors.white : Colors.white24,
           iconColor: _call.speakerOn ? AppColors.primaryDark : Colors.white,
-          label: 'Speaker',
+          label: _call.speakerOn ? 'Speaker' : 'Earpiece',
           onTap: _call.toggleSpeaker,
         ),
       ],

@@ -14,7 +14,7 @@ String _date(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
 class _Stars extends StatelessWidget {
   final int rating;
   final double size;
-  const _Stars({required this.rating, this.size = 16});
+  const _Stars({required this.rating}) : size = 16;
 
   @override
   Widget build(BuildContext context) {

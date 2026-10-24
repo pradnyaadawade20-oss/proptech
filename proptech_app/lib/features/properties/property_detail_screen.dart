@@ -174,6 +174,16 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> with Proper
   }
 
   Future<void> _bookVisit(Property property) async {
+    // Owner apni hi listing par visit book nahi kar sakta.
+    final myId = await TokenStore.instance.getUserId();
+    if (!mounted) return;
+    if (myId != null && myId == property.ownerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This is your own listing.')),
+      );
+      return;
+    }
+
     final date = await showDatePicker(
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 1)),
