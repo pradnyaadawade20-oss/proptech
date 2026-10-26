@@ -248,7 +248,8 @@ func (r *CallRepository) UserSuspended(ctx context.Context, userID string) bool 
 }
 
 // ListForUser is the call history (newest first) with the other person's name.
-func (r *CallRepository) ListForUser(ctx context.Context, userID string, limit int) ([]models.Call, error) {
+// peerID (optional) limits it to calls with that one person (used by the chat thread).
+func (r *CallRepository) ListForUser(ctx context.Context, userID, peerID string, limit int) ([]models.Call, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -259,9 +260,10 @@ func (r *CallRepository) ListForUser(ctx context.Context, userID string, limit i
 		       COALESCE(u.name, '')
 		FROM calls c
 		JOIN users u ON u.id = CASE WHEN c.caller_id = $1::uuid THEN c.callee_id ELSE c.caller_id END
-		WHERE c.caller_id = $1::uuid OR c.callee_id = $1::uuid
+		WHERE (c.caller_id = $1::uuid OR c.callee_id = $1::uuid)
+		  AND ($3::text = '' OR c.caller_id::text = $3::text OR c.callee_id::text = $3::text)
 		ORDER BY c.created_at DESC
-		LIMIT $2`, userID, limit)
+		LIMIT $2`, userID, limit, peerID)
 	if err != nil {
 		return nil, err
 	}

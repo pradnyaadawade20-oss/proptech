@@ -265,7 +265,13 @@ func (h *CallHandler) History(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	calls, err := h.repo.ListForUser(c.Request.Context(), userID, 50)
+	// Optional ?peer_id= : only calls with that person (chat thread). Up to 100.
+	peerID := strings.TrimSpace(c.Query("peer_id"))
+	limit := 50
+	if peerID != "" {
+		limit = 100
+	}
+	calls, err := h.repo.ListForUser(c.Request.Context(), userID, peerID, limit)
 	if err != nil {
 		writeCallError(c, err)
 		return
