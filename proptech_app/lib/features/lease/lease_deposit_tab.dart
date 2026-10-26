@@ -21,7 +21,19 @@ class LeaseDepositTab extends StatefulWidget {
 }
 
 class _LeaseDepositTabState extends State<LeaseDepositTab> {
-  late final Future<Deposit?> _future = LeaseService.instance.deposit(widget.lease.id);
+  late final Future<Deposit?> _future = _loadDeposit();
+
+  /// If a refund is still processing at Cashfree, check on it first so the screen shows the latest.
+  Future<Deposit?> _loadDeposit() async {
+    var d = await LeaseService.instance.deposit(widget.lease.id);
+    if (d != null && d.refundInProgress) {
+      try {
+        await LeaseService.instance.refreshOnlineRefund(widget.lease.id);
+        d = await LeaseService.instance.deposit(widget.lease.id);
+      } catch (_) {}
+    }
+    return d;
+  }
   bool _busy = false;
   Future<EarlyExit?>? _suggestFuture;
 
@@ -130,6 +142,17 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _refundOnline(Deposit d) async {
+    final ok = await confirmDialog(
+      context,
+      'Refund in the app',
+      '${inr(d.refundAmount)} will be refunded to ${widget.lease.tenantName}\'s original payment method (the UPI, card or bank they paid the deposit with). It can take a few days to reach them.',
+      yes: 'Refund now',
+    );
+    if (!ok) return;
+    await _run(() => LeaseService.instance.refundDepositOnline(_id), 'Refund started');
   }
 
   Future<void> _refund(Deposit d) async {
@@ -334,12 +357,36 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
       case 'disputed':
         return const InfoBanner('The tenant disputed the settlement. PropTech support will review and decide.', color: AppColors.error, icon: Icons.gavel);
       case 'refund_due':
-        return _owner
-            ? Column(children: [
-                InfoBanner('Refund ${inr(d.refundAmount)} to ${widget.lease.tenantName}, then record it here.', color: AppColors.warning, icon: Icons.payments_outlined),
-                btn('Record refund', () => _refund(d)),
-              ])
-            : InfoBanner('Settlement agreed. The owner will refund ${inr(d.refundAmount)}.', color: AppColors.warning, icon: Icons.payments_outlined);
+        if (d.refundInProgress) {
+          return InfoBanner(
+            _owner
+                ? 'Refund of ${inr(d.refundAmount)} is being processed. It goes back to the tenant\'s original payment method.'
+                : 'Your refund of ${inr(d.refundAmount)} is being processed. It goes back to the payment method you paid the deposit with.',
+            color: AppColors.warning,
+            icon: Icons.sync,
+          );
+        }
+        if (!_owner) {
+          return InfoBanner('Settlement agreed. The owner will refund ${inr(d.refundAmount)}.', color: AppColors.warning, icon: Icons.payments_outlined);
+        }
+        if (d.onlineRefundStatus == 'FAILED' || d.onlineRefundStatus == 'CANCELLED') {
+          return Column(children: [
+            const InfoBanner('The last refund did not go through. You can try again.', color: AppColors.error, icon: Icons.error_outline),
+            if (d.canRefundOnline) btn('Try refund again', () => _refundOnline(d)),
+            btn('I refunded outside the app', () => _refund(d), outlined: true),
+          ]);
+        }
+        return Column(children: [
+          InfoBanner(
+            d.canRefundOnline
+                ? 'Refund ${inr(d.refundAmount)} to ${widget.lease.tenantName}. The tenant paid in the app, so you can refund it from here in one tap.'
+                : 'Refund ${inr(d.refundAmount)} to ${widget.lease.tenantName}, then record it here.',
+            color: AppColors.warning,
+            icon: Icons.payments_outlined,
+          ),
+          if (d.canRefundOnline) btn('Refund ${inr(d.refundAmount)} in the app', () => _refundOnline(d)),
+          btn(d.canRefundOnline ? 'I refunded outside the app' : 'Record refund', () => _refund(d), outlined: d.canRefundOnline),
+        ]);
       case 'refunded':
         return const InfoBanner('The deposit has been settled and refunded.', color: AppColors.success, icon: Icons.check_circle_outline);
       case 'carried_forward':

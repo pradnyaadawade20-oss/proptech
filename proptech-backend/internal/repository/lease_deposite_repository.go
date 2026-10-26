@@ -17,7 +17,7 @@ const depositSelect = `
 	       submitted_at, received_at, total_deductions, refund_amount, tenant_owes,
 	       COALESCE(tenant_note, ''), COALESCE(admin_note, ''),
 	       COALESCE(refund_method, ''), COALESCE(refund_reference, ''),
-	       settlement_at, responded_at, refunded_at
+	       settlement_at, responded_at, refunded_at, cf_refund_status
 	FROM lease_deposits
 `
 
@@ -29,13 +29,20 @@ func (r *LeaseRepository) GetDeposit(ctx context.Context, leaseID string) (*mode
 		&d.ID, &d.LeaseID, &d.Amount, &d.Status, &d.PaymentMethod, &d.Reference,
 		&d.SubmittedAt, &d.ReceivedAt, &d.TotalDeductions, &d.RefundAmount, &d.TenantOwes,
 		&d.TenantNote, &d.AdminNote, &d.RefundMethod, &d.RefundReference,
-		&d.SettlementAt, &d.RespondedAt, &d.RefundedAt,
+		&d.SettlementAt, &d.RespondedAt, &d.RefundedAt, &d.OnlineRefundStatus,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrLeaseNotFound
 		}
 		return nil, err
+	}
+	// The refund can go back through the app only if the deposit was paid online.
+	if d.Status == "refund_due" && d.RefundAmount > 0 && d.OnlineRefundStatus != "PENDING" && d.OnlineRefundStatus != "ONHOLD" {
+		_ = r.db.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM payment_orders
+			               WHERE lease_id = $1 AND kind = 'deposit' AND status = 'paid' AND amount >= $2)`,
+			leaseID, d.RefundAmount).Scan(&d.CanRefundOnline)
 	}
 
 	rows, err := r.db.Query(ctx, `

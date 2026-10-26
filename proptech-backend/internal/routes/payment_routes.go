@@ -17,6 +17,8 @@ func RegisterPaymentRoutes(router *gin.Engine, h *handlers.PaymentHandler) {
 	api := router.Group("/api", middleware.AuthRequired())
 	api.POST("/rent/:paymentId/checkout", h.RentCheckout)
 	api.POST("/leases/:id/deposit/checkout", h.DepositCheckout)
+	api.POST("/leases/:id/deposit/refund-online", h.RefundDepositOnline)
+	api.GET("/leases/:id/deposit/refund-online", h.RefreshOnlineRefund)
 	api.GET("/payments/orders/:orderId", h.OrderStatus)
 	api.POST("/broker/:id/subscription/checkout", h.SubscriptionCheckout) // broker plan via Cashfree
 

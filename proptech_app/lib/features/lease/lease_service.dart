@@ -184,6 +184,14 @@ class LeaseService {
   Future<void> depositRefund(String leaseId, String method, String reference) =>
       _run(() => _dio.post('/api/leases/$leaseId/deposit/refund', data: {'method': method, 'reference': reference}));
 
+  /// Refund the deposit back to the tenant's original payment method (deposit paid in the app).
+  Future<void> refundDepositOnline(String leaseId) =>
+      _run(() => _dio.post('/api/leases/$leaseId/deposit/refund-online', data: {}));
+
+  /// Asks Cashfree how a started refund is going; the server finishes the deposit when it succeeded.
+  Future<void> refreshOnlineRefund(String leaseId) =>
+      _run(() => _dio.get('/api/leases/$leaseId/deposit/refund-online'));
+
   // ---------------- photos ----------------
 
   Future<List<RoomComparison>> comparison(String leaseId) => _run(() async {

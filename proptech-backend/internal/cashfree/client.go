@@ -140,6 +140,40 @@ func MethodName(group string) string {
 	return "online_" + strings.ToLower(group)
 }
 
+// ---- refunds ----
+
+type Refund struct {
+	CFRefundID   json.Number `json:"cf_refund_id"`
+	RefundID     string      `json:"refund_id"`
+	OrderID      string      `json:"order_id"`
+	RefundAmount float64     `json:"refund_amount"`
+	Status       string      `json:"refund_status"` // SUCCESS | PENDING | ONHOLD | CANCELLED | FAILED
+	Description  string      `json:"status_description"`
+}
+
+// CreateRefund refunds part (or all) of a PAID order back to the payer's original payment method.
+// refundID must be unique per refund (Cashfree rejects a repeated one).
+func (c *Client) CreateRefund(ctx context.Context, orderID, refundID string, amount float64, note string) (*Refund, error) {
+	body := map[string]any{
+		"refund_amount": amount,
+		"refund_id":     refundID,
+		"refund_note":   note,
+	}
+	var out Refund
+	if err := c.do(ctx, http.MethodPost, "/orders/"+orderID+"/refunds", body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) GetRefund(ctx context.Context, orderID, refundID string) (*Refund, error) {
+	var out Refund
+	if err := c.do(ctx, http.MethodGet, "/orders/"+orderID+"/refunds/"+refundID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ---- webhook signature ----
 
 // VerifyWebhook checks x-webhook-signature = base64(HMAC-SHA256(timestamp + rawBody, secret)).

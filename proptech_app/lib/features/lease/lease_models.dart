@@ -192,6 +192,8 @@ class Deposit {
   final String status, paymentMethod, reference, tenantNote, adminNote, refundMethod, refundReference;
   final List<Deduction> deductions;
   final DateTime? receivedAt;
+  final String onlineRefundStatus; // '' | SUCCESS | PENDING | ONHOLD | CANCELLED | FAILED
+  final bool canRefundOnline; // deposit was paid in the app, so it can be refunded in the app
 
   const Deposit({
     required this.id,
@@ -209,7 +211,11 @@ class Deposit {
     required this.refundReference,
     required this.deductions,
     this.receivedAt,
+    this.onlineRefundStatus = '',
+    this.canRefundOnline = false,
   });
+
+  bool get refundInProgress => onlineRefundStatus == 'PENDING' || onlineRefundStatus == 'ONHOLD';
 
   factory Deposit.fromJson(Map<String, dynamic> j) => Deposit(
         id: _s(j['id']),
@@ -226,6 +232,8 @@ class Deposit {
         refundMethod: _s(j['refund_method']),
         refundReference: _s(j['refund_reference']),
         receivedAt: _dt(j['received_at']),
+        onlineRefundStatus: _s(j['online_refund_status']),
+        canRefundOnline: j['can_refund_online'] == true,
         deductions: ((j['deductions'] as List?) ?? const [])
             .map((e) => Deduction.fromJson(e as Map<String, dynamic>))
             .toList(),

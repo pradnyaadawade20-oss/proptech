@@ -187,6 +187,10 @@ type Deposit struct {
 	Deductions      []Deduction `json:"deductions"`
 	// Live preview while the owner is still adding deductions.
 	PreviewRefund float64 `json:"preview_refund"`
+
+	// Refund through the app (Cashfree), back to the tenant's original payment method.
+	OnlineRefundStatus string `json:"online_refund_status,omitempty"` // SUCCESS | PENDING | ONHOLD | CANCELLED | FAILED
+	CanRefundOnline    bool   `json:"can_refund_online"`
 }
 
 type LeasePhoto struct {
