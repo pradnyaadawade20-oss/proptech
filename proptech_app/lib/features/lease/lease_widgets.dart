@@ -37,7 +37,7 @@ String inr(double v) {
     if (rest.isNotEmpty) parts.insert(0, rest);
     g = '${parts.join(',')},$last3';
   }
-  return '${neg ? '-' : ''}₹$g${paise > 0 ? '.${paise.toString().padLeft(2, '0')}' : ''}';
+  return '${neg ? '-' : ''}₹$g${paise > 0 ? ' .${paise.toString().padLeft(2, '0')}' : ''}';
 }
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -173,10 +173,7 @@ Future<String?> askDate(BuildContext context, {required DateTime first, required
 // ------------------------------------------------------------ payment sheet
 
 const paymentMethods = {
-  'bank_transfer': 'Bank transfer',
   'cash': 'Cash',
-  'cheque': 'Cheque',
-  'other': 'Other',
 };
 
 typedef PaymentInput = ({String method, String reference});
@@ -204,7 +201,7 @@ class _PaymentSheet extends StatefulWidget {
 }
 
 class _PaymentSheetState extends State<_PaymentSheet> {
-  String _method = 'bank_transfer';
+  String _method = 'cash';
   final _ref = TextEditingController();
   String? _error;
 
