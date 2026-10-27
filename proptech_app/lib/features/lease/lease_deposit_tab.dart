@@ -8,7 +8,6 @@ import 'lease_models.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
 import 'online_payment.dart';
-import 'receipt_screen.dart';
 
 class LeaseDepositTab extends StatefulWidget {
   final Lease lease;
@@ -131,22 +130,6 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     await widget.onChanged();
   }
 
-  /// Downloads the payment receipt or (refund = true) the refund receipt into the phone's Downloads.
-  Future<void> _receipt({bool refund = false}) async {
-    setState(() => _busy = true);
-    try {
-      final bytes = refund
-          ? await LeaseService.instance.depositRefundReceiptPdf(_id)
-          : await LeaseService.instance.depositReceiptPdf(_id);
-      if (!mounted) return;
-      await savePdfToDownloads(context, bytes, refund ? 'deposit-refund-receipt' : 'deposit-receipt');
-    } catch (e) {
-      if (mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   /// Long ids are shortened on screen (the full id is on the receipt).
   String _short(String ref) => ref.length > 16 ? '${ref.substring(0, 6)}...${ref.substring(ref.length - 6)}' : ref;
 
@@ -231,28 +214,6 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
                     if (d.refundReference.isNotEmpty) InfoRow('Refund ID', _short(d.refundReference)),
                     if (d.refundedAt != null) InfoRow('Refunded on', fmtDateTime(d.refundedAt)),
                   ],
-                  if (d.paymentMethod.isNotEmpty && d.status != 'pending' && d.status != 'submitted' && d.status != 'carried_forward') ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _busy ? null : () => _receipt(),
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Download payment receipt'),
-                      ),
-                    ),
-                  ],
-                  if (d.status == 'refunded') ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _busy ? null : () => _receipt(refund: true),
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Download refund receipt'),
-                      ),
-                    ),
-                  ],
                 ]),
               ),
               _statusBlock(d),
@@ -334,6 +295,10 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
             ]),
           ),
           if (d.tenantOwes > 0) InfoRow('Tenant still owes', inr(d.tenantOwes), valueColor: AppColors.error),
+        ],
+        if (widget.lease.ownerName.isNotEmpty) ...[
+          const Divider(height: 24),
+          InfoRow('Owner', widget.lease.ownerName),
         ],
       ]),
     );

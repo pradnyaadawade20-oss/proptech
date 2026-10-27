@@ -28,25 +28,61 @@ class TokenStore {
   // mid-session. Persisted copy in secure storage survives app restarts.
   String? _cachedToken;
 
+  // Backup copy in SharedPreferences. Android Keystore reads can fail or stall on
+  // a cold start (app killed in background), which used to look like "logged out".
+  // SharedPreferences is wiped on uninstall, so a reinstall still starts logged out.
+  Future<void> _mirrorWrite(String key, String? value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (value == null) {
+        await prefs.remove('mirror_$key');
+      } else {
+        await prefs.setString('mirror_$key', value);
+      }
+    } catch (_) {}
+  }
+
+  Future<String?> _mirrorRead(String key) async {
+    try {
+      return (await SharedPreferences.getInstance()).getString('mirror_$key');
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> saveToken(String token) async {
     _cachedToken = token;
-    await _storage.write(key: _tokenKey, value: token);
+    await _mirrorWrite(_tokenKey, token);
+    try {
+      await _storage.write(key: _tokenKey, value: token);
+    } catch (e) {
+      debugPrint('TokenStore: secure write failed, using backup copy: $e');
+    }
   }
 
   Future<String?> getToken() async {
     if (_cachedToken != null) return _cachedToken;
-    // Android Keystore can be slow / fail transiently right after launch,
-    // so retry once before giving up.
-    for (var attempt = 0; attempt < 2; attempt++) {
+    String? t;
+    // Android Keystore can be slow / fail transiently right after launch, so retry.
+    for (var attempt = 0; attempt < 3 && (t == null || t.isEmpty); attempt++) {
       try {
-        final t = await _storage.read(key: _tokenKey).timeout(const Duration(seconds: 8));
-        _cachedToken = t;
-        return t;
-      } on TimeoutException {
-        if (attempt == 1) rethrow;
+        t = await _storage.read(key: _tokenKey).timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('TokenStore: secure read failed (attempt ${attempt + 1}): $e');
+      }
+      if (t == null || t.isEmpty) await Future.delayed(const Duration(milliseconds: 300));
+    }
+    // Secure storage gave nothing: use the backup copy (and heal secure storage).
+    if (t == null || t.isEmpty) {
+      t = await _mirrorRead(_tokenKey);
+      if (t != null && t.isNotEmpty) {
+        try {
+          await _storage.write(key: _tokenKey, value: t);
+        } catch (_) {}
       }
     }
-    return null;
+    if (t != null && t.isNotEmpty) _cachedToken = t;
+    return (t == null || t.isEmpty) ? null : t;
   }
 
   // In-memory copy, like the token: a flaky Keystore read must not make a
@@ -55,7 +91,10 @@ class TokenStore {
 
   Future<void> saveUserId(String userId) async {
     _cachedUserId = userId;
-    await _storage.write(key: _userIdKey, value: userId);
+    await _mirrorWrite(_userIdKey, userId);
+    try {
+      await _storage.write(key: _userIdKey, value: userId);
+    } catch (_) {}
   }
 
   Future<String?> getUserId() async {
@@ -86,33 +125,38 @@ class TokenStore {
     }
   }
 
-  /// Never throws and never hangs: Android Keystore can get corrupted
-  /// (reinstall / backup restore) and then secure-storage reads throw
-  /// BadPaddingException or stall. In that case treat the user as logged
-  /// out and wipe the unreadable data so the next login works cleanly.
+  /// Never throws. Only "no token anywhere" counts as logged out; a failing or
+  /// slow secure-storage read must NOT wipe the login (that logged users out
+  /// every time the app was reopened after being killed).
   Future<bool> isLoggedIn() async {
     try {
       final token = await getToken();
       return token != null && token.isNotEmpty;
-    } on TimeoutException {
-      debugPrint('TokenStore: secure storage read timed out');
-      return false;
     } catch (e) {
-      debugPrint('TokenStore: secure storage unreadable, resetting: $e');
-      try {
-        await _storage.deleteAll().timeout(const Duration(seconds: 5));
-      } catch (_) {}
+      debugPrint('TokenStore: isLoggedIn check failed: $e');
       return false;
     }
   }
 
   Future<void> saveRoles(String roles, String activeRole) async {
-    await _storage.write(key: _rolesKey, value: roles);
-    await _storage.write(key: _activeRoleKey, value: activeRole);
+    await _mirrorWrite(_rolesKey, roles);
+    await _mirrorWrite(_activeRoleKey, activeRole);
+    try {
+      await _storage.write(key: _rolesKey, value: roles);
+      await _storage.write(key: _activeRoleKey, value: activeRole);
+    } catch (_) {}
   }
 
-  Future<String?> getRoles() => _storage.read(key: _rolesKey);
-  Future<String?> getActiveRole() => _storage.read(key: _activeRoleKey);
+  Future<String?> _readWithMirror(String key) async {
+    try {
+      final v = await _storage.read(key: key).timeout(const Duration(seconds: 8));
+      if (v != null && v.isNotEmpty) return v;
+    } catch (_) {}
+    return _mirrorRead(key);
+  }
+
+  Future<String?> getRoles() => _readWithMirror(_rolesKey);
+  Future<String?> getActiveRole() => _readWithMirror(_activeRoleKey);
 
   /// Call once at startup. SharedPreferences is wiped when the app is
   /// uninstalled, but Keychain (iOS) / restored backups can keep the old
@@ -130,9 +174,11 @@ class TokenStore {
   Future<void> clear() async {
     _cachedToken = null;
     _cachedUserId = null;
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _userIdKey);
-    await _storage.delete(key: _rolesKey);
-    await _storage.delete(key: _activeRoleKey);
+    for (final k in [_tokenKey, _userIdKey, _rolesKey, _activeRoleKey]) {
+      await _mirrorWrite(k, null);
+      try {
+        await _storage.delete(key: k);
+      } catch (_) {}
+    }
   }
 }

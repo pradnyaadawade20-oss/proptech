@@ -1,6 +1,8 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:share_plus/share_plus.dart';
@@ -31,10 +33,23 @@ class ReceiptData {
   });
 }
 
-/// Saves a PDF into the phone's Downloads folder.
+/// Saves a PDF into the phone's public Downloads folder.
 Future<void> savePdfToDownloads(BuildContext context, Uint8List bytes, String name) async {
   try {
-    await FileSaver.instance.saveFile(name: name, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+    var saved = false;
+    if (Platform.isAndroid) {
+      try {
+        saved = await const MethodChannel('proptech/downloads')
+                .invokeMethod<bool>('save', {'name': '$name.pdf', 'mime': 'application/pdf', 'bytes': bytes}) ??
+            false;
+      } catch (_) {}
+    }
+    // Older Android / iOS: let the user pick where to save.
+    if (!saved) {
+      final path = await FileSaver.instance.saveAs(name: name, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+      saved = path != null && path.isNotEmpty;
+      if (!saved) return; // user cancelled
+    }
     if (context.mounted) snack(context, 'PDF saved in your Downloads');
   } catch (_) {
     if (context.mounted) snack(context, 'Could not save the PDF. Try Share instead.', error: true);
