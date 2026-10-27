@@ -241,6 +241,7 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
       title: 'Deductions & refund',
       trailing: canEdit ? TextButton.icon(onPressed: _busy ? null : _addDeduction, icon: const Icon(Icons.add, size: 18), label: const Text('Add')) : null,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (widget.lease.ownerName.isNotEmpty) InfoRow('Owner', widget.lease.ownerName),
         InfoRow('Deposit amount', inr(d.amount)),
         const SizedBox(height: 4),
         if (d.deductions.isEmpty)
@@ -295,10 +296,6 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
             ]),
           ),
           if (d.tenantOwes > 0) InfoRow('Tenant still owes', inr(d.tenantOwes), valueColor: AppColors.error),
-        ],
-        if (widget.lease.ownerName.isNotEmpty) ...[
-          const Divider(height: 24),
-          InfoRow('Owner', widget.lease.ownerName),
         ],
       ]),
     );
