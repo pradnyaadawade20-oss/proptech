@@ -141,6 +141,17 @@ func (h *PropertyHandler) GetPropertyByID(c *gin.Context) {
 	one := []models.Property{*property}
 	h.repo.AttachMedia(c.Request.Context(), one, baseURL(c))
 	property = &one[0]
+
+	// Count the view for the owner's stats (one per person per day; the owner's own views are skipped).
+	viewer := middleware.OptionalUserID(c)
+	if viewer == "" || property.OwnerID == nil || *property.OwnerID != viewer {
+		key := viewer
+		if key == "" {
+			key = "ip:" + c.ClientIP()
+		}
+		_ = h.repo.RecordView(c.Request.Context(), property.ID, key)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"property": property})
 }
 

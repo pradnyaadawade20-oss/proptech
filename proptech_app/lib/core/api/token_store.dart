@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -48,8 +49,42 @@ class TokenStore {
     return null;
   }
 
-  Future<void> saveUserId(String userId) => _storage.write(key: _userIdKey, value: userId);
-  Future<String?> getUserId() => _storage.read(key: _userIdKey);
+  // In-memory copy, like the token: a flaky Keystore read must not make a
+  // logged-in user look "logged out" (screens say "Please log in again.").
+  String? _cachedUserId;
+
+  Future<void> saveUserId(String userId) async {
+    _cachedUserId = userId;
+    await _storage.write(key: _userIdKey, value: userId);
+  }
+
+  Future<String?> getUserId() async {
+    if (_cachedUserId != null && _cachedUserId!.isNotEmpty) return _cachedUserId;
+    String? id;
+    try {
+      id = await _storage.read(key: _userIdKey).timeout(const Duration(seconds: 8));
+    } catch (_) {}
+    // Storage gave nothing: the login token itself carries the user id ("user_id" claim).
+    if (id == null || id.isEmpty) {
+      id = _userIdFromToken(await getToken());
+    }
+    _cachedUserId = id;
+    return id;
+  }
+
+  /// Reads the "user_id" claim from the JWT (no signature check; the server does that).
+  String? _userIdFromToken(String? token) {
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final id = (jsonDecode(payload) as Map)['user_id'];
+      return id is String && id.isNotEmpty ? id : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Never throws and never hangs: Android Keystore can get corrupted
   /// (reinstall / backup restore) and then secure-storage reads throw
@@ -94,6 +129,7 @@ class TokenStore {
 
   Future<void> clear() async {
     _cachedToken = null;
+    _cachedUserId = null;
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _rolesKey);

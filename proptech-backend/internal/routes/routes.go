@@ -24,6 +24,7 @@ func RegisterPropertyRoutes(router *gin.Engine, h *handlers.PropertyHandler) {
 	{
 		propertiesAuthed.POST("", h.CreateProperty)
 		propertiesAuthed.GET("/dashboard-stats", h.GetDashboardStats)
+		propertiesAuthed.GET("/my-stats", h.GetMyPropertyStats)
 		propertiesAuthed.PUT("/:id", h.UpdateProperty)
 		propertiesAuthed.PATCH("/:id/status", h.UpdateListingStatus)
 		propertiesAuthed.DELETE("/:id", h.DeleteProperty)

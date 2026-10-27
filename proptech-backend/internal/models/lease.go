@@ -205,6 +205,8 @@ type LeasePhoto struct {
 	TicketID     *string   `json:"ticket_id,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	URL          string    `json:"url"`
+	ContentType  string    `json:"content_type"`
+	IsVideo      bool      `json:"is_video"`
 }
 
 type TicketUpdate struct {

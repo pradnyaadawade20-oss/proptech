@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:chewie/chewie.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
@@ -405,7 +407,73 @@ class _LeasePhotoImageState extends State<LeasePhotoImage> {
   }
 }
 
+/// Plays a lease video (damage proof). The server checks the login token, so it is sent as a header.
+class LeaseVideoScreen extends StatefulWidget {
+  final LeasePhoto video;
+  const LeaseVideoScreen(this.video, {super.key});
+
+  @override
+  State<LeaseVideoScreen> createState() => _LeaseVideoScreenState();
+}
+
+class _LeaseVideoScreenState extends State<LeaseVideoScreen> {
+  VideoPlayerController? _video;
+  ChewieController? _chewie;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final token = await TokenStore.instance.getToken();
+      final url = widget.video.url.startsWith('http') ? widget.video.url : '${LeaseService.instance.baseUrl}${widget.video.url}';
+      final c = VideoPlayerController.networkUrl(Uri.parse(url), httpHeaders: {'Authorization': 'Bearer $token'});
+      await c.initialize();
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() {
+        _video = c;
+        _chewie = ChewieController(videoPlayerController: c, autoPlay: true, aspectRatio: c.value.aspectRatio);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not play this video.');
+    }
+  }
+
+  @override
+  void dispose() {
+    _chewie?.dispose();
+    _video?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: const Text('Video proof')),
+      body: Center(
+        child: _error != null
+            ? Text(_error!, style: const TextStyle(color: Colors.white70))
+            : _chewie == null
+                ? const CircularProgressIndicator()
+                : Chewie(controller: _chewie!),
+      ),
+    );
+  }
+}
+
 void showPhotoViewer(BuildContext context, LeasePhoto photo) {
+  if (photo.isVideo) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => LeaseVideoScreen(photo)));
+    return;
+  }
   showDialog(
     context: context,
     builder: (_) => Dialog(
@@ -453,7 +521,21 @@ class PhotoStrip extends StatelessWidget {
           return GestureDetector(
             onTap: () => showPhotoViewer(context, p),
             child: Stack(children: [
-              ClipRRect(borderRadius: BorderRadius.circular(8), child: LeasePhotoImage(p, width: 84, height: 84)),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: p.isVideo
+                    ? Container(
+                        width: 84,
+                        height: 84,
+                        color: Colors.black87,
+                        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.play_circle_fill, color: Colors.white, size: 34),
+                          SizedBox(height: 2),
+                          Text('Video', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                        ]),
+                      )
+                    : LeasePhotoImage(p, width: 84, height: 84),
+              ),
               if (canDelete && onDelete != null)
                 Positioned(
                   top: 2,

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"proptech-backend/internal/models"
 
@@ -15,7 +16,7 @@ import (
 
 const photoSelect = `
 	SELECT ph.id, ph.lease_id, ph.uploader_id, COALESCE(u.name, ''), ph.kind, ph.room, ph.caption,
-	       ph.deduction_id, ph.ticket_id, ph.created_at
+	       ph.deduction_id, ph.ticket_id, ph.created_at, ph.content_type
 	FROM lease_photos ph
 	LEFT JOIN users u ON u.id = ph.uploader_id
 `
@@ -23,10 +24,11 @@ const photoSelect = `
 func scanPhoto(row interface{ Scan(dest ...any) error }) (*models.LeasePhoto, error) {
 	var p models.LeasePhoto
 	err := row.Scan(&p.ID, &p.LeaseID, &p.UploaderID, &p.UploaderName, &p.Kind, &p.Room, &p.Caption,
-		&p.DeductionID, &p.TicketID, &p.CreatedAt)
+		&p.DeductionID, &p.TicketID, &p.CreatedAt, &p.ContentType)
 	if err != nil {
 		return nil, err
 	}
+	p.IsVideo = strings.HasPrefix(p.ContentType, "video/")
 	p.URL = "/api/leases/" + p.LeaseID + "/photos/" + p.ID
 	return &p, nil
 }

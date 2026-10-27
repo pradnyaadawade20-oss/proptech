@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
@@ -9,6 +8,7 @@ import 'lease_models.dart';
 import 'lease_service.dart';
 import 'lease_widgets.dart';
 import 'online_payment.dart';
+import 'receipt_screen.dart';
 
 class LeaseDepositTab extends StatefulWidget {
   final Lease lease;
@@ -131,18 +131,24 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
     await widget.onChanged();
   }
 
-  Future<void> _receipt() async {
+  /// Downloads the payment receipt or (refund = true) the refund receipt into the phone's Downloads.
+  Future<void> _receipt({bool refund = false}) async {
     setState(() => _busy = true);
     try {
-      final bytes = await LeaseService.instance.depositReceiptPdf(_id);
-      const name = 'deposit-receipt.pdf';
-      await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: name)], fileNameOverrides: [name]);
+      final bytes = refund
+          ? await LeaseService.instance.depositRefundReceiptPdf(_id)
+          : await LeaseService.instance.depositReceiptPdf(_id);
+      if (!mounted) return;
+      await savePdfToDownloads(context, bytes, refund ? 'deposit-refund-receipt' : 'deposit-receipt');
     } catch (e) {
       if (mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// Long ids are shortened on screen (the full id is on the receipt).
+  String _short(String ref) => ref.length > 16 ? '${ref.substring(0, 6)}...${ref.substring(ref.length - 6)}' : ref;
 
   Future<void> _refundOnline(Deposit d) async {
     final ok = await confirmDialog(
@@ -212,27 +218,46 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
               SectionCard(
                 title: 'Security deposit',
                 trailing: StatusPill.status(d.status),
-                child: Column(children: [
-                  InfoRow('Amount', inr(d.amount)),
-                  if (d.paymentMethod.isNotEmpty)
-                    InfoRow('Paid via', prettify(d.paymentMethod) + (d.reference.isEmpty ? '' : ' • ${d.reference}')),
-                  if (d.refundMethod.isNotEmpty)
-                    InfoRow('Refunded via', prettify(d.refundMethod) + (d.refundReference.isEmpty ? '' : ' • ${d.refundReference}')),
-                  if (d.paymentMethod.isNotEmpty && d.status != 'pending' && d.status != 'submitted' && d.status != 'carried_forward')
-                    Align(
-                      alignment: Alignment.centerLeft,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  InfoRow('Deposit amount', inr(d.amount)),
+                  if (d.paymentMethod.isNotEmpty) InfoRow('Paid via', prettify(d.paymentMethod)),
+                  if (d.reference.isNotEmpty) InfoRow('Payment ID', _short(d.reference)),
+                  if (d.receivedAt != null) InfoRow('Paid on', fmtDateTime(d.receivedAt)),
+                  if (d.status == 'refunded') ...[
+                    const Divider(height: 20),
+                    InfoRow('Refund amount', inr(d.refundAmount), valueColor: AppColors.success),
+                    if (d.refundMethod.isNotEmpty)
+                      InfoRow('Refunded via', d.refundMethod == 'online_refund' ? 'Online (original payment method)' : prettify(d.refundMethod)),
+                    if (d.refundReference.isNotEmpty) InfoRow('Refund ID', _short(d.refundReference)),
+                    if (d.refundedAt != null) InfoRow('Refunded on', fmtDateTime(d.refundedAt)),
+                  ],
+                  if (d.paymentMethod.isNotEmpty && d.status != 'pending' && d.status != 'submitted' && d.status != 'carried_forward') ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: _busy ? null : _receipt,
-                        icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                        label: const Text('Deposit receipt'),
+                        onPressed: _busy ? null : () => _receipt(),
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: const Text('Download payment receipt'),
                       ),
                     ),
+                  ],
+                  if (d.status == 'refunded') ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _busy ? null : () => _receipt(refund: true),
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: const Text('Download refund receipt'),
+                      ),
+                    ),
+                  ],
                 ]),
               ),
               _statusBlock(d),
               _suggestions(d),
-              if (d.deductions.isNotEmpty || d.status == 'inspection') _deductions(d),
-              if (_showTotals(d)) _totals(d),
+              if (d.deductions.isNotEmpty || d.status == 'inspection' || _showTotals(d)) _deductions(d),
               if (d.tenantNote.isNotEmpty) InfoBanner('Tenant note: ${d.tenantNote}', color: AppColors.warning, icon: Icons.chat_outlined),
               if (d.adminNote.isNotEmpty) InfoBanner('PropTech support: ${d.adminNote}', icon: Icons.support_agent),
               if (_busy) const LinearProgressIndicator(),
@@ -245,56 +270,72 @@ class _LeaseDepositTabState extends State<LeaseDepositTab> {
 
   bool _showTotals(Deposit d) => const {'inspection', 'settlement', 'disputed', 'refund_due', 'refunded', 'carried_forward'}.contains(d.status);
 
-  Widget _totals(Deposit d) {
-    final inspecting = d.status == 'inspection';
-    final refund = inspecting ? d.previewRefund : d.refundAmount;
-    return SectionCard(
-      title: 'Settlement',
-      child: Column(children: [
-        InfoRow('Deposit held', inr(d.amount)),
-        InfoRow('Total deductions', '- ${inr(d.totalDeductions)}', valueColor: d.totalDeductions > 0 ? AppColors.error : null),
-        InfoRow(inspecting ? 'Refund (so far)' : 'Refund to tenant', inr(refund), valueColor: AppColors.success),
-        if (d.tenantOwes > 0) InfoRow('Tenant still owes', inr(d.tenantOwes), valueColor: AppColors.error),
-      ]),
-    );
-  }
-
+  /// One simple card: deposit - deductions = refund.
   Widget _deductions(Deposit d) {
     final canEdit = _owner && d.status == 'inspection';
+    final inspecting = d.status == 'inspection';
+    final refund = inspecting ? d.previewRefund : d.refundAmount;
+    final totals = _showTotals(d);
     return SectionCard(
-      title: 'Deductions',
+      title: 'Deductions & refund',
       trailing: canEdit ? TextButton.icon(onPressed: _busy ? null : _addDeduction, icon: const Icon(Icons.add, size: 18), label: const Text('Add')) : null,
-      child: d.deductions.isEmpty
-          ? Text('No deductions.', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13))
-          : Column(
-              children: d.deductions
-                  .map((x) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            StatusPill(prettify(x.category), AppColors.primary),
-                            const Spacer(),
-                            Text(inr(x.amount), style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.error)),
-                            if (canEdit)
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.delete_outline, size: 20),
-                                onPressed: _busy
-                                    ? null
-                                    : () async {
-                                        if (await confirmDialog(context, 'Remove deduction', 'Remove this deduction?', yes: 'Remove')) {
-                                          await _run(() => LeaseService.instance.deleteDeduction(_id, x.id), 'Deduction removed');
-                                        }
-                                      },
-                              ),
-                          ]),
-                          const SizedBox(height: 4),
-                          Text(x.reason, style: GoogleFonts.inter(fontSize: 13)),
-                          if (x.photos.isNotEmpty) ...[const SizedBox(height: 6), PhotoStrip(x.photos)],
-                        ]),
-                      ))
-                  .toList(),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        InfoRow('Deposit amount', inr(d.amount)),
+        const SizedBox(height: 4),
+        if (d.deductions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text('No deductions - the full deposit comes back.', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13)),
+          )
+        else
+          for (final x in d.deductions)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  StatusPill(prettify(x.category), AppColors.primary),
+                  const Spacer(),
+                  Text('- ${inr(x.amount)}', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.error)),
+                  if (canEdit)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              if (await confirmDialog(context, 'Remove deduction', 'Remove this deduction?', yes: 'Remove')) {
+                                await _run(() => LeaseService.instance.deleteDeduction(_id, x.id), 'Deduction removed');
+                              }
+                            },
+                    ),
+                ]),
+                const SizedBox(height: 4),
+                Text(x.reason, style: GoogleFonts.inter(fontSize: 13)),
+                if (x.photos.isNotEmpty) ...[const SizedBox(height: 6), PhotoStrip(x.photos)],
+              ]),
             ),
+        if (totals) ...[
+          const Divider(height: 24),
+          InfoRow('Total deductions', '- ${inr(d.totalDeductions)}', valueColor: d.totalDeductions > 0 ? AppColors.error : null),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(inspecting ? 'Refund to tenant (so far)' : 'Refund to tenant', style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.textSecondary)),
+              const SizedBox(height: 2),
+              Text(inr(refund), style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.success)),
+              const SizedBox(height: 2),
+              Text('${inr(d.amount)} deposit - ${inr(d.totalDeductions)} deductions = ${inr(refund)}',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+            ]),
+          ),
+          if (d.tenantOwes > 0) InfoRow('Tenant still owes', inr(d.tenantOwes), valueColor: AppColors.error),
+        ],
+      ]),
     );
   }
 
@@ -416,8 +457,13 @@ class _DeductionSheetState extends State<_DeductionSheet> {
   String _category = 'damage';
   final _reason = TextEditingController();
   final _amount = TextEditingController();
-  final List<XFile> _photos = [];
+  final List<XFile> _photos = []; // photos and videos
+  final Set<String> _videoPaths = {};
   String? _error;
+
+  static const _maxItems = 6;
+  static const _maxVideos = 2;
+  static const _maxVideoBytes = 30 * 1024 * 1024; // keep in step with the server (30 MB)
 
   static const _cats = {'damage': 'Damage', 'unpaid_rent': 'Unpaid rent', 'cleaning': 'Cleaning', 'other': 'Other'};
 
@@ -428,16 +474,73 @@ class _DeductionSheetState extends State<_DeductionSheet> {
     super.dispose();
   }
 
+  /// Camera / gallery for photos and videos.
   Future<void> _pick() async {
-    final files = await ImagePicker().pickMultiImage(limit: 6);
-    if (files.isNotEmpty) setState(() => _photos..clear()..addAll(files.take(6)));
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Take photo'), onTap: () => Navigator.pop(ctx, 'camera_photo')),
+          ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choose photos from gallery'), onTap: () => Navigator.pop(ctx, 'gallery_photos')),
+          ListTile(leading: const Icon(Icons.videocam_outlined), title: const Text('Record video (up to 15 sec)'), onTap: () => Navigator.pop(ctx, 'camera_video')),
+          ListTile(leading: const Icon(Icons.video_library_outlined), title: const Text('Choose video from gallery'), onTap: () => Navigator.pop(ctx, 'gallery_video')),
+        ]),
+      ),
+    );
+    if (choice == null) return;
+    final picker = ImagePicker();
+    try {
+      switch (choice) {
+        case 'camera_photo':
+          final f = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+          if (f != null) _add([f]);
+        case 'gallery_photos':
+          final fs = await picker.pickMultiImage(imageQuality: 80, limit: _maxItems);
+          _add(fs);
+        case 'camera_video':
+          final f = await picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(seconds: 15));
+          if (f != null) await _addVideo(f);
+        case 'gallery_video':
+          final f = await picker.pickVideo(source: ImageSource.gallery);
+          if (f != null) await _addVideo(f);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open the camera or gallery. Check the app permissions.');
+    }
+  }
+
+  void _add(List<XFile> files) {
+    if (files.isEmpty) return;
+    setState(() {
+      _error = null;
+      for (final f in files) {
+        if (_photos.length >= _maxItems) {
+          _error = 'You can add up to $_maxItems photos or videos.';
+          break;
+        }
+        _photos.add(f);
+      }
+    });
+  }
+
+  Future<void> _addVideo(XFile f) async {
+    if (_videoPaths.length >= _maxVideos) {
+      setState(() => _error = 'You can add up to $_maxVideos videos.');
+      return;
+    }
+    if (await f.length() > _maxVideoBytes) {
+      setState(() => _error = 'This video is too large (max 30 MB). Record a shorter one.');
+      return;
+    }
+    _videoPaths.add(f.path);
+    _add([f]);
   }
 
   void _submit() {
     final amt = double.tryParse(_amount.text.trim());
     if (_reason.text.trim().length < 3) return setState(() => _error = 'Write the reason for this deduction');
     if (amt == null || amt <= 0) return setState(() => _error = 'Enter a valid amount');
-    if (_category == 'damage' && _photos.isEmpty) return setState(() => _error = 'Add at least one photo as proof of the damage');
+    if (_category == 'damage' && _photos.isEmpty) return setState(() => _error = 'Add at least one photo or video as proof of the damage');
     Navigator.pop(context, _DeductionInput(_category, _reason.text.trim(), amt, List.of(_photos)));
   }
 
@@ -462,9 +565,26 @@ class _DeductionSheetState extends State<_DeductionSheet> {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _pick,
-            icon: const Icon(Icons.photo_library_outlined),
-            label: Text(_photos.isEmpty ? (_category == 'damage' ? 'Add proof photos (required)' : 'Add photos (optional)') : '${_photos.length} photo(s) selected'),
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: Text(_photos.isEmpty
+                ? (_category == 'damage' ? 'Add proof: photo / video (required)' : 'Add photo / video (optional)')
+                : 'Add more (${_photos.length}/$_maxItems)'),
           ),
+          if (_photos.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(spacing: 8, runSpacing: 4, children: [
+                for (final f in _photos)
+                  InputChip(
+                    avatar: Icon(_videoPaths.contains(f.path) ? Icons.videocam_outlined : Icons.image_outlined, size: 18),
+                    label: Text(_videoPaths.contains(f.path) ? 'Video' : 'Photo'),
+                    onDeleted: () => setState(() {
+                      _videoPaths.remove(f.path);
+                      _photos.remove(f);
+                    }),
+                  ),
+              ]),
+            ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12))),
           const SizedBox(height: 12),
           SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _submit, child: const Text('Add deduction'))),

@@ -63,6 +63,7 @@ class _LeaseReceiptsTabState extends State<LeaseReceiptsTab> {
       out.add(ReceiptData(
         title: 'Security deposit',
         receiptNo: '',
+        fileName: 'deposit-receipt',
         amount: dep.amount,
         paidAt: dep.receivedAt,
         loadPdf: () => svc.depositReceiptPdf(l.id),
@@ -74,6 +75,28 @@ class _LeaseReceiptsTabState extends State<LeaseReceiptsTab> {
           ('Payment method', prettify(dep.paymentMethod)),
           ('Transaction ID', dep.reference),
           ('Paid on', fmtDateTime(dep.receivedAt)),
+        ],
+      ));
+    }
+    if (dep != null && dep.status == 'refunded') {
+      out.add(ReceiptData(
+        title: 'Deposit refund',
+        heading: 'Refund successful',
+        receiptNo: '',
+        fileName: 'deposit-refund-receipt',
+        amount: dep.refundAmount,
+        paidAt: dep.refundedAt,
+        loadPdf: () => svc.depositRefundReceiptPdf(l.id),
+        rows: [
+          ('Property', l.propertyTitle),
+          ('Deposit paid', inr(dep.amount)),
+          ('Deductions', dep.totalDeductions > 0 ? '- ${inr(dep.totalDeductions)}' : 'None'),
+          ('Refund amount', inr(dep.refundAmount)),
+          ('Refunded to', l.tenantName),
+          ('Refunded by', l.ownerName),
+          ('Refund mode', dep.refundMethod == 'online_refund' ? 'Online (original payment method)' : prettify(dep.refundMethod)),
+          ('Reference', dep.refundReference),
+          ('Refunded on', fmtDateTime(dep.refundedAt)),
         ],
       ));
     }

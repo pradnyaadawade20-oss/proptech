@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme/app_colors.dart';
@@ -16,6 +17,8 @@ class ReceiptData {
   final DateTime? paidAt;
   final List<(String, String)> rows;
   final Future<Uint8List> Function()? loadPdf; // null = no PDF (button hidden)
+  final String heading; // "Payment successful" / "Refund successful"
+  final String? fileName; // PDF file name without .pdf
   const ReceiptData({
     required this.title,
     required this.receiptNo,
@@ -23,7 +26,19 @@ class ReceiptData {
     required this.paidAt,
     required this.rows,
     this.loadPdf,
+    this.heading = 'Payment successful',
+    this.fileName,
   });
+}
+
+/// Saves a PDF into the phone's Downloads folder.
+Future<void> savePdfToDownloads(BuildContext context, Uint8List bytes, String name) async {
+  try {
+    await FileSaver.instance.saveFile(name: name, bytes: bytes, ext: 'pdf', mimeType: MimeType.pdf);
+    if (context.mounted) snack(context, 'PDF saved in your Downloads');
+  } catch (_) {
+    if (context.mounted) snack(context, 'Could not save the PDF. Try Share instead.', error: true);
+  }
 }
 
 /// A proper receipt page (same for owner and tenant) with a Share / Download PDF button.
@@ -38,12 +53,29 @@ class ReceiptScreen extends StatefulWidget {
 class _ReceiptScreenState extends State<ReceiptScreen> {
   bool _busy = false;
 
+  String get _baseName {
+    final d = widget.data;
+    return d.fileName ?? (d.receiptNo.isEmpty ? 'receipt' : d.receiptNo);
+  }
+
+  Future<void> _downloadPdf() async {
+    setState(() => _busy = true);
+    try {
+      final bytes = await widget.data.loadPdf!();
+      if (!mounted) return;
+      await savePdfToDownloads(context, bytes, _baseName);
+    } catch (e) {
+      if (mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _sharePdf() async {
     setState(() => _busy = true);
     try {
       final bytes = await widget.data.loadPdf!();
-      final no = widget.data.receiptNo;
-      final name = '${no.isEmpty ? 'receipt' : no}.pdf';
+      final name = '$_baseName.pdf';
       await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'application/pdf', name: name)], fileNameOverrides: [name]);
     } catch (e) {
       if (mounted) snack(context, e.toString().replaceFirst('Exception: ', ''), error: true);
@@ -73,7 +105,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               const SizedBox(height: 4),
               const Icon(Icons.check_circle, color: AppColors.success, size: 52),
               const SizedBox(height: 8),
-              Text('Payment successful', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
+              Text(d.heading, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               Text(inr(d.amount), style: GoogleFonts.poppins(fontSize: 30, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
@@ -97,14 +129,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ]),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (d.loadPdf != null)
-          ElevatedButton.icon(
-            onPressed: _busy ? null : _sharePdf,
-            icon: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('Download / Share PDF'),
-          ),
+          if (d.loadPdf != null) ...[
+            ElevatedButton.icon(
+              onPressed: _busy ? null : _downloadPdf,
+              icon: _busy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Download PDF'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _sharePdf,
+              icon: const Icon(Icons.share_outlined, size: 18),
+              label: const Text('Share'),
+            ),
+          ],
         ],
       ),
     );

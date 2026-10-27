@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"proptech-backend/internal/models"
 	"proptech-backend/internal/notify"
@@ -14,7 +17,9 @@ import (
 
 const (
 	leasePhotoMaxBytes   = 8 << 20  // 8 MB per photo
-	leaseUploadMaxBytes  = 40 << 20 // whole request
+	leaseVideoMaxBytes   = 30 << 20 // 30 MB per video (damage proof only)
+	leaseVideosPerUpload = 2        // videos in one upload
+	leaseUploadMaxBytes  = 64 << 20 // whole request
 	leasePhotosPerKind   = 60       // move_in / move_out photos per lease
 	ticketPhotosMax      = 8
 	deductionPhotosMax   = 6
@@ -51,6 +56,40 @@ func imageType(declared string, data []byte) (string, bool) {
 		return d, true
 	}
 	return "", false
+}
+
+// mediaType accepts photos and (only when allowVideo) short videos, judged by the real bytes.
+func mediaType(declared string, data []byte, allowVideo bool) (ct string, isVideo, ok bool) {
+	if t, ok := imageType(declared, data); ok {
+		return t, false, true
+	}
+	if !allowVideo {
+		return "", false, false
+	}
+	if len(data) > 12 && string(data[4:8]) == "ftyp" { // MP4 / MOV / 3GP family
+		brand := string(data[8:12])
+		switch {
+		case brand == "qt  ":
+			return "video/quicktime", true, true
+		case strings.HasPrefix(brand, "3gp"):
+			return "video/3gpp", true, true
+		default:
+			return "video/mp4", true, true
+		}
+	}
+	if len(data) > 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3 { // WebM
+		return "video/webm", true, true
+	}
+	return "", false, false
+}
+
+// looksLikeVideo guesses from the declared type / file name before the bytes are read (size limit).
+func looksLikeVideo(declared, filename string) bool {
+	if strings.HasPrefix(strings.ToLower(declared), "video/") {
+		return true
+	}
+	_, ok := videoExtTypes[strings.ToLower(filepath.Ext(filename))]
+	return ok
 }
 
 // savePhotos stores every file of the form field "images". It returns the
@@ -93,18 +132,33 @@ func (h *LeaseHandler) savePhotos(c *gin.Context, l *models.Lease, userID, kind,
 		ct   string
 		data []byte
 	}
+	allowVideo := kind == "damage" // videos are accepted only as damage proof
+	videos := 0
 	items := make([]item, 0, len(files))
 	for _, fh := range files {
-		if fh.Size > leasePhotoMaxBytes {
-			return nil, fmt.Sprintf("photo %s is larger than %d MB", fh.Filename, leasePhotoMaxBytes>>20)
+		maxBytes := int64(leasePhotoMaxBytes)
+		if allowVideo && looksLikeVideo(fh.Header.Get("Content-Type"), fh.Filename) {
+			maxBytes = leaseVideoMaxBytes
+		}
+		if fh.Size > maxBytes {
+			return nil, fmt.Sprintf("%s is larger than %d MB", fh.Filename, maxBytes>>20)
 		}
 		data, rerr := readUpload(fh)
 		if rerr != nil {
 			return nil, "could not read " + fh.Filename
 		}
-		ct, ok := imageType(resolveContentType(fh, data), data)
+		ct, isVideo, ok := mediaType(resolveContentType(fh, data), data, allowVideo)
 		if !ok {
+			if allowVideo {
+				return nil, fh.Filename + " is not a photo or video (use JPG, PNG, WebP, MP4 or MOV)"
+			}
 			return nil, fh.Filename + " is not a photo (use JPG, PNG or WebP)"
+		}
+		if isVideo {
+			videos++
+			if videos > leaseVideosPerUpload {
+				return nil, fmt.Sprintf("you can add at most %d videos", leaseVideosPerUpload)
+			}
 		}
 		items = append(items, item{ct: ct, data: data})
 	}
@@ -211,7 +265,9 @@ func (h *LeaseHandler) PhotoServe(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "private, max-age=86400")
 	c.Header("X-Content-Type-Options", "nosniff")
-	c.Data(http.StatusOK, ct, data)
+	c.Header("Content-Type", ct)
+	// ServeContent supports Range requests, which video players need to start playing.
+	http.ServeContent(c.Writer, c.Request, "", time.Time{}, bytes.NewReader(data))
 }
 
 // DELETE /api/leases/:id/photos/:photoId   (only the uploader, only while the phase is open)

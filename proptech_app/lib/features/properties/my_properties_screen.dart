@@ -8,6 +8,7 @@ import '../../core/api/token_store.dart';
 import '../../core/widgets/safe_network_image.dart';
 import 'property.dart';
 import 'property_service.dart';
+import 'property_stats.dart';
 import 'property_store.dart';
 import 'verify_property_flow.dart';
 import '../../core/utils/price_format.dart';
@@ -21,10 +22,19 @@ class MyPropertiesScreen extends StatefulWidget {
 
 class _MyPropertiesScreenState extends State<MyPropertiesScreen> with PropertyStoreListener<MyPropertiesScreen> {
   String? _myId;
+  Map<String, PropertyStats> _stats = {};
+
+  Future<void> _loadStats() async {
+    try {
+      final s = await PropertyService.instance.myStats();
+      if (mounted) setState(() => _stats = s);
+    } catch (_) {} // the counts are optional; the list still works without them
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadStats();
     TokenStore.instance.getUserId().then((id) {
       if (mounted) setState(() => _myId = id);
     });
@@ -47,14 +57,18 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with PropertySt
       ),
       body: properties.isEmpty
           ? const Center(child: Text('No properties listed yet'))
-          : ListView.separated(
+          : RefreshIndicator(
+              onRefresh: _loadStats,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(AppSpacing.md),
               itemCount: properties.length,
               separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final property = properties[index];
-                return _PropertyManageCard(property: property);
+                return _PropertyManageCard(property: property, stats: _stats[property.id]);
               },
+            ),
             ),
     );
   }
@@ -62,7 +76,8 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with PropertySt
 
 class _PropertyManageCard extends StatelessWidget {
   final Property property;
-  const _PropertyManageCard({required this.property});
+  final PropertyStats? stats;
+  const _PropertyManageCard({required this.property, this.stats});
 
   Future<void> _confirmDelete(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -168,6 +183,8 @@ class _PropertyManageCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
+            _StatsRow(stats ?? const PropertyStats()),
+            const SizedBox(height: AppSpacing.sm),
             if (property.postedBy == 'broker' && !property.isLive) ...[
               // Broker listings go live only after the real owner approves. Until then only the broker sees them.
               Container(
@@ -244,6 +261,47 @@ class _PropertyManageCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "How many people viewed" and "how many are interested" for one listing.
+class _StatsRow extends StatelessWidget {
+  final PropertyStats stats;
+  const _StatsRow(this.stats);
+
+  Widget _cell(IconData icon, int value, String label) => Expanded(
+        child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 18, color: AppColors.primary),
+            const SizedBox(width: 6),
+            Text('$value', style: AppTextStyles.h3.copyWith(fontSize: 18)),
+          ]),
+          const SizedBox(height: 2),
+          Text(label, style: AppTextStyles.bodySmall),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Column(children: [
+        Row(children: [
+          _cell(Icons.visibility_outlined, stats.views, 'People viewed'),
+          Container(width: 1, height: 32, color: AppColors.border),
+          _cell(Icons.favorite_border, stats.interested, 'Interested'),
+        ]),
+        if (stats.interested > 0) ...[
+          const SizedBox(height: 6),
+          Text('${stats.saved} saved  •  ${stats.enquiries} contacted you', style: AppTextStyles.bodySmall),
+        ],
+      ]),
     );
   }
 }

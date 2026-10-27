@@ -28,6 +28,7 @@ func RegisterLeaseRoutes(router *gin.Engine, h *handlers.LeaseHandler) {
 		l.GET("/deposit", h.Deposit)
 		l.POST("/deposit/pay", h.DepositPay)
 		l.GET("/deposit/receipt", h.DepositReceipt)
+		l.GET("/deposit/refund-receipt", h.RefundReceipt)
 		l.POST("/deposit/confirm", h.DepositConfirm)
 		l.POST("/deposit/reject", h.DepositReject)
 		l.POST("/deposit/inspection", h.DepositInspection)

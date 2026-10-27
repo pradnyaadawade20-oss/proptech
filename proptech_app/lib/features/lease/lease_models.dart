@@ -139,6 +139,7 @@ class RentSummary {
 class LeasePhoto {
   final String id, kind, room, caption, url, uploaderName, uploaderId;
   final String? deductionId;
+  final bool isVideo;
   const LeasePhoto({
     required this.uploaderId,
     required this.id,
@@ -148,6 +149,7 @@ class LeasePhoto {
     required this.url,
     required this.uploaderName,
     this.deductionId,
+    this.isVideo = false,
   });
 
   factory LeasePhoto.fromJson(Map<String, dynamic> j) => LeasePhoto(
@@ -159,6 +161,7 @@ class LeasePhoto {
         uploaderName: _s(j['uploader_name']),
         uploaderId: _s(j['uploader_id']),
         deductionId: j['deduction_id']?.toString(),
+        isVideo: j['is_video'] == true || _s(j['content_type']).startsWith('video/'),
       );
 }
 
@@ -191,7 +194,7 @@ class Deposit {
   // pending | submitted | held | inspection | settlement | disputed | refund_due | refunded | carried_forward
   final String status, paymentMethod, reference, tenantNote, adminNote, refundMethod, refundReference;
   final List<Deduction> deductions;
-  final DateTime? receivedAt;
+  final DateTime? receivedAt, refundedAt;
   final String onlineRefundStatus; // '' | SUCCESS | PENDING | ONHOLD | CANCELLED | FAILED
   final bool canRefundOnline; // deposit was paid in the app, so it can be refunded in the app
 
@@ -211,6 +214,7 @@ class Deposit {
     required this.refundReference,
     required this.deductions,
     this.receivedAt,
+    this.refundedAt,
     this.onlineRefundStatus = '',
     this.canRefundOnline = false,
   });
@@ -232,6 +236,7 @@ class Deposit {
         refundMethod: _s(j['refund_method']),
         refundReference: _s(j['refund_reference']),
         receivedAt: _dt(j['received_at']),
+        refundedAt: _dt(j['refunded_at']),
         onlineRefundStatus: _s(j['online_refund_status']),
         canRefundOnline: j['can_refund_online'] == true,
         deductions: ((j['deductions'] as List?) ?? const [])

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import '../../core/api/api_client.dart';
 import 'property.dart';
+import 'property_stats.dart';
 
 /// Talks to /api/properties/*. Add Property and Home listing use this to
 /// create/list real properties (with real UUIDs + owner_id).
@@ -305,6 +306,19 @@ class PropertyService {
     try {
       final mediaId = Uri.parse(mediaUrl).pathSegments.last;
       await _dio.delete('/api/properties/$propertyId/media/$mediaId');
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  /// Views / interested counts for each of my listings, keyed by property id.
+  Future<Map<String, PropertyStats>> myStats() async {
+    try {
+      final r = await _dio.get('/api/properties/my-stats');
+      final list = r.data['stats'] as List<dynamic>? ?? [];
+      return {
+        for (final e in list) (e as Map<String, dynamic>)['property_id'].toString(): PropertyStats.fromJson(e),
+      };
     } on DioException catch (e) {
       throw _toException(e);
     }
