@@ -419,7 +419,7 @@ class _TourCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: Text('Skip', style: TextStyle(color: AppColors.textSecondary)),
+                    child: const Text('Skip', style: TextStyle(color: AppColors.textSecondary)),
                   ),
               ],
             ),

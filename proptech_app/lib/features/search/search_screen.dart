@@ -476,7 +476,7 @@ class _SearchScreenState extends State<SearchScreen> with PropertyStoreListener<
               onHorizontalDragEnd: (d) {
                 final v = d.primaryVelocity ?? 0;
                 if (v.abs() < 300) return;
-                final modes = ListingMode.values;
+                const modes = ListingMode.values;
                 final next = v < 0 ? _mode.index + 1 : _mode.index - 1;
                 if (next < 0 || next >= modes.length) return;
                 _setMode(modes[next]);
