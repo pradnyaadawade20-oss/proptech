@@ -452,11 +452,9 @@ class _ProfileMenuTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
-    this.subtitle,
-    this.subtitleColor,
     this.iconColor,
     this.textColor,
-  });
+  }) : subtitle = null : subtitleColor = null;
 
   @override
   Widget build(BuildContext context) {

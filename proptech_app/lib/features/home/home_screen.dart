@@ -291,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text('Post Property'),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
