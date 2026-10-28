@@ -538,14 +538,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => context.push(RouteNames.agreements),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _ActivityCard(
-                    icon: Icons.vpn_key_outlined,
-                    title: 'Leases & Rent',
-                    onTap: () => context.push(RouteNames.leases),
-                  ),
-                ),
               ],
             ),
           ),

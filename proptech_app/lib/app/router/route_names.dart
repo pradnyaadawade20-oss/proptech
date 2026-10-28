@@ -44,9 +44,6 @@ class RouteNames {
   static const compare = '/compare';
   static const kycVerification = '/kyc'; // B3: Aadhaar KYC (needed before signing agreements)
 
-  // Lease / rent lifecycle
-  static const leases = '/leases';
-  static const leaseDetail = '/lease/:id'; // also the target of lease/rent/deposit notifications
 
   // Owner
   static const ownerDashboard = '/owner';
@@ -54,9 +51,6 @@ class RouteNames {
   static const myProperties = '/owner/properties';
   static const editProperty = '/owner/edit-property';
 
-  // Broker
-  static const brokerDashboard = '/broker';
-  static const brokerSubscription = '/broker/subscription';
 
   // Agreement
   static const agreementRequest = '/property/:id/agreement/request';
@@ -67,6 +61,5 @@ class RouteNames {
   static const agreementStatus = '/agreement/:id/status';
   static const propertyOwnerLink = '/property/:id/owner-link'; // broker: link a listing to its real owner
   static const landlordInvites = '/landlord-invites'; // owner: invitations from brokers
-  static const commissionAgreements = '/commission-agreements'; // broker <-> tenant commission agreements
   static const ownerApprove = '/o/:token'; // owner: the share link a broker sent (opens the app via App Links)
 }

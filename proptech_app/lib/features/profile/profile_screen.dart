@@ -14,7 +14,6 @@ import 'role_switcher_sheet.dart';
 import 'profile_service.dart';
 import 'kyc_store.dart';
 import '../notifications/push_notification_service.dart';
-import '../broker/broker_subscription_service.dart';
 
 class _Ui {
   _Ui._();
@@ -45,7 +44,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   bool _uploadingAvatar = false;
   String? _error;
-  Future<BrokerSubscriptionData>? _subFuture; // brokers only (Plan tile)
 
   @override
   void initState() {
@@ -66,26 +64,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
-  }
-
-  /// Loaded lazily, so only brokers ever hit the subscription endpoint.
-  Future<BrokerSubscriptionData> get _plan =>
-      _subFuture ??= BrokerSubscriptionService.instance.getMine();
-
-  Future<void> _openPlans() async {
-    await context.push(RouteNames.brokerSubscription);
-    if (!mounted) return;
-    // Refresh "X of 3 listings used" after the broker comes back (may have subscribed).
-    setState(() => _subFuture = BrokerSubscriptionService.instance.getMine());
-  }
-
-  String _planSubtitle(BrokerSubscription s) {
-    if (s.isActive) {
-      final till = s.expiryLabel;
-      return till == null ? s.usageLabel : '${s.usageLabel} • till $till';
-    }
-    if (s.expired) return 'Plan expired • ${s.listingsUsed} listings';
-    return s.usageLabel;
   }
 
   Future<void> _editProfile() async {
@@ -322,41 +300,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'My Agreements',
                         onTap: () => context.push(RouteNames.agreements),
                       ),
-                      _ProfileMenuTile(
-                        icon: Icons.vpn_key_outlined,
-                        title: 'My Leases & Rent',
-                        onTap: () => context.push(RouteNames.leases),
-                      ),
                       // Owners get the invite from a broker, so everyone can open this.
                       _ProfileMenuTile(
                         icon: Icons.handshake_outlined,
                         title: 'Broker invitations',
                         onTap: () => context.push(RouteNames.landlordInvites),
                       ),
-                      // Brokers send commission agreements, tenants sign them.
-                      _ProfileMenuTile(
-                        icon: Icons.payments_outlined,
-                        title: 'Commission agreements',
-                        onTap: () => context.push(RouteNames.commissionAgreements),
-                      ),
-                      if (role == UserRole.broker)
-                        FutureBuilder<BrokerSubscriptionData>(
-                          future: _plan,
-                          builder: (context, snap) {
-                            final sub = snap.data?.subscription;
-                            return _ProfileMenuTile(
-                              icon: Icons.workspace_premium_outlined,
-                              title: 'My Plan / Subscription',
-                              subtitle: sub == null
-                                  ? (snap.hasError ? null : 'Loading plan…')
-                                  : _planSubtitle(sub),
-                              subtitleColor: sub != null && !sub.isActive && !sub.canAddListing
-                                  ? _Ui.red
-                                  : null,
-                              onTap: _openPlans,
-                            );
-                          },
-                        ),
                       _ProfileMenuTile(
                         icon: Icons.verified_user_outlined,
                         title: 'KYC Verification',

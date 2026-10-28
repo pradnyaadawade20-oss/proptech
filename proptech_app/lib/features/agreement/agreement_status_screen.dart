@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/api/token_store.dart';
-import '../lease/lease_service.dart';
 import 'agreement.dart';
 import 'agreement_service.dart';
 import 'agreement_status_widgets.dart';
@@ -265,17 +264,6 @@ class _AgreementStatusScreenState extends State<AgreementStatusScreen> {
     }
   }
 
-  Future<void> _openLease(Agreement a) async {
-    try {
-      final lease = await LeaseService.instance.leaseForAgreement(a.id);
-      if (!mounted) return;
-      context.push('/lease/${lease.id}');
-    } catch (e) {
-      if (!mounted) return;
-      _snack(e.toString().replaceFirst('Exception: ', ''));
-    }
-  }
-
   void _requestAgain(Agreement a) {
     context.push(
       RouteNames.agreementRequest.replaceFirst(':id', a.propertyId),
@@ -397,15 +385,6 @@ class _AgreementStatusScreenState extends State<AgreementStatusScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.home_work_outlined),
-              label: const Text('View lease & rent'),
-              onPressed: () => _openLease(a),
-            ),
-          ),
-          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(

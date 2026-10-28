@@ -11,8 +11,6 @@ import '../../core/services/place_autocomplete_service.dart';
 import '../../app/router/route_names.dart';
 import '../../core/session/user_session.dart';
 import '../../core/widgets/app_button.dart';
-import '../broker/broker_subscription_service.dart';
-import '../broker/subscription_plans_screen.dart';
 import 'property.dart';
 import 'property_store.dart';
 import 'property_service.dart';
@@ -131,10 +129,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   void initState() {
     super.initState();
     final p = widget.editing;
-    if (p == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkBrokerQuota());
-      return;
-    }
+    if (p == null) return;
 
     String num0(double v) => v <= 0 ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
     String int0(int v) => v <= 0 ? '' : v.toString();
@@ -308,32 +303,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   bool _submitting = false;
-
-  /// Brokers get 3 free listings; after that a monthly/yearly plan is needed.
-  /// Checked up-front so they don't fill the whole form first (the server
-  /// enforces the same rule on submit).
-  Future<void> _checkBrokerQuota() async {
-    if (_isEdit || UserSession.instance.currentRole.value != UserRole.broker) return;
-    BrokerSubscription sub;
-    try {
-      sub = (await BrokerSubscriptionService.instance.getMine()).subscription;
-    } catch (_) {
-      return;
-    }
-    if (sub.canAddListing || !mounted) return;
-
-    final goPlans = await showSubscriptionRequiredDialog(context, sub);
-    if (!mounted) return;
-    if (goPlans == true) {
-      await context.push(RouteNames.brokerSubscription);
-      if (!mounted) return;
-      try {
-        sub = (await BrokerSubscriptionService.instance.getMine()).subscription;
-        if (sub.canAddListing) return;
-      } catch (_) {}
-    }
-    if (mounted && context.canPop()) context.pop();
-  }
 
   /// Finds the map coordinates of the typed address (OpenStreetMap geocoding)
   /// so the listing shows up in map / "near me" search. Best effort: returns
@@ -562,20 +531,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      if (e.toString().contains('BROKER_LIMIT_REACHED')) {
-        // Free listings used up: send the broker to the plans instead of showing a raw DB error.
-        try {
-          final sub = (await BrokerSubscriptionService.instance.getMine()).subscription;
-          if (!mounted) return;
-          final goPlans = await showSubscriptionRequiredDialog(context, sub);
-          if (goPlans == true && mounted) await context.push(RouteNames.brokerSubscription);
-          return;
-        } catch (_) {
-          if (!mounted) return;
-          _showError('Your free listing limit is reached. Subscribe to a plan to add more listings.');
-          return;
-        }
-      }
       _showError('Could not list property: $e');
     }
   }

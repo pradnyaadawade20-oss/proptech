@@ -13,8 +13,6 @@ import 'route_names.dart';
 import '../../features/auth/otp_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/owner/owner_dashboard_screen.dart';
-import '../../features/broker/broker_dashboard_screen.dart';
-import '../../features/broker/subscription_plans_screen.dart';
 import '../../features/visits/visits_screen.dart';
 import '../../features/visits/visit.dart';
 import '../../features/leads/leads_screen.dart';
@@ -39,13 +37,10 @@ import '../../features/profile/kyc_verification_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/properties/emi_calculator_screen.dart';
 import '../../features/compare/compare_screen.dart';
-import '../../features/lease/leases_screen.dart';
-import '../../features/lease/lease_detail_screen.dart';
 import '../../features/agreement/agreements_screen.dart';
 import '../../features/landlord/landlord_invites_screen.dart';
 import '../../features/landlord/property_owner_link_screen.dart';
 import '../../features/landlord/owner_approve_screen.dart';
-import '../../features/lease/agent_commissions_screen.dart';
 import '../../features/call/in_app_call_screen.dart';
 import 'main_shell.dart';
 
@@ -277,14 +272,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const OwnerDashboardScreen(),
     ),
     GoRoute(
-      path: RouteNames.brokerDashboard,
-      builder: (context, state) => const BrokerDashboardScreen(),
-    ),
-    GoRoute(
-      path: RouteNames.brokerSubscription,
-      builder: (context, state) => const SubscriptionPlansScreen(),
-    ),
-    GoRoute(
       path: RouteNames.addProperty,
 builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    ),
     GoRoute(
@@ -336,14 +323,6 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
       builder: (context, state) => const KycVerificationScreen(),
     ),
     GoRoute(
-      path: RouteNames.leases,
-      builder: (context, state) => const LeasesScreen(),
-    ),
-    GoRoute(
-      path: RouteNames.leaseDetail,
-      builder: (context, state) => LeaseDetailScreen(leaseId: state.pathParameters['id']!),
-    ),
-    GoRoute(
       path: RouteNames.propertyOwnerLink,
       builder: (context, state) => PropertyOwnerLinkScreen(
         propertyId: state.pathParameters['id']!,
@@ -353,10 +332,6 @@ builder: (context, state) => const PostRoleGate(child: AddPropertyScreen()),    
     GoRoute(
       path: RouteNames.landlordInvites,
       builder: (context, state) => const LandlordInvitesScreen(),
-    ),
-    GoRoute(
-      path: RouteNames.commissionAgreements,
-      builder: (context, state) => const CommissionAgreementsScreen(),
     ),
     GoRoute(
       path: RouteNames.ownerApprove,
